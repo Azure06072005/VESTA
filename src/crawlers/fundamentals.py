@@ -17,14 +17,22 @@ around (PROJECT_INSTRUCTIONS.md A1):
    discover_fundamentals_schema.py is run live. normalize_statement()
    requires a `period_end` column to exist and fails loudly if it
    doesn't, rather than guessing.
-2. `available_at` (real public disclosure date) is NOT exposed by vnstock
-   at all. This module computes it as `period_end + DISCLOSURE_LAG_DAYS`
-   -- an assumed reporting-lag constant, not a real disclosure date. This
-   is a placeholder approximation, not the "actual public disclosure
-   date" the feature spec calls for. It must be logged as its own
-   DECISIONS.md entry (lag length + justification) before F005 can be
-   considered to meet its own point-in-time correctness requirement --
-   F102's look-ahead-bias join depends on this being right.
+
+SOURCED (2026-08-12, see DECISIONS.md): `available_at` is computed as
+`period_end + DISCLOSURE_LAG_DAYS` (30 days). This is grounded in Circular
+96/2020/TT-BTC's 20-day quarterly disclosure deadline plus a buffer for
+the commonly observed pattern of extension requests -- it is still a
+single-constant approximation across all symbols/periods, not a real
+per-filing disclosure date (vnstock exposes no such field), but it is no
+longer an ungrounded guess.
+
+RESOLVED (2026-08-12, formally accepted by Tran Dieu, see DECISIONS.md):
+`balance_sheet()` returned a completely empty DataFrame for the test
+symbol against a live call. This is accepted as a real vnstock API gap,
+not a bug -- income_statement, cash_flow, and ratio are unaffected and
+proceed to `passing` independently. balance_sheet's crawl still fails
+loudly on the empty fetch by design; that is correct behavior, not
+something to catch and paper over.
 
 financial_health (5th sub-dataset in the original spec) is out of scope
 for this pass -- no confirmed vnstock method for it was found. Left as an
@@ -126,7 +134,10 @@ def normalize_statement(raw_df: pd.DataFrame, symbol: str, report_type: str) -> 
         raise ValueError(
             f"fetch_raw returned an empty DataFrame for symbol={symbol!r}, "
             f"report_type={report_type!r} -- per conventions.md, crawlers "
-            f"fail loudly rather than silently substituting stale data."
+            f"fail loudly rather than silently substituting stale data. "
+            f"(Confirmed live 2026-08-12: balance_sheet returned empty for "
+            f"the test symbol -- FORMALLY ACCEPTED as a real vnstock API "
+            f"gap, not a bug, see DECISIONS.md.)"
         )
 
     period_col = _find_period_end_column(raw_df)
