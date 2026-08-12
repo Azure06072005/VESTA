@@ -46,9 +46,15 @@ from etl import db  # noqa: E402
 
 REQUIRED_ENV_VAR = "VNSTOCK_API_KEY"
 
-# ASSUMED, not sourced from vnstock (see module docstring point 2). Needs
-# its own DECISIONS.md entry before this is trusted for F102's join.
-DISCLOSURE_LAG_DAYS = 45
+# SOURCED (2026-08-12, see DECISIONS.md): Circular 96/2020/TT-BTC sets a
+# 20-day regulatory deadline for quarterly financial report submission.
+# Real-world practice regularly exceeds this -- extension requests to
+# HOSE are common, with documented cases (e.g. REE) requesting Q4 filing
+# out to 30 days. 30 days = regulatory deadline + buffer for the commonly
+# observed extension pattern, chosen because underestimating the lag
+# leaks future information into F102's backtest (worse failure mode than
+# overestimating and discarding a few real data points).
+DISCLOSURE_LAG_DAYS = 30
 
 # report_type -> (method name, whether it accepts a `period` kwarg)
 REPORT_TYPES: dict[str, tuple[str, bool]] = {
