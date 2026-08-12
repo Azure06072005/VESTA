@@ -138,3 +138,32 @@ Newest at the top. Don't reverse any of these without a new, stated reason.
   rather than a single constant). This directly affects F102's
   look-ahead-bias join correctness -- an under-estimated lag would leak
   future information into the backtest.
+## 2026-08-12: F005 DISCLOSURE_LAG_DAYS resolved — 30 days, sourced
+- Reason: Circular 96/2020/TT-BTC requires quarterly financial reports
+  submitted within 20 days of quarter-end. Real-world compliance
+  regularly lags this: HOSE has received dozens of extension requests in
+  a single year (191 companies requesting annual-filing extensions per
+  SSC data), with a documented case (REE) requesting its Q4 filing
+  deadline pushed to 30 days. 30 days = the 20-day regulatory floor plus
+  a buffer covering the commonly observed extension pattern.
+- Sources: Circular 96/2020/TT-BTC (quarterly disclosure deadline);
+  VietnamPlus reporting on HOSE extension-request volume and the REE
+  case; Circular 200/2014/TT-BTC (used only to confirm this 30-day figure
+  is specific to quarterly filings, not the separate 90-day annual-report
+  deadline, which does not apply here).
+- Rejected: the original 45-day placeholder — that number was actually
+  closer to the semi-annual disclosure deadline (5 days after auditor
+  review, capped at 45 days from half-year end), which does not apply to
+  quarterly filings and was never sourced in the first place.
+- Rejected: the strict 20-day regulatory deadline with no buffer —
+  rejected because extension requests are common enough in practice
+  (documented, not rare) that 20 days would systematically underestimate
+  real availability for a meaningful fraction of filings, and
+  underestimating this lag is the more dangerous failure mode for F102's
+  look-ahead-bias join (leaks future data) versus overestimating it
+  (discards a few real data points).
+- Constraint: this is still a single constant applied uniformly across
+  symbols and periods, not a real per-filing disclosure date. If F102 or
+  F201 results look sensitive to this assumption, revisit with
+  per-symbol/per-period data before trusting backtest conclusions built
+  on it.

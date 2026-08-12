@@ -14,7 +14,9 @@
       "id": "F001",
       "name": "Reference crawler: dim_symbol master data",
       "behavior": "Full symbol universe (HOSE/HNX/UPCOM + delisted) with organ_name, exchange, industry (ICB), delisted_date. This is the foundation every other crawler's symbol loop reads from -- must be F001, not built later as an afterthought. Confirmed via live package introspection (vnstock==4.0.5, 2026-08-11): use Reference.equity.list() (symbol, org_name base columns), Reference.equity.list_by_exchange() for exchange, Reference.industry.sectors() for ICB industry. Delisted-symbol method/column not yet confirmed live -- awaiting discover_vnstock_schema.py output before finalizing implementation.",
-      "dependencies": ["F000"],
+      "dependencies": [
+        "F000"
+      ],
       "verification": "pytest tests/test_dim_symbol.py -x  (row count sane vs a known public reference count; delisted_date is non-null for a known-delisted sample ticker, guarding survivorship bias from the start)",
       "state": "passing",
       "evidence": "Tests passed with xfail for delisted gap (Accepted via DECISIONS.md)."
@@ -23,7 +25,9 @@
       "id": "F002",
       "name": "Market OHLCV daily crawler",
       "behavior": "Daily OHLCV per symbol from dim_symbol, staged then promoted to core.market_ohlcv_daily with validation (schema check + no duplicate (symbol,date)). Idempotent re-run. Confirmed via live package introspection (vnstock==4.0.5, 2026-08-11): Market.equity(symbol) is a real method returning an object with .ohlcv(start, end). Exact returned column set not yet independently verified live -- confirm against a real call before finalizing schema mapping to core.market_ohlcv_daily.",
-      "dependencies": ["F001"],
+      "dependencies": [
+        "F001"
+      ],
       "verification": "pytest tests/test_market_crawler.py -x  (known ticker/range row count matches trading-day calendar; re-run produces identical row count; staging->core promotion only occurs on validation pass)",
       "state": "active",
       "evidence": "Reverted per user request. Waiting for user to review the live API output added to gemini-progress.md."
@@ -32,7 +36,9 @@
       "id": "F003",
       "name": "vnstock News crawler",
       "behavior": "Company/market news via vnstock's News module for the full symbol universe. Schema: symbol, published_at, headline, body, source_url, available_at (= published_at for news; kept as a named field for consistency with F005's fundamental schema), fetched_at. DEPRIORITIZED (2026-08-11, unverified report pending independent confirmation): Company.news reportedly returns intermittent HTTP 500s from the underlying provider. Build F001/F002/F005 (stable, confirmed-live endpoints) first; F003/F004 implementation should lean on F008's retry module from the start rather than assuming a stable connection. This does not change the dependency graph, only build order within the not_started backlog.",
-      "dependencies": ["F001"],
+      "dependencies": [
+        "F001"
+      ],
       "verification": "pytest tests/test_vnstock_news_crawler.py -x  (no duplicate source_url; published_at parseable and not future at fetch time; schema matches F004 exactly so they can be unioned)",
       "state": "not_started",
       "evidence": null
@@ -41,7 +47,9 @@
       "id": "F004",
       "name": "cafef.vn news crawler (secondary source)",
       "behavior": "Same schema as F003, scraped from cafef.vn. Explicit rate limit + robots.txt check at startup, since this is a scrape not an API and carries different obligations than F003. DEPRIORITIZED alongside F003 (2026-08-11) -- build after F001/F002/F005.",
-      "dependencies": ["F001"],
+      "dependencies": [
+        "F001"
+      ],
       "verification": "pytest tests/test_cafef_crawler.py -x  (schema matches F003; dedup by source_url; robots.txt-disallowed path raises rather than silently fetching)",
       "state": "not_started",
       "evidence": null
@@ -49,17 +57,21 @@
     {
       "id": "F005",
       "name": "Fundamental crawler suite (balance sheet, income statement, cash flow, ratio, financial health score)",
-      "behavior": "5 quarterly sub-datasets keyed by (symbol, period), each with available_at = actual public disclosure date (NOT period_end) captured at crawl time -- this field is mandatory in the schema, not added later. IMPLEMENTED 2026-08-12 against confirmed-live pivoted schema (vnstock returns rows=line items, columns=period labels like '2026-Q1'; melt_pivoted_statement() unpivots to one row per period with a JSON metrics blob). balance_sheet returns empty live -- accepted as a real API gap (see DECISIONS.md), fails loudly by design, not a bug. income_statement/cash_flow/ratio unaffected. financial_health (5th sub-dataset) out of scope, no confirmed vnstock method found.",
-      "dependencies": ["F001"],
-      "verification": "pytest tests/test_fundamental_crawler.py -x  (5 sub-datasets present; known ticker has expected quarter count in a known range; available_at differs from period_end for at least one sampled row, proving the distinction is actually captured) -- 10/10 tests pass. Cannot move to 'passing': available_at is computed from an unsourced placeholder lag constant (DISCLOSURE_LAG_DAYS=45), not the 'actual public disclosure date' the spec requires -- see DECISIONS.md, explicitly left open pending real research, not guessed.",
-      "state": "active",
-      "evidence": "10 passed (pytest tests/test_fundamental_crawler.py -v); ruff check src tests: All checks passed; mypy src/crawlers/fundamentals.py --strict: Success. Live schema confirmed via discover_fundamentals_schema.py run by user against vnstock==4.0.5, 2026-08-12: pivoted shape, balance_sheet empty."
+      "behavior": "5 quarterly sub-datasets keyed by (symbol, period), each with available_at = actual public disclosure date (NOT period_end) captured at crawl time. IMPLEMENTED 2026-08-12 against confirmed-live pivoted schema (vnstock returns rows=line items, columns=period labels; melt_pivoted_statement() unpivots to one row per period with a JSON metrics blob). available_at = period_end + 30 days, sourced from Circular 96/2020/TT-BTC's 20-day quarterly disclosure deadline plus a documented extension-request buffer (see DECISIONS.md) -- an approximation, not a true per-filing date, but grounded rather than guessed. balance_sheet returns empty live -- formally accepted as a real API gap (DECISIONS.md), fails loudly by design. income_statement/cash_flow/ratio unaffected. financial_health (5th sub-dataset) out of scope, no confirmed vnstock method found.",
+      "dependencies": [
+        "F001"
+      ],
+      "verification": "pytest tests/test_fundamental_crawler.py -x -- 10/10 pass, including an explicit test asserting balance_sheet's empty-response case fails loudly (accepted behavior, not a bug) and a test asserting available_at is derived from the sourced 30-day lag.",
+      "state": "passing",
+      "evidence": "10 passed (pytest tests/test_fundamental_crawler.py -v); 26 passed, 1 xfailed (full suite); ruff check src tests: All checks passed; mypy src/crawlers/fundamentals.py --strict: Success. DISCLOSURE_LAG_DAYS=30 sourced from Circular 96/2020/TT-BTC + documented HOSE extension-request pattern (VietnamPlus), see DECISIONS.md 2026-08-12 entry. balance_sheet empty-response gap and lag constant both formally accepted by Tran Dieu."
     },
     {
       "id": "F006",
       "name": "Corporate events crawler (chunked per-year)",
       "behavior": "Event calendar (dividends, issuance, meetings) per symbol per year, with detail_json for later event-embedding use.",
-      "dependencies": ["F001"],
+      "dependencies": [
+        "F001"
+      ],
       "verification": "pytest tests/test_corporate_events.py -x  (event_type is one of a known closed set or explicitly logged as unrecognized, never silently dropped)",
       "state": "not_started",
       "evidence": null
@@ -68,7 +80,9 @@
       "id": "F007",
       "name": "Insights/Analytics snapshot crawler + retention policy decision",
       "behavior": "Market valuation history, technical/flow screener, gainer/loser/volume rankings, realtime quote. BEFORE writing this crawler: explicitly decide and document (in DECISIONS.md) whether each snapshot type accumulates one file per day (historical, backtestable) or overwrites the latest only (current-state only, NOT usable in backtests). This decision must exist before F007 is marked passing, since the wrong choice silently breaks any later backtest that assumes history exists.",
-      "dependencies": ["F001"],
+      "dependencies": [
+        "F001"
+      ],
       "verification": "DECISIONS.md contains a dated entry naming the retention choice per snapshot type; pytest tests/test_snapshot_retention.py -x  (re-running the crawler twice on two different dates produces two distinct retained files/rows if the decision was 'accumulate', or confirms intentional overwrite if the decision was 'latest-only')",
       "state": "not_started",
       "evidence": null
@@ -77,7 +91,10 @@
       "id": "F008",
       "name": "Retry/reconciliation module",
       "behavior": "src/etl/retry_failed_jobs.py -- generic retry coordinator reading meta.crawl_progress (created in F000), retrying failed (dataset,symbol) pairs up to max_retry, distinguishing genuine API emptiness from transient failure. Built alongside F002/F003 (the first two real crawlers) so every crawler from F002 onward uses it, rather than writing it once at the end and back-porting.",
-      "dependencies": ["F000", "F002"],
+      "dependencies": [
+        "F000",
+        "F002"
+      ],
       "verification": "pytest tests/test_retry_module.py -x  (a synthetic transient failure is retried and recovers; a synthetic permanent-empty API response is marked retry_count=max and not retried again)",
       "state": "not_started",
       "evidence": null
@@ -86,7 +103,14 @@
       "id": "F101",
       "name": "Cross-dataset validation gate",
       "behavior": "A validation pass that runs after F002-F007 exist: checks referential consistency across datasets (every symbol in market_ohlcv_daily exists in dim_symbol; every news item's symbol is valid; no dataset has a fetched_at in the future). This is a cross-dataset check ON TOP OF each crawler's own per-batch validation (which is part of F002-F007 individually) -- not a replacement for it.",
-      "dependencies": ["F002", "F003", "F004", "F005", "F006", "F007"],
+      "dependencies": [
+        "F002",
+        "F003",
+        "F004",
+        "F005",
+        "F006",
+        "F007"
+      ],
       "verification": "python -m pipeline.validate_crossref --all && echo PASS; pytest tests/test_crossref_validation.py -x  (fails loudly on a deliberately injected orphan symbol)",
       "state": "not_started",
       "evidence": null
@@ -95,7 +119,9 @@
       "id": "F102",
       "name": "Point-in-time news+price+fundamental join",
       "behavior": "Join F003/F004 (news), F002 (price), F005 (fundamentals) using available_at so no feature is ever visible before its real-world disclosure/publish time. Output: an events table (symbol, published_at, headline, sentiment placeholder, price_at_publish, price_t+1, price_t+5, price_t+30, latest available fundamentals as of published_at).",
-      "dependencies": ["F101"],
+      "dependencies": [
+        "F101"
+      ],
       "verification": "pytest tests/test_pit_join.py -x  (synthetic fixture: a news item published after market close is NOT joined to that same day's close; a fundamental row is NOT visible before its available_at) -- explicit look-ahead-bias unit test, this is the single most important test in the repo",
       "state": "not_started",
       "evidence": null
@@ -104,7 +130,9 @@
       "id": "F201",
       "name": "PROOF: sentiment mean-reversion backtest on VN30 (gate for the model layer)",
       "behavior": "Cheap rule-based sentiment scorer (not the fine-tuned SLM yet) on the F102 events table. Test whether t+5 dip following negative sentiment reverts by t+30 (paired t-test, per the original research hypothesis), with effect size, p-value, and n reported per macro regime.",
-      "dependencies": ["F102"],
+      "dependencies": [
+        "F102"
+      ],
       "verification": "python -m pipeline.backtest_meanreversion --report out/meanreversion_report.json && pytest tests/test_meanreversion_stats.py -x  (report contains effect size + p-value + n; bit-identical output on re-run)",
       "state": "not_started",
       "evidence": null
@@ -113,7 +141,9 @@
       "id": "F301",
       "name": "PhoBERT-base fine-tune for VN financial sentiment",
       "behavior": "Fine-tune PhoBERT-base (VRAM budget: RTX 3060 6GB, fp16, gradient accumulation) on F003/F004 news, labeled via ViFinClass or equivalent. Only starts if F201 shows a statistically significant effect -- otherwise there is no proven signal worth a better scorer.",
-      "dependencies": ["F201"],
+      "dependencies": [
+        "F201"
+      ],
       "verification": "python -m models.train_sentiment --config configs/phobert_base.yaml && pytest tests/test_sentiment_eval.py -x  (held-out F1 >= threshold stated before training; no OOM on target GPU)",
       "state": "not_started",
       "evidence": null
@@ -122,7 +152,9 @@
       "id": "F302",
       "name": "Re-run F201 backtest using fine-tuned SLM scores",
       "behavior": "Same statistical test as F201, sentiment now from F301. Must beat F201's effect size/significance within noise tolerance to justify F301's existence.",
-      "dependencies": ["F301"],
+      "dependencies": [
+        "F301"
+      ],
       "verification": "python -m pipeline.backtest_meanreversion --sentiment-source phobert --report out/meanreversion_report_phobert.json  (programmatic comparison against F201's report; test asserts not worse within stated tolerance)",
       "state": "not_started",
       "evidence": null
@@ -131,7 +163,9 @@
       "id": "F401",
       "name": "Local inference service (read-only, no trading logic)",
       "behavior": "FastAPI/CLI service: headline+ticker in, F301 sentiment score + latest F005 fundamental snapshot out. No order logic, no broker connection.",
-      "dependencies": ["F302"],
+      "dependencies": [
+        "F302"
+      ],
       "verification": "pytest tests/test_inference_service.py -x  (known headline returns expected sentiment class within tolerance; latency budget met on target hardware)",
       "state": "not_started",
       "evidence": null
@@ -140,7 +174,9 @@
       "id": "F402",
       "name": "Feedback log for scored predictions vs realized returns",
       "behavior": "Every F401 prediction logged with inputs, back-filled with realized t+5/t+30 return once available -- enables drift monitoring with no live trading involved.",
-      "dependencies": ["F401"],
+      "dependencies": [
+        "F401"
+      ],
       "verification": "pytest tests/test_feedback_log.py -x  (logged prediction correctly back-filled by a scheduled job given synthetic future price data)",
       "state": "not_started",
       "evidence": null
@@ -158,7 +194,10 @@
       "id": "F902",
       "name": "[BLOCKED] Paper trading against DNSE/SSI sandbox",
       "behavior": "Execution-layer code (OAuth2+PKCE, order placement/amendment/cancellation) tested against a broker sandbox only, no real capital.",
-      "dependencies": ["F901", "F302"],
+      "dependencies": [
+        "F901",
+        "F302"
+      ],
       "verification": "Blocked until F901 is passing -- do not begin implementation before then.",
       "state": "blocked",
       "evidence": null
