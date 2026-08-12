@@ -1,0 +1,160 @@
+# ==============================================================================
+# Python & Virtual Environments
+# ==============================================================================
+discover_*
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# ==============================================================================
+# Tests, Coverage & Logs
+# ==============================================================================
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+cover/
+*.log
+logs/
+pip-log.txt
+pip-delete-this-directory.txt
+
+# ==============================================================================
+# IDEs & OS generated files
+# ==============================================================================
+.vscode/
+.idea/
+*.swp
+*.swo
+.ipynb_checkpoints
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# ==============================================================================
+# Temp, Trash, and Cache (User Requested)
+# ==============================================================================
+tmp/
+temp/
+trash/
+.trash/
+*.bak
+*.tmp
+*.cache
+
+# ==============================================================================
+# Large Storage & Data Files (User Requested)
+# ==============================================================================
+# Ignore common data formats
+*.csv
+*.tsv
+*.dat
+*.jsonl
+# Optional: uncomment if you don't want any json pushed, 
+# but usually config json files are pushed. 
+# *.json 
+
+# Large data binaries
+*.h5
+*.hdf5
+*.pkl
+*.pickle
+*.npy
+*.npz
+*.feather
+*.parquet
+*.arrow
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+*.duckdb
+*.db3
+*.s3db
+*.mdf
+*.ldf
+*.ndf
+
+# Deep Learning / ML model files
+*.pt
+*.pth
+*.onnx
+*.tflite
+*.pb
+*.keras
+*.weights
+*.ckpt
+
+# Compressed files & Archives
+*.zip
+*.tar
+*.tar.gz
+*.tgz
+*.rar
+*.7z
+*.gz
+*.bz2
+
+# Media files
+*.mp4
+*.avi
+*.mkv
+*.mov
+*.mp3
+*.wav
+*.flac
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.bmp
+*.ico
+*.svg
+
+# Any custom big data folder
+data/
+datasets/
+models/
+storage/
+out/
