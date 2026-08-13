@@ -100,6 +100,8 @@ next session reads to avoid starting from zero.
 
 - Resolved: F006 (Corporate events crawler) marked passing after live discovery script verified schema and tests cleanly pass.
 
+- Resolved: F008 (Retry/reconciliation module) marked passing after test suite passed.
+
 <!--
 Template for future entries:
 

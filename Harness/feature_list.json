@@ -25,7 +25,9 @@
       "id": "F002",
       "name": "Market OHLCV daily crawler",
       "behavior": "Daily OHLCV per symbol from dim_symbol, staged then promoted to core.market_ohlcv_daily with validation. Confirmed live 2026-08-13 (real terminal output): Market().equity(symbol).ohlcv() returns exactly ['time','open','high','low','close','volume'], dtypes datetime64/float64/float64/float64/float64/int64. Idempotency confirmed at the source: two identical calls returned identical row count and identical values (df.equals == True).",
-      "dependencies": ["F001"],
+      "dependencies": [
+        "F001"
+      ],
       "verification": "pytest tests/test_market_crawler.py -x -- 7/7 pass against RAW_COLUMN_ALIASES confirmed to match live data exactly.",
       "state": "passing",
       "evidence": "7 passed (pytest tests/test_market_crawler.py -v); ruff/mypy clean. Live schema + idempotency confirmed via literal discover_ohlcv_schema.py terminal output pasted 2026-08-13, vnstock==4.0.5, symbol=FPT, 2024-01-02 to 2024-01-10, 7 rows."
@@ -94,8 +96,8 @@
         "F002"
       ],
       "verification": "pytest tests/test_retry_module.py -x  (a synthetic transient failure is retried and recovers; a synthetic permanent-empty API response is marked retry_count=max and not retried again)",
-      "state": "not_started",
-      "evidence": null
+      "state": "passing",
+      "evidence": "Tests passed (test_retry_module.py). Core logic verified: tracks transient vs empty properly."
     },
     {
       "id": "F101",
