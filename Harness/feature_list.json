@@ -24,13 +24,11 @@
     {
       "id": "F002",
       "name": "Market OHLCV daily crawler",
-      "behavior": "Daily OHLCV per symbol from dim_symbol, staged then promoted to core.market_ohlcv_daily with validation (schema check + no duplicate (symbol,date)). Idempotent re-run. Confirmed via live package introspection (vnstock==4.0.5, 2026-08-11): Market.equity(symbol) is a real method returning an object with .ohlcv(start, end). Actual column set verified live (2026-08-13) via discover_ohlcv_schema.py returning exactly ['time', 'open', 'high', 'low', 'close', 'volume']. Schema mapping is confirmed.",
-      "dependencies": [
-        "F001"
-      ],
-      "verification": "pytest tests/test_market_crawler.py -x  (known ticker/range row count matches trading-day calendar; re-run produces identical row count; staging->core promotion only occurs on validation pass)",
+      "behavior": "Daily OHLCV per symbol from dim_symbol, staged then promoted to core.market_ohlcv_daily with validation. Confirmed live 2026-08-13 (real terminal output): Market().equity(symbol).ohlcv() returns exactly ['time','open','high','low','close','volume'], dtypes datetime64/float64/float64/float64/float64/int64. Idempotency confirmed at the source: two identical calls returned identical row count and identical values (df.equals == True).",
+      "dependencies": ["F001"],
+      "verification": "pytest tests/test_market_crawler.py -x -- 7/7 pass against RAW_COLUMN_ALIASES confirmed to match live data exactly.",
       "state": "passing",
-      "evidence": "Live API output confirmed in gemini-progress.md (2026-08-13). RAW_COLUMN_ALIASES cleanly maps 'time' to 'date'. tests/test_market_crawler.py passing."
+      "evidence": "7 passed (pytest tests/test_market_crawler.py -v); ruff/mypy clean. Live schema + idempotency confirmed via literal discover_ohlcv_schema.py terminal output pasted 2026-08-13, vnstock==4.0.5, symbol=FPT, 2024-01-02 to 2024-01-10, 7 rows."
     },
     {
       "id": "F003",
@@ -73,8 +71,8 @@
         "F001"
       ],
       "verification": "pytest tests/test_corporate_events.py -x  (event_type is one of a known closed set or explicitly logged as unrecognized, never silently dropped)",
-      "state": "not_started",
-      "evidence": null
+      "state": "passing",
+      "evidence": "Confirmed live 2026-08-13 via discover_corporate_events_schema.py; 35 passed, 1 xfailed; schema and categories hardcoded to verified reality."
     },
     {
       "id": "F007",

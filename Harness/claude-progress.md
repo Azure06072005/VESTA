@@ -98,6 +98,8 @@ next session reads to avoid starting from zero.
 
 - Resolved: F002 verification. Live run of discover_ohlcv_schema.py confirmed the vnstock .ohlcv() endpoint returns exactly ['time', 'open', 'high', 'low', 'close', 'volume']. RAW_COLUMN_ALIASES works correctly, assumption removed, F002 marked as passing.
 
+- Resolved: F006 (Corporate events crawler) marked passing after live discovery script verified schema and tests cleanly pass.
+
 <!--
 Template for future entries:
 
