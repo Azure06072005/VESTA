@@ -111,13 +111,11 @@ def normalize_events(raw_df: pd.DataFrame, symbol: str) -> pd.DataFrame:
     access -- fully unit-testable with synthetic DataFrames.
     """
     if raw_df.empty:
-        raise ValueError(
+        raise EmptyResultError(
             f"fetch_raw returned an empty DataFrame for symbol={symbol!r} -- "
-            f"per conventions.md, crawlers fail loudly rather than silently "
-            f"substituting stale/synthetic data. (Could also mean this "
-            f"symbol genuinely has no events -- if so, that's a real "
-            f"empty-but-valid result and this check may need adjusting "
-            f"once confirmed live.)"
+            f"F008-compatible: a symbol with genuinely no corporate events "
+            f"is a valid, non-failure outcome -- recorded via "
+            f"record_empty(), NOT retried."
         )
 
     id_col = _find_column(raw_df, EVENT_ID_ALIASES, "event_id")
