@@ -96,6 +96,8 @@ next session reads to avoid starting from zero.
   reverted to `active` per the correction above. Per WIP=1, don't start
   new feature code until the F005 path is decided one way or the other.
 
+- Resolved: F002 verification. Live run of discover_ohlcv_schema.py confirmed the vnstock .ohlcv() endpoint returns exactly ['time', 'open', 'high', 'low', 'close', 'volume']. RAW_COLUMN_ALIASES works correctly, assumption removed, F002 marked as passing.
+
 <!--
 Template for future entries:
 

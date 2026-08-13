@@ -24,13 +24,13 @@
     {
       "id": "F002",
       "name": "Market OHLCV daily crawler",
-      "behavior": "Daily OHLCV per symbol from dim_symbol, staged then promoted to core.market_ohlcv_daily with validation (schema check + no duplicate (symbol,date)). Idempotent re-run. Confirmed via live package introspection (vnstock==4.0.5, 2026-08-11): Market.equity(symbol) is a real method returning an object with .ohlcv(start, end). Exact returned column set not yet independently verified live -- confirm against a real call before finalizing schema mapping to core.market_ohlcv_daily.",
+      "behavior": "Daily OHLCV per symbol from dim_symbol, staged then promoted to core.market_ohlcv_daily with validation (schema check + no duplicate (symbol,date)). Idempotent re-run. Confirmed via live package introspection (vnstock==4.0.5, 2026-08-11): Market.equity(symbol) is a real method returning an object with .ohlcv(start, end). Actual column set verified live (2026-08-13) via discover_ohlcv_schema.py returning exactly ['time', 'open', 'high', 'low', 'close', 'volume']. Schema mapping is confirmed.",
       "dependencies": [
         "F001"
       ],
       "verification": "pytest tests/test_market_crawler.py -x  (known ticker/range row count matches trading-day calendar; re-run produces identical row count; staging->core promotion only occurs on validation pass)",
-      "state": "active",
-      "evidence": "Reverted per user request. Waiting for user to review the live API output added to gemini-progress.md."
+      "state": "passing",
+      "evidence": "Live API output confirmed in gemini-progress.md (2026-08-13). RAW_COLUMN_ALIASES cleanly maps 'time' to 'date'. tests/test_market_crawler.py passing."
     },
     {
       "id": "F003",
