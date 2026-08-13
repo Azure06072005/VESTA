@@ -51,6 +51,7 @@ import duckdb
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 from etl import db  # noqa: E402
+from etl.retry_failed_jobs import EmptyResultError
 
 REQUIRED_ENV_VAR = "VNSTOCK_API_KEY"
 
