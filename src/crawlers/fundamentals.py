@@ -51,6 +51,7 @@ import duckdb
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 from etl import db  # noqa: E402
+from etl.retry_failed_jobs import EmptyResultError
 
 REQUIRED_ENV_VAR = "VNSTOCK_API_KEY"
 
@@ -131,10 +132,10 @@ def normalize_statement(raw_df: pd.DataFrame, symbol: str, report_type: str) -> 
     available_at. No network access -- fully unit-testable.
     """
     if raw_df.empty:
-        raise ValueError(
+        raise EmptyResultError(
             f"fetch_raw returned an empty DataFrame for symbol={symbol!r}, "
-            f"report_type={report_type!r} -- per conventions.md, crawlers "
-            f"fail loudly rather than silently substituting stale data. "
+            f"report_type={report_type!r} -- F008-compatible: recorded as "
+            f"genuine emptiness via record_empty(), NOT retried. "
             f"(Confirmed live 2026-08-12: balance_sheet returned empty for "
             f"the test symbol -- FORMALLY ACCEPTED as a real vnstock API "
             f"gap, not a bug, see DECISIONS.md.)"

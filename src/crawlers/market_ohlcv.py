@@ -23,6 +23,7 @@ import duckdb
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 from etl import db  # noqa: E402
+from etl.retry_failed_jobs import EmptyResultError
 
 REQUIRED_ENV_VAR = "VNSTOCK_API_KEY"
 
@@ -88,10 +89,11 @@ def normalize_ohlcv(raw_df: pd.DataFrame, symbol: str) -> pd.DataFrame:
     No network access -- fully unit-testable with synthetic DataFrames.
     """
     if raw_df.empty:
-        raise ValueError(
+        raise EmptyResultError(
             f"fetch_raw returned an empty DataFrame for symbol={symbol!r} -- "
-            f"per conventions.md, crawlers fail loudly rather than silently "
-            f"substituting stale/synthetic data."
+            f"F008-compatible: this is genuine emptiness (e.g. no trading "
+            f"data for the requested range), not a transient failure, so "
+            f"it will be recorded via record_empty() and NOT retried."
         )
 
     col_map = {field: _find_column(raw_df, field) for field in RAW_COLUMN_ALIASES}
