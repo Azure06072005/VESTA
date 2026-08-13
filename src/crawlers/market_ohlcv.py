@@ -5,15 +5,10 @@ returns an EquityMarket object with a real `.ohlcv(start=None, end=None,
 interval='1D', count=100, source='kbs', **kwargs)` method (signature
 introspected directly from the installed package).
 
-UNCONFIRMED / ASSUMED: the actual column names `.ohlcv()` returns. The only
-reference is an earlier, partially-hallucinated report (it fabricated an
-entire `Insights` module for F007 -- see DECISIONS.md) claiming
-`[time, open, high, low, close, volume]`. This module does NOT trust that
-blindly: `_normalize_ohlcv()` looks up columns via an alias table and raises
-a clear, actionable error if none of the expected aliases are present,
-rather than silently mismapping data. Run discover_ohlcv_schema.py against
-a live key to confirm RAW_COLUMN_ALIASES before trusting this in
-production.
+SOURCED/VERIFIED (2026-08-13, see gemini-progress.md): discover_ohlcv_schema.py 
+was run against the live API. The columns returned were exactly 
+`['time', 'open', 'high', 'low', 'close', 'volume']`. RAW_COLUMN_ALIASES 
+works as designed and the schema mapping is now fully verified, not assumed.
 """
 from __future__ import annotations
 
@@ -31,9 +26,8 @@ from etl import db  # noqa: E402
 
 REQUIRED_ENV_VAR = "VNSTOCK_API_KEY"
 
-# UNCONFIRMED (see module docstring). Each field maps to a list of
-# candidate raw column names, checked in order. Update this once
-# discover_ohlcv_schema.py output is available.
+# VERIFIED (2026-08-13): Live API returns ['time', 'open', 'high', 'low', 'close', 'volume'].
+# This alias mapping cleanly covers it (time -> date).
 RAW_COLUMN_ALIASES: dict[str, list[str]] = {
     "date": ["time", "date", "trading_date"],
     "open": ["open"],
