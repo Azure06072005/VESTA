@@ -95,3 +95,40 @@ Template for future entries:
 - Blocked: (dependency / decision needed, or "none")
 - Next session should: <one concrete next action>
 -->
+    - **F006 (Corporate Events)**: `discover_corporate_events_schema.py` WAS run against the live vnstock API on 2026-08-13.
+      - **Output details:**
+        ```text
+        columns: ['id', 'event_name_vi', 'event_name_en', 'ticker', 'event_code', 'event_title_vi', 'event_title_en', 'display_date1', 'public_date', 'exercise_ratio', 'category', 'display_date2', 'start_date', 'end_date', 'action_type_vi', 'action_type_en', 'record_date', 'exright_date', 'payout_date', 'value_per_share', 'issue_date', 'listing_date']
+        dtypes:
+         id                  object
+        event_name_vi       object
+        event_name_en       object
+        ticker              object
+        event_code          object
+        event_title_vi      object
+        event_title_en      object
+        display_date1       object
+        public_date         object
+        exercise_ratio     float64
+        category            object
+        display_date2       object
+        start_date          object
+        end_date            object
+        action_type_vi      object
+        action_type_en      object
+        record_date         object
+        exright_date        object
+        payout_date         object
+        value_per_share    float64
+        issue_date          object
+        listing_date        object
+        dtype: object
+        row count: 50
+        
+        unique event_type-ish values:
+          event_name_vi: ['Giao dá»‹ch ná»™i bá»™: Giao dá»‹ch cÃ¡ nhÃ¢n', 'Giao dá»‹ch ná»™i bá»™: Giao dá»‹ch ngÆ°á»i liÃªn quan', 'Giao dá»‹ch ná»™i bá»™: Giao dá»‹ch tá»• chá»©c', 'NiÃªm yáº¿t thÃªm', 'PhÃ¡t hÃ nh cá»• phiáº¿u', 'Tráº£ cá»• tá»©c báº±ng tiá»n máº·t', 'Äáº¡i há»™i Äá»“ng Cá»• Ä‘Ã´ng']
+          event_name_en: ['Additional Listing', 'Annual General Meeting', 'Cash Dividend', 'Director Deal: Individual transactions', 'Director Deal: Institutional transactions', 'Director Deal: Related Person transactions', 'Share Issue']
+          event_code: ['AGME', 'AIS', 'DDIND', 'DDINS', 'DDRP', 'DIV', 'ISS']
+          category: ['DIVIDEND', 'MAJOR_SHAREHOLDER_TRADING', 'OTHER', 'SHAREHOLDER_MEETING']
+        ```
+      - **Conclusion**: The `.events()` endpoint returns 22 columns. The `event_type` can be mapped from `event_code` or `category`. It seems to return history all at once (50 rows spanning multiple years), so "chunked per-year" may not be required!
