@@ -92,3 +92,58 @@ CREATE TABLE IF NOT EXISTS core.fundamentals (
     fetched_at   TIMESTAMP NOT NULL,
     PRIMARY KEY (symbol, report_type, period_end)
 );
+
+-- staging/core.corporate_events (F006): event calendar per symbol.
+-- Confirmed live 2026-08-13: Company(source='VCI', symbol=symbol).events()
+-- is the real per-symbol method (not Reference().events.calendar(), which
+-- is market-wide). Actual column names and the closed set of event_type
+-- values are UNCONFIRMED as of this schema -- see
+-- src/crawlers/corporate_events.py module docstring. detail_json holds
+-- the full raw row for later event-embedding use (per F006 spec).
+CREATE TABLE IF NOT EXISTS staging.corporate_events (
+    symbol       VARCHAR NOT NULL,
+    event_id     VARCHAR NOT NULL,
+    event_type   VARCHAR NOT NULL,
+    event_date   DATE,
+    detail_json  VARCHAR NOT NULL,
+    fetched_at   TIMESTAMP NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS core.corporate_events (
+    symbol       VARCHAR NOT NULL,
+    event_id     VARCHAR NOT NULL,
+    event_type   VARCHAR NOT NULL,
+    event_date   DATE,
+    detail_json  VARCHAR NOT NULL,
+    fetched_at   TIMESTAMP NOT NULL,
+    PRIMARY KEY (symbol, event_id)
+);
+
+-- staging/core.news (F003/F004): shared schema so vnstock News (F003) and
+-- cafef.vn (F004) can be unioned without source-specific branching (see
+-- DECISIONS.md "Dual news source" entry). available_at = published_at for
+-- news (no separate disclosure-lag concept, unlike F005's fundamentals).
+-- Column names for the F003 vnstock source are UNCONFIRMED as of this
+-- schema -- see src/crawlers/vnstock_news.py module docstring.
+CREATE TABLE IF NOT EXISTS staging.news (
+    symbol       VARCHAR NOT NULL,
+    source       VARCHAR NOT NULL,  -- 'vnstock' (F003) or 'cafef' (F004)
+    published_at TIMESTAMP NOT NULL,
+    available_at TIMESTAMP NOT NULL,
+    headline     VARCHAR NOT NULL,
+    body         VARCHAR,
+    source_url   VARCHAR NOT NULL,
+    fetched_at   TIMESTAMP NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS core.news (
+    symbol       VARCHAR NOT NULL,
+    source       VARCHAR NOT NULL,
+    published_at TIMESTAMP NOT NULL,
+    available_at TIMESTAMP NOT NULL,
+    headline     VARCHAR NOT NULL,
+    body         VARCHAR,
+    source_url   VARCHAR NOT NULL,
+    fetched_at   TIMESTAMP NOT NULL,
+    PRIMARY KEY (source_url)
+);
