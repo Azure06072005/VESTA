@@ -16,7 +16,8 @@ import pytest
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1] / "src"))
 
-from etl import db  # noqa: E402
+from etl import db
+from etl.retry_failed_jobs import EmptyResultError  # noqa: E402
 from crawlers import market_ohlcv  # noqa: E402
 
 
@@ -51,7 +52,7 @@ def test_normalize_ohlcv_raises_clearly_on_schema_drift():
 
 
 def test_normalize_ohlcv_rejects_empty_fetch():
-    with pytest.raises(ValueError, match="empty DataFrame"):
+    with pytest.raises(EmptyResultError):
         market_ohlcv.normalize_ohlcv(pd.DataFrame(), "FPT")
 
 

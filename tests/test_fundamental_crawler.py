@@ -18,7 +18,8 @@ import pytest
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1] / "src"))
 
-from etl import db  # noqa: E402
+from etl import db
+from etl.retry_failed_jobs import EmptyResultError  # noqa: E402
 from crawlers import fundamentals  # noqa: E402
 
 
@@ -62,7 +63,7 @@ def test_balance_sheet_empty_response_fails_loudly():
     what this asserts -- do not "fix" this by catching the error and
     returning an empty result.
     """
-    with pytest.raises(ValueError, match="empty DataFrame"):
+    with pytest.raises(EmptyResultError):
         fundamentals.normalize_statement(pd.DataFrame(), "FPT", "balance_sheet")
 
 

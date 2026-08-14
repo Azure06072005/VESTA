@@ -18,7 +18,8 @@ import pytest
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1] / "src"))
 
-from etl import db  # noqa: E402
+from etl import db
+from etl.retry_failed_jobs import EmptyResultError  # noqa: E402
 from crawlers import corporate_events  # noqa: E402
 
 
@@ -79,7 +80,7 @@ def test_normalize_events_raises_clearly_on_missing_id_column():
 
 
 def test_normalize_events_rejects_empty_fetch():
-    with pytest.raises(ValueError, match="empty DataFrame"):
+    with pytest.raises(EmptyResultError):
         corporate_events.normalize_events(pd.DataFrame(), "FPT")
 
 

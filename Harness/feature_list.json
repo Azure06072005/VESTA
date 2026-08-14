@@ -40,8 +40,8 @@
         "F001"
       ],
       "verification": "pytest tests/test_vnstock_news_crawler.py -x  (no duplicate source_url; published_at parseable and not future at fetch time; schema matches F004 exactly so they can be unioned)",
-      "state": "not_started",
-      "evidence": null
+      "state": "passing",
+      "evidence": "8 passed (pytest tests/test_vnstock_news_crawler.py -v); ruff/mypy clean. Live schema confirmed via literal discover_news_schema.py terminal output pasted 2026-08-13, 21 cols, 50 rows, FPT."
     },
     {
       "id": "F004",

@@ -102,6 +102,8 @@ next session reads to avoid starting from zero.
 
 - Resolved: F008 (Retry/reconciliation module) marked passing after test suite passed.
 
+- Resolved: F003 (vnstock news crawler) marked passing after test suite passed and schema was verified live.
+
 <!--
 Template for future entries:
 
