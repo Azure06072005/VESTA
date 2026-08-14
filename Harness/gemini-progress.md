@@ -86,6 +86,19 @@ log when implementing features from `feature_list.json`. See DECISIONS.md
 - Blocked: F005 (Need decision on `DISCLOSURE_LAG_DAYS` and `balance_sheet` failure).
 - Next session should: Rewrite F005 normalization logic using `pd.melt` to handle vnstock's pivoted fundamental schema, and resolve the open decisions.
 
+## Session 3 — 2026-08-14
+- Completed: F007 (Realtime quote snapshot crawler + ACCUMULATE retention policy).
+- Scope adjustment formally logged in DECISIONS.md: shrunken to `Trading(source='VCI').price_board()` for realtime price board quotes; other 3 sub-features (valuation history, screener, rankings) deferred.
+- Implemented `src/crawlers/snapshots.py` with MultiIndex column handling (82 columns from VCI price board flattened and preserved in `data_json`).
+- Added DDL for `staging.realtime_quote_snapshot` and `core.realtime_quote_snapshot` with ACCUMULATE retention policy in `configs/duckdb_schema.sql`.
+- Harmonized F005 `src/crawlers/fundamentals.py` with `melt_pivoted_statement()` for unpivoting quarterly financial statement schemas.
+- Full verification pass:
+  - Unit tests: `33 passed, 1 xfailed` (`pytest -v`).
+  - Linter: `ruff check src tests` (clean, all checks passed).
+  - Type-checker: `mypy src tests --ignore-missing-imports` (clean, 14 files checked).
+  - Live execution: Crawled realtime price board snapshot for `FPT` and `VNM` into DuckDB table `core.realtime_quote_snapshot`.
+- Next session should: Implement F101 (`src/pipeline/validate_crossref.py`) to cross-validate referential integrity across all crawlers (F001–F007).
+
 <!--
 Template for future entries:
 

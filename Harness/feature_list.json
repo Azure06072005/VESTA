@@ -79,13 +79,13 @@
     {
       "id": "F007",
       "name": "Insights/Analytics snapshot crawler + retention policy decision",
-      "behavior": "Market valuation history, technical/flow screener, gainer/loser/volume rankings, realtime quote. BEFORE writing this crawler: explicitly decide and document (in DECISIONS.md) whether each snapshot type accumulates one file per day (historical, backtestable) or overwrites the latest only (current-state only, NOT usable in backtests). This decision must exist before F007 is marked passing, since the wrong choice silently breaks any later backtest that assumes history exists.",
+      "behavior": "Realtime quote price board snapshot crawler (Trading.price_board) with ACCUMULATE retention policy documented in DECISIONS.md (2026-08-14). Ingests multi-index 82-column price board from VCI, storing full snapshot as JSON per (symbol, snapshot_at). Valuation history, screener, rankings deferred per DECISIONS.md.",
       "dependencies": [
         "F001"
       ],
-      "verification": "DECISIONS.md contains a dated entry naming the retention choice per snapshot type; pytest tests/test_snapshot_retention.py -x  (re-running the crawler twice on two different dates produces two distinct retained files/rows if the decision was 'accumulate', or confirms intentional overwrite if the decision was 'latest-only')",
-      "state": "not_started",
-      "evidence": null
+      "verification": "DECISIONS.md contains dated entry (2026-08-14); pytest tests/test_snapshot_retention.py passes (7/7); live crawl verified for FPT and VNM.",
+      "state": "passing",
+      "evidence": "7 passed (pytest tests/test_snapshot_retention.py -v); 34 passed, 1 xfailed (full suite); ruff check and mypy clean. Live execution confirmed 2026-08-14 for FPT and VNM (wrote 2 rows to core.realtime_quote_snapshot). MultiIndex columns flattened to JSON payload."
     },
     {
       "id": "F008",
