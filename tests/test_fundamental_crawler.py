@@ -1,11 +1,11 @@
 """F005 verification.
 
-normalize_statement/write_statements are pure/DB-only and tested here
+melt_pivoted_statement/write_statements are pure/DB-only and tested here
 without network access. fetch_raw() (the live vnstock call) is NOT covered
--- this sandbox cannot reach vnstock's API domain. Run
-discover_fundamentals_schema.py against a real key to confirm
-PERIOD_END_ALIASES and the DISCLOSURE_LAG_DAYS assumption in
-src/crawlers/fundamentals.py.
+-- this sandbox cannot reach vnstock's API domain. Fixtures below match
+the pivoted shape confirmed live 2026-08-12: rows are financial line
+items, columns after the id column are period labels ('YYYY-Qn' or
+'YYYY').
 """
 from __future__ import annotations
 
@@ -22,36 +22,53 @@ from etl import db  # noqa: E402
 from crawlers import fundamentals  # noqa: E402
 
 
-def _sample_income_statement_df() -> pd.DataFrame:
-    # UNCONFIRMED column names -- see fundamentals.py module docstring.
+def _sample_pivoted_df() -> pd.DataFrame:
+    # Confirmed live shape 2026-08-12: id column ('item_id') + period
+    # label columns. Exact id column name is a best guess among
+    # ID_COLUMN_CANDIDATES -- see module docstring.
     return pd.DataFrame(
         {
-            "period_end": ["2025-12-31", "2025-09-30"],
-            "revenue": [12000.5, 11500.2],
-            "net_profit": [1800.1, 1700.3],
+            "item_id": ["revenue", "net_profit"],
+            "2026-Q1": [12000.5, 1800.1],
+            "2025-Q4": [11500.2, 1700.3],
         }
     )
 
 
-def test_normalize_statement_computes_available_at_from_lag():
-    out = fundamentals.normalize_statement(_sample_income_statement_df(), "FPT", "income_statement")
+def test_melt_pivoted_statement_produces_one_row_per_period():
+    out = fundamentals.melt_pivoted_statement(_sample_pivoted_df(), "FPT", "income_statement")
     assert list(out.columns) == fundamentals.FUNDAMENTAL_COLUMNS
+    assert len(out) == 2  # two period columns -> two period rows
+    periods = sorted(out["period_end"].tolist())
+    assert periods[0].isoformat() == "2025-12-31"  # 2025-Q4 end
+    assert periods[1].isoformat() == "2026-03-31"  # 2026-Q1 end
+
+
+def test_melt_pivoted_statement_packs_metrics_into_json():
+    out = fundamentals.melt_pivoted_statement(_sample_pivoted_df(), "FPT", "income_statement")
+    q1_row = out[out["period_end"].astype(str) == "2026-03-31"].iloc[0]
+    metrics = json.loads(q1_row["data_json"])
+    assert metrics["revenue"] == 12000.5
+    assert metrics["net_profit"] == 1800.1
+
+
+def test_melt_pivoted_statement_handles_bare_year_columns():
+    yearly = pd.DataFrame({"item_id": ["revenue"], "2025": [50000.0], "2024": [45000.0]})
+    out = fundamentals.melt_pivoted_statement(yearly, "FPT", "income_statement")
+    periods = sorted(p.isoformat() for p in out["period_end"])
+    assert periods == ["2024-12-31", "2025-12-31"]
+
+
+def test_melt_pivoted_statement_computes_available_at_from_lag():
+    out = fundamentals.melt_pivoted_statement(_sample_pivoted_df(), "FPT", "income_statement")
     row = out.iloc[0]
-    expected_lag_days = fundamentals.DISCLOSURE_LAG_DAYS
-    assert (row["available_at"] - row["period_end"]).days == expected_lag_days
+    assert (row["available_at"] - row["period_end"]).days == fundamentals.DISCLOSURE_LAG_DAYS
 
 
-def test_normalize_statement_preserves_full_row_as_json():
-    out = fundamentals.normalize_statement(_sample_income_statement_df(), "FPT", "income_statement")
-    parsed = json.loads(out.iloc[0]["data_json"])
-    assert parsed["revenue"] == 12000.5
-    assert parsed["net_profit"] == 1800.1
-
-
-def test_normalize_statement_raises_clearly_on_missing_period_column():
-    drifted = _sample_income_statement_df().rename(columns={"period_end": "totally_different_col"})
-    with pytest.raises(ValueError, match="Could not find a period-end column"):
-        fundamentals.normalize_statement(drifted, "FPT", "income_statement")
+def test_melt_pivoted_statement_raises_clearly_when_no_period_columns():
+    no_periods = pd.DataFrame({"item_id": ["revenue"], "notes": ["some text"]})
+    with pytest.raises(ValueError, match="No period-label columns"):
+        fundamentals.melt_pivoted_statement(no_periods, "FPT", "income_statement")
 
 
 def test_balance_sheet_empty_response_fails_loudly():
@@ -62,14 +79,10 @@ def test_balance_sheet_empty_response_fails_loudly():
     what this asserts -- do not "fix" this by catching the error and
     returning an empty result.
     """
-    with pytest.raises(ValueError, match="empty DataFrame"):
-        fundamentals.normalize_statement(pd.DataFrame(), "FPT", "balance_sheet")
+    from etl.retry_failed_jobs import EmptyResultError
 
-
-def test_normalize_statement_raises_on_duplicate_period():
-    dupe = pd.concat([_sample_income_statement_df().iloc[[0]], _sample_income_statement_df().iloc[[0]]])
-    with pytest.raises(ValueError, match="duplicate"):
-        fundamentals.normalize_statement(dupe, "FPT", "income_statement")
+    with pytest.raises(EmptyResultError):
+        fundamentals.melt_pivoted_statement(pd.DataFrame(), "FPT", "balance_sheet")
 
 
 def test_fetch_raw_rejects_unknown_report_type():
@@ -80,7 +93,7 @@ def test_fetch_raw_rejects_unknown_report_type():
 def test_write_statements_is_idempotent(tmp_path):
     db_path = tmp_path / "test_vesta.duckdb"
     con = db.bootstrap_schema(db_path)
-    normalized = fundamentals.normalize_statement(_sample_income_statement_df(), "FPT", "income_statement")
+    normalized = fundamentals.melt_pivoted_statement(_sample_pivoted_df(), "FPT", "income_statement")
 
     n1 = fundamentals.write_statements(normalized, con)
     n2 = fundamentals.write_statements(normalized, con)  # re-run, same input
@@ -95,10 +108,9 @@ def test_write_statements_is_idempotent(tmp_path):
 def test_write_statements_keeps_report_types_independent(tmp_path):
     db_path = tmp_path / "test_vesta.duckdb"
     con = db.bootstrap_schema(db_path)
-    income = fundamentals.normalize_statement(_sample_income_statement_df(), "FPT", "income_statement")
-    ratio = fundamentals.normalize_statement(
-        pd.DataFrame({"period_end": ["2025-12-31"], "pe": [15.2]}), "FPT", "ratio"
-    )
+    income = fundamentals.melt_pivoted_statement(_sample_pivoted_df(), "FPT", "income_statement")
+    ratio_raw = pd.DataFrame({"item_id": ["pe"], "2025-Q4": [15.2]})
+    ratio = fundamentals.melt_pivoted_statement(ratio_raw, "FPT", "ratio")
 
     fundamentals.write_statements(income, con)
     fundamentals.write_statements(ratio, con)
