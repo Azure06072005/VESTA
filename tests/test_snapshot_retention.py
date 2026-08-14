@@ -34,14 +34,14 @@ def _sample_price_board_df() -> pd.DataFrame:
     )
 
 
-def test_normalize_snapshot_produces_one_row_per_symbol():
+def test_normalize_snapshot_produces_one_row_per_symbol() -> None:
     out = snapshots.normalize_snapshot(_sample_price_board_df())
     assert list(out.columns) == snapshots.SNAPSHOT_COLUMNS
     assert len(out) == 2
     assert set(out["symbol"]) == {"FPT", "VNM"}
 
 
-def test_normalize_snapshot_preserves_full_row_as_json():
+def test_normalize_snapshot_preserves_full_row_as_json() -> None:
     out = snapshots.normalize_snapshot(_sample_price_board_df())
     fpt_row = out[out["symbol"] == "FPT"].iloc[0]
     parsed = json.loads(fpt_row["data_json"])
@@ -49,24 +49,24 @@ def test_normalize_snapshot_preserves_full_row_as_json():
     assert parsed["volume"] == 1714500
 
 
-def test_normalize_snapshot_accepts_ticker_column_alias():
+def test_normalize_snapshot_accepts_ticker_column_alias() -> None:
     ticker_df = pd.DataFrame({"ticker": ["FPT"], "match_price": [93.9]})
     out = snapshots.normalize_snapshot(ticker_df)
     assert out.iloc[0]["symbol"] == "FPT"
 
 
-def test_normalize_snapshot_raises_clearly_on_missing_symbol_column():
+def test_normalize_snapshot_raises_clearly_on_missing_symbol_column() -> None:
     no_symbol_df = pd.DataFrame({"match_price": [93.9]})
     with pytest.raises(ValueError, match="Could not find a 'symbol' or 'ticker' column"):
         snapshots.normalize_snapshot(no_symbol_df)
 
 
-def test_normalize_snapshot_raises_empty_result_error_on_empty_fetch():
+def test_normalize_snapshot_raises_empty_result_error_on_empty_fetch() -> None:
     with pytest.raises(EmptyResultError):
         snapshots.normalize_snapshot(pd.DataFrame())
 
 
-def test_write_snapshot_accumulates_across_separate_fetches(tmp_path):
+def test_write_snapshot_accumulates_across_separate_fetches(tmp_path: pathlib.Path) -> None:
     # ACCUMULATE retention policy (DECISIONS.md 2026-08-14): two distinct
     # snapshots for the same symbol must both be kept, not overwritten.
     db_path = tmp_path / "test_vesta.duckdb"
@@ -79,13 +79,14 @@ def test_write_snapshot_accumulates_across_separate_fetches(tmp_path):
     n2 = snapshots.write_snapshot(second, con)
 
     assert n1 == n2 == 2
-    row_count = con.execute(
+    res = con.execute(
         "SELECT COUNT(*) FROM core.realtime_quote_snapshot WHERE symbol = 'FPT'"
-    ).fetchone()[0]
-    assert row_count == 2  # both snapshots retained, not deduped away
+    ).fetchone()
+    assert res is not None
+    assert res[0] == 2  # both snapshots retained, not deduped away
 
 
-def test_write_snapshot_rejects_schema_mismatch(tmp_path):
+def test_write_snapshot_rejects_schema_mismatch(tmp_path: pathlib.Path) -> None:
     db_path = tmp_path / "test_vesta.duckdb"
     con = db.bootstrap_schema(db_path)
     bad_df = pd.DataFrame({"symbol": ["FPT"]})
