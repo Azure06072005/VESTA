@@ -1,0 +1,99 @@
+{
+  "F000": {
+    "status": "PASS",
+    "schemas": [
+      "information_schema",
+      "main",
+      "pg_catalog",
+      "main",
+      "core",
+      "main",
+      "meta",
+      "staging"
+    ],
+    "core_tables": [
+      "corporate_events",
+      "dim_symbol",
+      "fundamentals",
+      "market_ohlcv_daily",
+      "news"
+    ]
+  },
+  "F001": {
+    "status": "FAIL",
+    "error": "Constraint Error: NOT NULL constraint failed: dim_symbol.organ_name"
+  },
+  "F002": {
+    "status": "PASS",
+    "rows_fpt": 7,
+    "sample": [
+      {
+        "symbol": "FPT",
+        "date": "2024-01-02 00:00:00",
+        "open": 69.96,
+        "high": 69.96,
+        "low": 69.1,
+        "close": 69.24,
+        "volume": 1714500,
+        "fetched_at": "2026-08-14 07:22:31.893967"
+      },
+      {
+        "symbol": "FPT",
+        "date": "2024-01-03 00:00:00",
+        "open": 69.02,
+        "high": 69.67,
+        "low": 68.88,
+        "close": 69.53,
+        "volume": 1436900,
+        "fetched_at": "2026-08-14 07:22:31.893967"
+      }
+    ]
+  },
+  "F003": {
+    "status": "PASS",
+    "total_rows": 1,
+    "sample": [
+      {
+        "symbol": "FPT",
+        "source": "vnstock",
+        "published_at": "2026-08-03 16:13:52",
+        "available_at": "2026-08-03 16:13:52",
+        "headline": "FPT: Ngh\u1ecb quy\u1ebft H\u0110QT v\u1ec1 vi\u1ec7c tri\u1ec3n khai ph\u01b0\u01a1ng \u00e1n ph\u00e1t h\u00e0nh c\u1ed5 phi\u1ebfu \u0111\u1ec3 t\u0103ng v\u1ed1n c\u1ed5 ph\u1ea7n t\u1eeb ngu\u1ed3n v\u1ed1n ch\u1ee7 s\u1edf h\u1eefu",
+        "source_url": "None"
+      }
+    ]
+  },
+  "F004": {
+    "status": "PASS",
+    "total_rows": 3,
+    "sample": [
+      {
+        "symbol": "FPT",
+        "source": "cafef",
+        "published_at": "2026-08-05 12:07:00",
+        "available_at": "2026-08-05 12:07:00",
+        "headline": "H\u01a1n 6.400 nh\u00e2n s\u1ef1 r\u1eddi kh\u1ecfi b\u00e1o c\u00e1o c\u1ee7a 8 ng\u00e2n h\u00e0ng, 14 DN \u0111\u1ee9ng \u0111\u1ea7u \u0111\u00e3 gi\u1ea3m 21.730 lao \u0111\u1ed9ng",
+        "source_url": "https://cafef.vn/FPT-2946651/hon-6400-nhan-su-roi-khoi-bao-cao-cua-8-ngan-hang-14-dn-dung-dau-da-giam-21730-lao-dong.chn"
+      },
+      {
+        "symbol": "FPT",
+        "source": "cafef",
+        "published_at": "2026-08-04 09:18:00",
+        "available_at": "2026-08-04 09:18:00",
+        "headline": "Khi c\u00e1c '\u00f4ng l\u1edbn' b\u1eaft \u0111\u1ea7u tuy\u1ec3n d\u1ee5ng tr\u1edf l\u1ea1i: Th\u1ebf Gi\u1edbi Di \u0110\u1ed9ng, Vinhomes d\u1eabn \u0111\u1ea7u nh\u00f3m 13 DN tuy\u1ec3n th\u00eam 11.500 lao \u0111\u1ed9ng, 4 ng\u00e2n h\u00e0ng t\u0103ng 2.500 ng\u01b0\u1eddi",
+        "source_url": "https://cafef.vn/FPT-2946179/khi-cac-ong-lon-bat-dau-tuyen-dung-tro-lai-the-gioi-di-dong-vinhomes-dan-dau-nhom-13-dn-tuyen-them-11500-lao-dong-4-ngan-hang-tang-2500-nguoi.chn"
+      }
+    ]
+  },
+  "F005": {
+    "status": "FAIL",
+    "error": "Could not find a period-end column in fetched fundamental data. Columns present: ['item', 'item_id', '2026-Q2', '2025-Q4', '2026-Q1', '2025-Q4_1']. PERIOD_END_ALIASES tried: ['period_end', 'date', 'report_date', 'period']. Run discover_fundamentals_schema.py against a live key and update PERIOD_END_ALIASES rather than guessing."
+  },
+  "F006": {
+    "status": "FAIL",
+    "error": "Binder Error: Referenced column \"event_title\" not found in FROM clause!\nCandidate bindings: \"event_date\", \"event_type\", \"event_id\", \"fetched_at\", \"detail_json\"\n\nLINE 1: SELECT symbol, event_id, event_date, event_type, event_title FROM core.corporate_events WHERE symbol = 'FPT...\n                                                         ^"
+  },
+  "F008": {
+    "status": "PASS"
+  }
+}
