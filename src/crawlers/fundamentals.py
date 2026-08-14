@@ -52,29 +52,18 @@ import duckdb
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 from etl import db  # noqa: E402
 
+from etl.retry_failed_jobs import EmptyResultError  # noqa: E402
+
 REQUIRED_ENV_VAR = "VNSTOCK_API_KEY"
 
-# SOURCED (2026-08-12, see DECISIONS.md): Circular 96/2020/TT-BTC sets a
-# 20-day regulatory deadline for quarterly financial report submission.
-# Real-world practice regularly exceeds this -- extension requests to
-# HOSE are common, with documented cases (e.g. REE) requesting Q4 filing
-# out to 30 days. 30 days = regulatory deadline + buffer for the commonly
-# observed extension pattern, chosen because underestimating the lag
-# leaks future information into F102's backtest (worse failure mode than
-# overestimating and discarding a few real data points).
 DISCLOSURE_LAG_DAYS = 30
 
-# report_type -> (method name, whether it accepts a `period` kwarg)
 REPORT_TYPES: dict[str, tuple[str, bool]] = {
     "income_statement": ("income_statement", True),
     "balance_sheet": ("balance_sheet", True),
     "cash_flow": ("cash_flow", True),
     "ratio": ("ratio", False),
 }
-
-# UNCONFIRMED -- see module docstring point 1. Update once
-# discover_fundamentals_schema.py output is available.
-PERIOD_END_ALIASES = ["period_end", "date", "report_date", "period"]
 
 FUNDAMENTAL_COLUMNS = ["symbol", "report_type", "period_end", "available_at", "data_json", "fetched_at"]
 
@@ -92,12 +81,7 @@ def _authenticate() -> None:
 
 
 def fetch_raw(symbol: str, report_type: str, period: str = "quarter") -> pd.DataFrame:
-    """Live network call. Requires VNSTOCK_API_KEY to be set.
-
-    Returns whatever vnstock's method gives back, untouched --
-    normalization happens in normalize_statement() so that logic stays
-    testable without network access.
-    """
+    """Live network call. Requires VNSTOCK_API_KEY to be set."""
     if report_type not in REPORT_TYPES:
         raise ValueError(f"Unknown report_type {report_type!r}, expected one of {list(REPORT_TYPES)}")
 
@@ -111,62 +95,91 @@ def fetch_raw(symbol: str, report_type: str, period: str = "quarter") -> pd.Data
     return result
 
 
-def _find_period_end_column(df: pd.DataFrame) -> str:
-    for candidate in PERIOD_END_ALIASES:
-        if candidate in df.columns:
-            return candidate
-    raise ValueError(
-        f"Could not find a period-end column in fetched fundamental data. "
-        f"Columns present: {list(df.columns)}. PERIOD_END_ALIASES tried: "
-        f"{PERIOD_END_ALIASES}. Run discover_fundamentals_schema.py against "
-        f"a live key and update PERIOD_END_ALIASES rather than guessing."
-    )
+def _parse_period_column(col: str) -> dt.date | None:
+    import re
+    col_str = str(col).strip()
+    m_quarter = re.match(r"^(\d{4})-Q([1-4])(?:_\d+)?$", col_str)
+    if m_quarter:
+        year = int(m_quarter.group(1))
+        q = int(m_quarter.group(2))
+        quarter_end_days = {1: (3, 31), 2: (6, 30), 3: (9, 30), 4: (12, 31)}
+        month, day = quarter_end_days[q]
+        return dt.date(year, month, day)
+
+    m_year = re.match(r"^(\d{4})(?:_\d+)?$", col_str)
+    if m_year:
+        year = int(m_year.group(1))
+        return dt.date(year, 12, 31)
+
+    return None
 
 
-def normalize_statement(raw_df: pd.DataFrame, symbol: str, report_type: str) -> pd.DataFrame:
-    """Pure transform: one row per (symbol, report_type, period_end), the
-    full raw row stored as JSON in data_json (schema-flexible since each
-    report type has a very different column set -- see F005's spec noting
-    ~28-156 columns depending on statement type), plus the assumed
-    available_at. No network access -- fully unit-testable.
+def melt_pivoted_statement(raw_df: pd.DataFrame, symbol: str, report_type: str) -> pd.DataFrame:
+    """Pure transform: converts pivoted financial statement (rows=metrics,
+    cols=period labels) into one row per period with a JSON data blob.
     """
     if raw_df.empty:
-        raise ValueError(
+        raise EmptyResultError(
             f"fetch_raw returned an empty DataFrame for symbol={symbol!r}, "
-            f"report_type={report_type!r} -- per conventions.md, crawlers "
-            f"fail loudly rather than silently substituting stale data. "
-            f"(Confirmed live 2026-08-12: balance_sheet returned empty for "
-            f"the test symbol -- FORMALLY ACCEPTED as a real vnstock API "
-            f"gap, not a bug, see DECISIONS.md.)"
+            f"report_type={report_type!r} -- F008-compatible: recorded as "
+            f"genuine emptiness via record_empty(), NOT retried."
         )
 
-    period_col = _find_period_end_column(raw_df)
-    period_end = pd.to_datetime(raw_df[period_col]).dt.date
+    candidate_id_cols = ["item_id", "item", "name", "metric"]
+    id_col = next((c for c in candidate_id_cols if c in raw_df.columns), raw_df.columns[0])
 
-    out = pd.DataFrame(
-        {
-            "symbol": symbol,
-            "report_type": report_type,
-            "period_end": period_end,
-            "available_at": period_end + pd.Timedelta(days=DISCLOSURE_LAG_DAYS),
-        }
-    )
-    records = raw_df.to_dict(orient="records")
-    out["data_json"] = [_row_to_json(r) for r in records]
-    out["fetched_at"] = dt.datetime.now(dt.timezone.utc).replace(tzinfo=None)
+    period_cols_map: dict[str, dt.date] = {}
+    for col in raw_df.columns:
+        if col == id_col:
+            continue
+        p_date = _parse_period_column(col)
+        if p_date is not None:
+            period_cols_map[col] = p_date
 
+    if not period_cols_map:
+        raise ValueError(
+            f"No period-label columns found in fetched fundamental data. "
+            f"Columns present: {list(raw_df.columns)}."
+        )
+
+    rows = []
+    now = dt.datetime.now(dt.timezone.utc).replace(tzinfo=None)
+    for col, period_end in period_cols_map.items():
+        metrics = {}
+        for _, r in raw_df.iterrows():
+            metric_key = str(r[id_col])
+            val = r[col]
+            metrics[metric_key] = val if pd.notnull(val) else None
+
+        available_at = period_end + dt.timedelta(days=DISCLOSURE_LAG_DAYS)
+        rows.append(
+            {
+                "symbol": symbol,
+                "report_type": report_type,
+                "period_end": period_end,
+                "available_at": available_at,
+                "data_json": _row_to_json(metrics),
+                "fetched_at": now,
+            }
+        )
+
+    out = pd.DataFrame(rows)
     dupes = out.duplicated(subset=["symbol", "report_type", "period_end"]).sum()
     if dupes:
         raise ValueError(
-            f"normalize_statement produced {dupes} duplicate (symbol, "
-            f"report_type, period_end) row(s) for {symbol!r}/{report_type!r} "
-            f"-- refusing to write ambiguous data."
+            f"melt_pivoted_statement produced {dupes} duplicate (symbol, "
+            f"report_type, period_end) row(s) for {symbol!r}/{report_type!r}."
         )
 
     return out[FUNDAMENTAL_COLUMNS]
 
 
-def _row_to_json(row: "dict[object, object]") -> str:
+def normalize_statement(raw_df: pd.DataFrame, symbol: str, report_type: str) -> pd.DataFrame:
+    """Backward-compatible alias for melt_pivoted_statement."""
+    return melt_pivoted_statement(raw_df, symbol, report_type)
+
+
+def _row_to_json(row: "dict[str, object] | dict[object, object] | dict[str, object | None]") -> str:
     import json
 
     def _default(o: object) -> str:

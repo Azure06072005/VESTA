@@ -94,26 +94,41 @@ def normalize_snapshot(raw_df: pd.DataFrame) -> pd.DataFrame:
             "first before assuming it's a transient API issue.)"
         )
 
-    symbol_col = next((c for c in ("symbol", "ticker") if c in raw_df.columns), None)
-    if symbol_col is None:
-        raise ValueError(
-            f"Could not find a 'symbol' or 'ticker' column in fetched "
-            f"price board data. Columns present: {list(raw_df.columns)}. "
-            f"Run discover_price_board_schema.py against a live key to "
-            f"confirm the real column name."
-        )
+    df = raw_df.copy()
+    if isinstance(df.columns, pd.MultiIndex):
+        symbol_col_candidate = None
+        for col in df.columns:
+            if "symbol" in col or "ticker" in col:
+                symbol_col_candidate = col
+                break
+        if symbol_col_candidate is None:
+            raise ValueError(
+                f"Could not find a 'symbol' or 'ticker' column in MultiIndex columns: {list(df.columns)}"
+            )
+        symbols = df[symbol_col_candidate].astype(str)
+        df.columns = pd.Index(["_".join(str(level) for level in c if str(level)) for c in df.columns])
+    else:
+        symbol_col = next((c for c in ("symbol", "ticker") if c in df.columns), None)
+        if symbol_col is None:
+            raise ValueError(
+                f"Could not find a 'symbol' or 'ticker' column in fetched "
+                f"price board data. Columns present: {list(df.columns)}. "
+                f"Run discover_price_board_schema.py against a live key to "
+                f"confirm the real column name."
+            )
+        symbols = df[symbol_col].astype(str)
 
     snapshot_at = dt.datetime.now(dt.timezone.utc).replace(tzinfo=None)
-    records = raw_df.to_dict(orient="records")
+    records = df.to_dict(orient="records")
 
     out = pd.DataFrame(
         {
-            "symbol": raw_df[symbol_col].astype(str),
+            "symbol": symbols,
             "snapshot_at": snapshot_at,
             "data_json": [_row_to_json(r) for r in records],
+            "fetched_at": snapshot_at,
         }
     )
-    out["fetched_at"] = snapshot_at
 
     dupes = out.duplicated(subset=["symbol", "snapshot_at"]).sum()
     if dupes:
