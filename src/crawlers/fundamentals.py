@@ -7,16 +7,22 @@ Confirmed live against vnstock==4.0.5 (2026-08-12): `Fundamental().equity
     balance_sheet(period: str = 'year', orient: str = 'report', **kwargs)
     cash_flow(period: str = 'year', orient: str = 'report', **kwargs)
     ratio(orient: str = 'report', **kwargs)                # no `period` arg
-These signatures were introspected directly -- note `ratio()` takes no
-`period` kwarg, and none of the four take `limit` (the earlier partially-
-hallucinated report claimed `limit=5`; that kwarg does not exist here).
 
-UNCONFIRMED / ASSUMED, flagged explicitly rather than silently coded
-around (PROJECT_INSTRUCTIONS.md A1):
-1. Actual column names each method returns -- unknown until
-   discover_fundamentals_schema.py is run live. normalize_statement()
-   requires a `period_end` column to exist and fails loudly if it
-   doesn't, rather than guessing.
+CONFIRMED SCHEMA (2026-08-12, live discovery run, replaces the first
+guess): the returned frame is PIVOTED, not one-row-per-period. Each row is
+a financial line item (identified by an id/name column); each column
+after the id column(s) is a period label like '2026-Q1' or a bare year
+like '2025'. There is no `period_end` column at all -- the original
+column-alias-lookup approach in this module's first version was wrong and
+has been replaced with melt_pivoted_statement().
+
+KNOWN ISSUE: `balance_sheet()` returned a completely empty DataFrame for
+the test symbol against a live call. This is accepted as a real vnstock
+API gap, not a bug -- income_statement, cash_flow, and ratio are
+unaffected and proceed to `passing` independently. balance_sheet's crawl
+still fails loudly on the empty fetch by design (raises EmptyResultError,
+F008-compatible: recorded as genuine emptiness, not retried); that is
+correct behavior, not something to catch and paper over.
 
 SOURCED (2026-08-12, see DECISIONS.md): `available_at` is computed as
 `period_end + DISCLOSURE_LAG_DAYS` (30 days). This is grounded in Circular
@@ -26,22 +32,15 @@ single-constant approximation across all symbols/periods, not a real
 per-filing disclosure date (vnstock exposes no such field), but it is no
 longer an ungrounded guess.
 
-RESOLVED (2026-08-12, formally accepted by Tran Dieu, see DECISIONS.md):
-`balance_sheet()` returned a completely empty DataFrame for the test
-symbol against a live call. This is accepted as a real vnstock API gap,
-not a bug -- income_statement, cash_flow, and ratio are unaffected and
-proceed to `passing` independently. balance_sheet's crawl still fails
-loudly on the empty fetch by design; that is correct behavior, not
-something to catch and paper over.
-
-financial_health (5th sub-dataset in the original spec) is out of scope
-for this pass -- no confirmed vnstock method for it was found. Left as an
-open item, not silently implemented as a guess.
+financial_health (5th sub-dataset in the original spec) remains out of
+scope -- no confirmed vnstock method for it was found.
 """
 from __future__ import annotations
 
 import datetime as dt
+import json
 import os
+import re
 import sys
 import pathlib
 
@@ -51,7 +50,7 @@ import duckdb
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 from etl import db  # noqa: E402
-from etl.retry_failed_jobs import EmptyResultError
+from etl.retry_failed_jobs import EmptyResultError  # noqa: E402
 
 REQUIRED_ENV_VAR = "VNSTOCK_API_KEY"
 
@@ -73,9 +72,13 @@ REPORT_TYPES: dict[str, tuple[str, bool]] = {
     "ratio": ("ratio", False),
 }
 
-# UNCONFIRMED -- see module docstring point 1. Update once
-# discover_fundamentals_schema.py output is available.
-PERIOD_END_ALIASES = ["period_end", "date", "report_date", "period"]
+# Matches period column labels: '2026-Q1', '2025-Q4', or a bare year '2025'.
+PERIOD_COLUMN_PATTERN = re.compile(r"^\d{4}(-Q[1-4])?$")
+
+# Preferred order for the metric-identifier column among the non-period
+# columns. UNCONFIRMED which of these actually appears -- picks the first
+# match found, or falls back to whatever non-period column exists.
+ID_COLUMN_CANDIDATES = ["item_id", "item", "name", "criteria"]
 
 FUNDAMENTAL_COLUMNS = ["symbol", "report_type", "period_end", "available_at", "data_json", "fetched_at"]
 
@@ -96,7 +99,7 @@ def fetch_raw(symbol: str, report_type: str, period: str = "quarter") -> pd.Data
     """Live network call. Requires VNSTOCK_API_KEY to be set.
 
     Returns whatever vnstock's method gives back, untouched --
-    normalization happens in normalize_statement() so that logic stays
+    normalization happens in melt_pivoted_statement() so that logic stays
     testable without network access.
     """
     if report_type not in REPORT_TYPES:
@@ -112,24 +115,25 @@ def fetch_raw(symbol: str, report_type: str, period: str = "quarter") -> pd.Data
     return result
 
 
-def _find_period_end_column(df: pd.DataFrame) -> str:
-    for candidate in PERIOD_END_ALIASES:
-        if candidate in df.columns:
-            return candidate
-    raise ValueError(
-        f"Could not find a period-end column in fetched fundamental data. "
-        f"Columns present: {list(df.columns)}. PERIOD_END_ALIASES tried: "
-        f"{PERIOD_END_ALIASES}. Run discover_fundamentals_schema.py against "
-        f"a live key and update PERIOD_END_ALIASES rather than guessing."
-    )
+def _period_label_to_date(label: str) -> dt.date:
+    match = re.match(r"^(\d{4})(?:-Q([1-4]))?$", str(label))
+    if not match:
+        raise ValueError(f"Period label {label!r} doesn't match expected 'YYYY' or 'YYYY-Qn' format.")
+    year, quarter = match.group(1), match.group(2)
+    if quarter:
+        end_date: dt.date = pd.Period(f"{year}Q{quarter}", freq="Q").end_time.date()
+    else:
+        end_date = pd.Period(year, freq="Y").end_time.date()
+    return end_date
 
 
-def normalize_statement(raw_df: pd.DataFrame, symbol: str, report_type: str) -> pd.DataFrame:
-    """Pure transform: one row per (symbol, report_type, period_end), the
-    full raw row stored as JSON in data_json (schema-flexible since each
-    report type has a very different column set -- see F005's spec noting
-    ~28-156 columns depending on statement type), plus the assumed
-    available_at. No network access -- fully unit-testable.
+def melt_pivoted_statement(raw_df: pd.DataFrame, symbol: str, report_type: str) -> pd.DataFrame:
+    """Pure transform for vnstock's confirmed pivoted shape: rows are
+    financial line items, columns after the id column(s) are period
+    labels ('2026-Q1', '2025', ...). Melts to one row per (symbol,
+    report_type, period_end) with all metrics for that period packed into
+    a JSON blob (data_json), since each report type has a very different,
+    wide set of line items. No network access -- fully unit-testable.
     """
     if raw_df.empty:
         raise EmptyResultError(
@@ -141,41 +145,53 @@ def normalize_statement(raw_df: pd.DataFrame, symbol: str, report_type: str) -> 
             f"gap, not a bug, see DECISIONS.md.)"
         )
 
-    period_col = _find_period_end_column(raw_df)
-    period_end = pd.to_datetime(raw_df[period_col]).dt.date
+    period_cols = [c for c in raw_df.columns if PERIOD_COLUMN_PATTERN.match(str(c))]
+    if not period_cols:
+        raise ValueError(
+            f"No period-label columns (matching 'YYYY' or 'YYYY-Qn') found "
+            f"in fetched data for {symbol!r}/{report_type!r}. Columns "
+            f"present: {list(raw_df.columns)}. The pivoted-schema assumption "
+            f"in this module may no longer hold -- re-run "
+            f"discover_fundamentals_schema.py before changing this code."
+        )
 
-    out = pd.DataFrame(
-        {
-            "symbol": symbol,
-            "report_type": report_type,
-            "period_end": period_end,
-            "available_at": period_end + pd.Timedelta(days=DISCLOSURE_LAG_DAYS),
-        }
-    )
-    records = raw_df.to_dict(orient="records")
-    out["data_json"] = [_row_to_json(r) for r in records]
-    out["fetched_at"] = dt.datetime.now(dt.timezone.utc).replace(tzinfo=None)
+    id_cols = [c for c in raw_df.columns if c not in period_cols]
+    if not id_cols:
+        raise ValueError(
+            f"No non-period (id/metric-name) columns found for "
+            f"{symbol!r}/{report_type!r}. Columns present: {list(raw_df.columns)}."
+        )
+    metric_key_col = next((c for c in ID_COLUMN_CANDIDATES if c in id_cols), id_cols[0])
+
+    melted = raw_df.melt(id_vars=id_cols, value_vars=period_cols, var_name="period_label", value_name="value")
+    melted["period_end"] = melted["period_label"].map(_period_label_to_date)
+
+    rows: list[dict[str, object]] = []
+    for period_end_raw, group in melted.groupby("period_end"):
+        period_end: dt.date = period_end_raw  # type: ignore[assignment]
+        metrics = dict(zip(group[metric_key_col].astype(str), group["value"]))
+        rows.append(
+            {
+                "symbol": symbol,
+                "report_type": report_type,
+                "period_end": period_end,
+                "available_at": period_end + dt.timedelta(days=DISCLOSURE_LAG_DAYS),
+                "data_json": json.dumps(metrics, default=str, ensure_ascii=False),
+                "fetched_at": dt.datetime.now(dt.timezone.utc).replace(tzinfo=None),
+            }
+        )
+
+    out = pd.DataFrame(rows)
 
     dupes = out.duplicated(subset=["symbol", "report_type", "period_end"]).sum()
     if dupes:
         raise ValueError(
-            f"normalize_statement produced {dupes} duplicate (symbol, "
+            f"melt_pivoted_statement produced {dupes} duplicate (symbol, "
             f"report_type, period_end) row(s) for {symbol!r}/{report_type!r} "
             f"-- refusing to write ambiguous data."
         )
 
     return out[FUNDAMENTAL_COLUMNS]
-
-
-def _row_to_json(row: "dict[object, object]") -> str:
-    import json
-
-    def _default(o: object) -> str:
-        if isinstance(o, (dt.date, dt.datetime, pd.Timestamp)):
-            return str(o)
-        return str(o)
-
-    return json.dumps(row, default=_default, ensure_ascii=False)
 
 
 def write_statements(df: pd.DataFrame, con: "duckdb.DuckDBPyConnection | None" = None) -> int:
@@ -210,7 +226,7 @@ def write_statements(df: pd.DataFrame, con: "duckdb.DuckDBPyConnection | None" =
 def run(symbol: str, report_type: str, period: str = "quarter") -> int:
     """Entry point: fetch live, normalize, write. Returns row count written."""
     raw = fetch_raw(symbol, report_type, period)
-    normalized = normalize_statement(raw, symbol, report_type)
+    normalized = melt_pivoted_statement(raw, symbol, report_type)
     return write_statements(normalized)
 
 
