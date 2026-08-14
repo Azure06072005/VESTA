@@ -92,3 +92,29 @@ CREATE TABLE IF NOT EXISTS core.fundamentals (
     fetched_at   TIMESTAMP NOT NULL,
     PRIMARY KEY (symbol, report_type, period_end)
 );
+
+-- staging/core.realtime_quote_snapshot (F007, SHRUNK SCOPE -- see
+-- DECISIONS.md 2026-08-14): F007 was originally scoped as 4 sub-features
+-- (valuation history, technical/flow screener, gainer/loser/volume
+-- rankings, realtime quote). Only realtime quote has a confirmed-real
+-- vnstock method in the free/open-source package (Trading.price_board);
+-- the other 3 have no confirmed method and are deferred, not built here.
+-- Retention policy: ACCUMULATE one row per (symbol, snapshot_at) --
+-- historical, backtestable -- per F007's spec requiring this decision be
+-- made explicitly before the feature is passing. A snapshot is a point-
+-- in-time price/volume read, not a correction of a prior snapshot, so
+-- overwriting would destroy real historical signal.
+CREATE TABLE IF NOT EXISTS staging.realtime_quote_snapshot (
+    symbol        VARCHAR NOT NULL,
+    snapshot_at   TIMESTAMP NOT NULL,
+    data_json     VARCHAR NOT NULL,
+    fetched_at    TIMESTAMP NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS core.realtime_quote_snapshot (
+    symbol        VARCHAR NOT NULL,
+    snapshot_at   TIMESTAMP NOT NULL,
+    data_json     VARCHAR NOT NULL,
+    fetched_at    TIMESTAMP NOT NULL,
+    PRIMARY KEY (symbol, snapshot_at)
+);
