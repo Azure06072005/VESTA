@@ -167,3 +167,21 @@ Newest at the top. Don't reverse any of these without a new, stated reason.
   F201 results look sensitive to this assumption, revisit with
   per-symbol/per-period data before trusting backtest conclusions built
   on it.
+
+## 2026-08-13: F004 accepts page-1-only cafef.vn crawl (~28 recent items/run)
+- Reason: cafef.vn's per-symbol news page server-renders only the first
+  page of articles; further items load via `javascript:LoadNext()`
+  (client-side AJAX). Reverse-engineering that endpoint was rejected on
+  ToS grounds -- robots.txt disallows /Ajax/, and the underlying endpoint
+  is very likely under that path.
+- Decision: F004 crawls page 1 only, per run. Full history is not a
+  one-shot backfill -- it accumulates over repeated scheduled runs via
+  the same idempotent dedup-by-source_url pattern F003 uses.
+- Also logged: the URL cafef.vn/du-lieu/hose/{ticker}-tin-tuc.chn looks
+  like a per-symbol news page but is JS/AJAX-rendered and returns no
+  articles to a plain HTTP GET -- the working URL is
+  cafef.vn/du-lieu/tin-doanh-nghiep/{ticker}/Event.chn.
+- Constraint: article body text is NOT fetched by F004 (would require a
+  second request per article) -- core.news.body is NULL for cafef-sourced
+  rows. If body text becomes necessary for sentiment scoring, that's a
+  separate feature, not a silent scope-creep into F004.

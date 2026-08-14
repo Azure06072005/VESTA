@@ -51,8 +51,8 @@
         "F001"
       ],
       "verification": "pytest tests/test_cafef_crawler.py -x  (schema matches F003; dedup by source_url; robots.txt-disallowed path raises rather than silently fetching)",
-      "state": "not_started",
-      "evidence": null
+      "state": "passing",
+      "evidence": "8 passed (pytest tests/test_cafef_crawler.py -v); 58 passed, 1 xfailed (full suite); ruff/mypy clean. Live execution confirmed 2026-08-14 for FPT and VNM (wrote 3 rows each to core.news); live idempotency and robots.txt check verified."
     },
     {
       "id": "F005",
