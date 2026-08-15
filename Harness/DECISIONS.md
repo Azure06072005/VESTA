@@ -185,3 +185,27 @@ Newest at the top. Don't reverse any of these without a new, stated reason.
   second request per article) -- core.news.body is NULL for cafef-sourced
   rows. If body text becomes necessary for sentiment scoring, that's a
   separate feature, not a silent scope-creep into F004.
+
+  ## 2026-08-14: F007 scope shrunk to realtime quote only; retention = ACCUMULATE
+- Reason: F007 was originally scoped as 4 sub-features (valuation
+  history, technical/flow screener, gainer/loser/volume rankings,
+  realtime quote). Live discovery (2026-08-13/14) confirmed `Insights`
+  does not exist anywhere in vnstock==4.0.5, and a full survey of every
+  top-level class (Trading, Retail, Fund, Quote, Market, Broker,
+  Reference) found no confirmed free-tier method for the other 3
+  sub-features. Only `Trading(source='VCI').price_board(symbols_list=
+  [...])` is a real, confirmed-callable method, plausibly covering
+  realtime quote.
+- Decision: implement F007 with realtime quote only. Retention policy:
+  ACCUMULATE -- one row per (symbol, snapshot_at), never overwritten --
+  since a price snapshot is a point-in-time fact, not a correction.
+- Rejected: purchasing paid `vnstock_data` to restore full scope --
+  rejected for now on cost grounds; revisit if valuation-history/
+  screener/ranking data becomes load-bearing for a later feature.
+- Rejected: searching for an entirely different data source for the
+  other 3 sub-features right now -- rejected as scope creep beyond what
+  F007 needs to unblock F101; can be revisited as its own feature later.
+- Constraint: valuation history, technical/flow screener, and gainer/
+  loser/volume rankings remain unimplemented. If a future feature
+  actually needs them, that's a new decision, not an assumption that
+  they're covered by this entry.
