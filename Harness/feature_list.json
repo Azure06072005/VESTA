@@ -79,13 +79,11 @@
     {
       "id": "F007",
       "name": "Insights/Analytics snapshot crawler + retention policy decision",
-      "behavior": "Realtime quote price board snapshot crawler (Trading.price_board) with ACCUMULATE retention policy documented in DECISIONS.md (2026-08-14). Ingests multi-index 82-column price board from VCI, storing full snapshot as JSON per (symbol, snapshot_at). Valuation history, screener, rankings deferred per DECISIONS.md.",
-      "dependencies": [
-        "F001"
-      ],
-      "verification": "DECISIONS.md contains dated entry (2026-08-14); pytest tests/test_snapshot_retention.py passes (7/7); live crawl verified for FPT and VNM.",
+      "behavior": "SCOPE SHRUNK 2026-08-14 (see DECISIONS.md): original spec had 4 sub-features (valuation history, screener, gainer/loser/volume rankings, realtime quote). Insights class confirmed absent from vnstock==4.0.5; full survey of Trading/Retail/Fund/Quote/Market/Broker/Reference found no confirmed free-tier method for 3 of the 4. Implemented realtime quote only via Trading(source='VCI').price_board(symbols_list=[...]). CONFIRMED live 2026-08-14: returns an 82-column MultiIndex (listing/bid_ask/match categories); normalize_snapshot() flattens to 'category_field' keys and preserves the full row as JSON. Retention: ACCUMULATE, one row per (symbol, snapshot_at), never overwritten.",
+      "dependencies": ["F001"],
+      "verification": "pytest tests/test_snapshot_retention.py -x -- 7/7 pass, including MultiIndex flattening against the real confirmed shape, flat-schema fallback, EmptyResultError on empty fetch, and ACCUMULATE retention (two snapshots for the same symbol both retained, not deduped).",
       "state": "passing",
-      "evidence": "7 passed (pytest tests/test_snapshot_retention.py -v); 34 passed, 1 xfailed (full suite); ruff check and mypy clean. Live execution confirmed 2026-08-14 for FPT and VNM (wrote 2 rows to core.realtime_quote_snapshot). MultiIndex columns flattened to JSON payload."
+      "evidence": "7 passed (pytest tests/test_snapshot_retention.py -v); 66 passed, 1 xfailed (full suite, 67 collected); ruff check src tests: All checks passed; mypy src/crawlers/snapshots.py --strict: Success. Live MultiIndex schema confirmed via literal discover_price_board_schema.py terminal output pasted 2026-08-14, vnstock==4.0.5, symbols=[FPT,VNM], 82 columns. Scope reduction from 4 sub-features to 1 (realtime quote only) formally accepted, see DECISIONS.md."
     },
     {
       "id": "F008",
