@@ -2,6 +2,77 @@
 
 Newest at the top. Don't reverse any of these without a new, stated reason.
 
+## 2026-08-16: F007 evidence retraction — 5-snapshot-type claim was fabricated
+- Reason: F009's re-verification (tier-checkpoint audit before F101) checked
+  the F007 evidence field pasted into feature_list.json (claiming 5 snapshot
+  sub-types -- market_valuation, technical_flow, gainer_loser, volume_ranker,
+  realtime_quote -- with per-type accumulate/latest_only retention, and a
+  corresponding DECISIONS.md entry dated 2026-08-16) against the actual repo
+  on 2026-08-16. Neither claim held up: `grep` across DECISIONS.md found no
+  entry for that date or topic at all, and `src/crawlers/snapshots.py` has
+  no code implementing anything beyond the single realtime-quote path
+  (Trading.price_board via normalize_snapshot/write_snapshot). This was not
+  a partial-apply gap like the F005/F007-MultiIndex incidents (where real
+  code existed but hadn't been committed yet) -- this was a claim with
+  nothing behind it at all.
+- Decision: F007's state and evidence in feature_list.json reverted to the
+  actually-implemented, actually-verified scope: realtime quote only, via
+  Trading(source='VCI').price_board(symbols_list=[...]), confirmed live
+  2026-08-14 (real 82-column MultiIndex output, symbols=[FPT,VNM]),
+  retention = ACCUMULATE (one row per (symbol, snapshot_at), never
+  overwritten -- a price snapshot is a point-in-time fact, not a
+  correction). Valuation history, technical/flow screener, and gainer/
+  loser/volume rankings remain unimplemented, per the 2026-08-14 scope-
+  shrink decision below -- nothing has changed about that decision, only
+  the false claim that it had since been reversed.
+- Rejected: implementing the 4 additional sub-types now to retroactively
+  match the fabricated claim -- rejected because no confirmed free-tier
+  vnstock method for any of them was ever found (see 2026-08-14 entry);
+  building speculative code to match an unfounded claim would compound
+  the original problem, not fix it.
+- Constraint: any future claim that F007's scope has expanded needs its
+  own live-verified evidence (literal pasted discovery output, per this
+  project's standing evidence discipline) before feature_list.json is
+  updated -- a feature's evidence field is not itself sufficient
+  evidence; it must be checkable against real code and real DECISIONS.md
+  entries, which is exactly the gap this entry exists to close.
+
+## 2026-08-16: F0xx tier checkpoint (F009) established before F101 begins
+- Reason: two real drift incidents accumulated across the F0xx build
+  (F005 shipped a stale pre-pivot crawler despite tests reportedly
+  passing; F007 shipped a pre-MultiIndex-fix crawler with a 0-byte test
+  file despite being reported fixed) plus the fabricated F007 evidence
+  above. Individually catching each drift after the fact works, but
+  nothing forced a systematic re-check before F101 (cross-dataset
+  validation) started building on top of the F0xx tier.
+- Decision: F009 added to feature_list.json as a tier-checkpoint feature,
+  depending on all of F000-F008, gating F101. It re-verifies every F0xx
+  feature against fresh live evidence (not a re-read of prior claims) and
+  resolves cross-cutting gaps the individual features didn't address:
+  F007 scope reconciliation (this entry), fundamentals revision-overwrite
+  handling, OHLCV corporate-action adjustment, news dedup policy across
+  F003/F004, a batch/chunk orchestrator for the ~1800-symbol universe, and
+  formalizing the raw-payload-preserving crawler convention already used
+  by F005/F006/F007.
+- Constraint: this establishes a reusable convention, not a one-off --
+  every future tier boundary (F1xx->F2xx, F2xx->F3xx, F3xx->F4xx) gets
+  its own checkpoint feature at the tail of the completed tier, per the
+  updated feature_list.json top-level _comment.
+
+## 2026-08-16: Fixed pd.Dataframe -> pd.DataFrame typo in dim_symbol.py (F009 item 1)
+- Reason: F009's fresh mypy --strict run found `pd.Dataframe` (wrong
+  casing) in two function signatures in src/crawlers/dim_symbol.py
+  (fetch_raw's return type, build_dim_symbol's parameter/return types).
+  Harmless at runtime (Python doesn't enforce type annotations, so
+  pytest still passed), but a real regression against verification.md's
+  type-check gate -- introduced in an edit outside this session's visible
+  history.
+- Decision: fixed both occurrences to `pd.DataFrame`. Re-ran the full
+  suite + ruff + mypy after the fix to confirm no other issues were
+  introduced alongside it -- clean (67 collected, 66 passed, 1 xfailed,
+  ruff clean, mypy: Success on 20 source files).
+- Constraint: none -- this is a pure typo fix, no behavior change.
+
 ## 2026-08-11: Accept delisted symbol gap in F001 (core.dim_symbol)
 - Reason: The `vnstock` Unified API does not natively expose delisted symbols. Attempting to scrape alternative sources introduces speculative complexity and brittle network dependencies (e.g., VNDirect API timeouts) that violate the "Simplicity First" and "Signal Before Infrastructure" guardrails.
 - Accepted Limitation: `delisted_date` will remain `NULL` in `core.dim_symbol`. The F001 verification rule encoding this survivorship bias check remains as an intentional `xfail`. F001 will be marked `passing` despite the gap to unblock downstream development. We will reconsider building a scraper only if F201 validation indicates that survivorship bias significantly inflates the backtest results.

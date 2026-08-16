@@ -61,7 +61,7 @@ def _authenticate() -> None:
 
     vnstock.change_api_key(api_key)
 
-def fetch_raw() -> tuple[pd.Dataframe, pd.Dataframe]: 
+def fetch_raw() -> tuple[pd.DataFrame, pd.DataFrame]:
     """Live network call. Requires VNSTOCK_API_KEY to be set.
 
     Returns (exchange_df, industry_df) exactly as vnstock returns them,
@@ -76,7 +76,7 @@ def fetch_raw() -> tuple[pd.Dataframe, pd.Dataframe]:
     industry_df = ref.industry.sectors()
     return exchange_df, industry_df
 
-def build_dim_symbol(exchange_df: pd.Dataframe, industry_df:pd.Dataframe) -> pd.Dataframe:
+def build_dim_symbol(exchange_df: pd.DataFrame, industry_df:pd.DataFrame) -> pd.DataFrame:
     """Pure transform: left-join exchange listing with industry sectors on
     `symbol`, append delisted_date (always NULL -- see module docstring)
     and fetched_at. No network access -- fully unit-testable with
