@@ -12,23 +12,22 @@ Confirmed live 2026-08-13/14 against the installed vnstock==4.0.5:
   valuation history, a technical/flow screener, or gainer/loser/volume
   rankings.
 - `Trading(source='VCI').price_board(symbols_list=[...])` IS a real,
-  confirmed-callable method (introspected directly: `price_board(
-  symbols_list: Any = None, **kwargs: Any) -> Any`) and plausibly covers
-  "realtime quote" -- this is the one piece of F007 this module
-  implements. The other 3 sub-features are deferred, not built here --
-  see DECISIONS.md for the decision and why (no confirmed free-tier
-  method found; paid vnstock_data was not purchased).
+  confirmed-callable method and plausibly covers "realtime quote" -- this
+  is the one piece of F007 this module implements. The other 3
+  sub-features are deferred, not built here -- see DECISIONS.md.
 
-UNCONFIRMED / ASSUMED, flagged explicitly (PROJECT_INSTRUCTIONS.md A1):
-the actual columns/shape price_board() returns -- unknown until
-discover_price_board_schema.py is run live. normalize_snapshot() stores
-the full raw row as JSON rather than mapping named columns, specifically
-because the shape is unconfirmed -- safer to preserve everything than to
-guess which fields matter and silently drop the rest.
-
-Retention: ACCUMULATE (per DECISIONS.md 2026-08-14) -- one row per
-(symbol, snapshot_at), never overwritten. A price snapshot is a point-in-
-time fact, not a correction of a prior one.
+CONFIRMED SCHEMA (2026-08-14, real discovery output pasted by Tran Dieu,
+replaces the flat-DataFrame first guess): `price_board()` returns an
+82-column MultiIndex DataFrame across 3 top-level categories: 'listing'
+(symbol, ceiling, floor, ref_price, exchange, trading_status, ...),
+'bid_ask' (bid_1..3_price/volume, ask_1..3_price/volume, bid_count,
+ask_count, ...), 'match' (match_price, match_vol, accumulated_volume,
+foreign_buy_volume, foreign_sell_volume, highest, lowest, ATO/ATC price
+fields, ...). The symbol column lives at ('listing', 'symbol').
+normalize_snapshot() flattens the MultiIndex to 'category_field' string
+keys (e.g. 'listing_symbol', 'bid_ask_bid_1_price') before serializing
+each row to JSON, so no data is lost and no field name needs to be
+individually mapped -- the full 82-column row is preserved.
 """
 from __future__ import annotations
 
@@ -48,6 +47,11 @@ from etl.retry_failed_jobs import EmptyResultError  # noqa: E402
 
 REQUIRED_ENV_VAR = "VNSTOCK_API_KEY"
 
+# CONFIRMED live 2026-08-14: the real symbol column after flattening the
+# MultiIndex is 'listing_symbol'. Aliases kept for robustness against a
+# flat (non-MultiIndex) response, e.g. in offline/synthetic test data.
+SYMBOL_COLUMN_ALIASES = ["listing_symbol", "symbol", "ticker"]
+
 SNAPSHOT_COLUMNS = ["symbol", "snapshot_at", "data_json", "fetched_at"]
 
 
@@ -66,9 +70,10 @@ def _authenticate() -> None:
 def fetch_raw(symbols: list[str]) -> pd.DataFrame:
     """Live network call. Requires VNSTOCK_API_KEY to be set.
 
-    Returns whatever vnstock's price_board() gives back, untouched --
-    normalization happens in normalize_snapshot() so that logic stays
-    testable without network access.
+    Returns whatever vnstock's price_board() gives back, untouched
+    (including its MultiIndex columns) -- flattening happens in
+    normalize_snapshot() so that logic stays testable without network
+    access.
     """
     _authenticate()
     import vnstock
@@ -78,12 +83,25 @@ def fetch_raw(symbols: list[str]) -> pd.DataFrame:
     return result
 
 
+def _flatten_columns(df: pd.DataFrame) -> pd.DataFrame:
+    """Confirmed live 2026-08-14: price_board() returns a MultiIndex
+    (category, field) column structure. Flatten to 'category_field'
+    string keys. A no-op if columns are already flat (e.g. synthetic test
+    data), so this function works for both shapes.
+    """
+    if isinstance(df.columns, pd.MultiIndex):
+        df = df.copy()
+        df.columns = pd.Index(["_".join(str(part) for part in col) for col in df.columns])
+    return df
+
+
 def normalize_snapshot(raw_df: pd.DataFrame) -> pd.DataFrame:
     """Pure transform: one row per symbol in the fetched price board, full
-    raw row preserved as JSON (schema unconfirmed -- see module
-    docstring). Requires a 'symbol' or 'ticker' column to key rows by;
-    fails loudly if neither is present rather than guessing. No network
-    access -- fully unit-testable with synthetic DataFrames.
+    (flattened) raw row preserved as JSON. Requires a symbol column
+    (after flattening) to key rows by; fails loudly if none of
+    SYMBOL_COLUMN_ALIASES is present rather than guessing. No network
+    access -- fully unit-testable with synthetic DataFrames, MultiIndex
+    or flat.
     """
     if raw_df.empty:
         raise EmptyResultError(
@@ -94,21 +112,23 @@ def normalize_snapshot(raw_df: pd.DataFrame) -> pd.DataFrame:
             "first before assuming it's a transient API issue.)"
         )
 
-    symbol_col = next((c for c in ("symbol", "ticker") if c in raw_df.columns), None)
+    flat_df = _flatten_columns(raw_df)
+
+    symbol_col = next((c for c in SYMBOL_COLUMN_ALIASES if c in flat_df.columns), None)
     if symbol_col is None:
         raise ValueError(
-            f"Could not find a 'symbol' or 'ticker' column in fetched "
-            f"price board data. Columns present: {list(raw_df.columns)}. "
-            f"Run discover_price_board_schema.py against a live key to "
-            f"confirm the real column name."
+            f"Could not find a symbol column among {SYMBOL_COLUMN_ALIASES} "
+            f"in fetched (flattened) price board data. Columns present: "
+            f"{list(flat_df.columns)}. Run discover_price_board_schema.py "
+            f"against a live key to confirm the real column name."
         )
 
     snapshot_at = dt.datetime.now(dt.timezone.utc).replace(tzinfo=None)
-    records = raw_df.to_dict(orient="records")
+    records = flat_df.to_dict(orient="records")
 
     out = pd.DataFrame(
         {
-            "symbol": raw_df[symbol_col].astype(str),
+            "symbol": flat_df[symbol_col].astype(str),
             "snapshot_at": snapshot_at,
             "data_json": [_row_to_json(r) for r in records],
         }
