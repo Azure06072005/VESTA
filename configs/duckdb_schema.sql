@@ -65,12 +65,25 @@ CREATE TABLE IF NOT EXISTS core.market_ohlcv_daily (
     PRIMARY KEY (symbol, date)
 );
 
--- staging/core.fundamentals (F005): one row per (symbol, report_type,
--- period_end). Each report type (income_statement/balance_sheet/
--- cash_flow/ratio) has a very different, wide column set (28-156+ cols
--- per the feature spec), so raw fields are stored as a JSON blob
--- (data_json) rather than exploded into one column per financial-statement
--- line item -- keeps the table schema stable across report types.
+-- staging/core.fundamentals (F005): APPEND-ONLY revision history, one row
+-- per (symbol, report_type, period_end, fetched_at) -- NOT deduped down to
+-- one row per (symbol, report_type, period_end). Financial statements get
+-- restated after initial filing (common after audits); the original
+-- three-column PRIMARY KEY meant a restated quarter silently overwrote its
+-- original value on the next crawl, which is a real look-ahead-bias leak
+-- (see DECISIONS.md 2026-08-16 F009 item 3 entry) -- any backtest querying
+-- "what was known as of date X" would see the revised figure even for
+-- dates before the revision happened. Fixed 2026-08-16: crawls now INSERT
+-- a new revision row only when data_json actually changed for that period
+-- (see src/crawlers/fundamentals.py write_statements()); nothing is ever
+-- deleted. Point-in-time queries pick a specific vintage explicitly --
+-- see get_as_reported()/get_as_of() in fundamentals.py, not a raw SELECT.
+--
+-- Each report type (income_statement/balance_sheet/cash_flow/ratio) has a
+-- very different, wide column set (28-156+ cols per the feature spec), so
+-- raw fields are stored as a JSON blob (data_json) rather than exploded
+-- into one column per financial-statement line item -- keeps the table
+-- schema stable across report types.
 -- available_at is an ASSUMED approximation (period_end + a fixed lag),
 -- NOT a real disclosure date -- vnstock doesn't expose one. See
 -- src/crawlers/fundamentals.py module docstring and DECISIONS.md.
@@ -90,7 +103,7 @@ CREATE TABLE IF NOT EXISTS core.fundamentals (
     available_at DATE NOT NULL,
     data_json    VARCHAR NOT NULL,
     fetched_at   TIMESTAMP NOT NULL,
-    PRIMARY KEY (symbol, report_type, period_end)
+    PRIMARY KEY (symbol, report_type, period_end, fetched_at)
 );
 
 -- staging/core.corporate_events (F006): event calendar per symbol.
@@ -172,4 +185,33 @@ CREATE TABLE IF NOT EXISTS core.realtime_quote_snapshot (
     data_json     VARCHAR NOT NULL,
     fetched_at    TIMESTAMP NOT NULL,
     PRIMARY KEY (symbol, snapshot_at)
+);
+
+-- staging/core.price_adjustment_events (F009 item 4): corporate-action
+-- price-adjustment multipliers, computed DOWNSTREAM from F006's
+-- corporate_events, NOT from vnstock directly -- confirmed live
+-- 2026-08-16 that .ohlcv()/Quote.history() expose no adjusted-price or
+-- split-adjustment parameter at all. core.market_ohlcv_daily's raw prices
+-- are never mutated (raw-payload-preserving principle, F009 item 7);
+-- adjustment is applied at query time by joining this table, not baked
+-- into F002's output. See src/etl/adjustments.py -- UNVALIDATED against a
+-- real published adjusted-price series, see DECISIONS.md, do not trust
+-- in a live backtest until that validation happens.
+CREATE TABLE IF NOT EXISTS staging.price_adjustment_events (
+    symbol           VARCHAR NOT NULL,
+    ex_date          DATE NOT NULL,
+    adjustment_type  VARCHAR NOT NULL,  -- 'dividend' | 'share_issue'
+    multiplier       DOUBLE NOT NULL,
+    source_event_id  VARCHAR NOT NULL,
+    computed_at      TIMESTAMP NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS core.price_adjustment_events (
+    symbol           VARCHAR NOT NULL,
+    ex_date          DATE NOT NULL,
+    adjustment_type  VARCHAR NOT NULL,
+    multiplier       DOUBLE NOT NULL,
+    source_event_id  VARCHAR NOT NULL,
+    computed_at      TIMESTAMP NOT NULL,
+    PRIMARY KEY (symbol, ex_date, source_event_id)
 );

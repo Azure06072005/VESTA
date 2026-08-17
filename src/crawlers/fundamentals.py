@@ -195,32 +195,122 @@ def melt_pivoted_statement(raw_df: pd.DataFrame, symbol: str, report_type: str) 
 
 
 def write_statements(df: pd.DataFrame, con: "duckdb.DuckDBPyConnection | None" = None) -> int:
-    """Validate + write to staging, then promote to core for this
-    (symbol, report_type) only. Idempotent: re-running replaces the same
-    keys rather than duplicating them.
+    """APPEND-ONLY revision history (fixed 2026-08-16, see DECISIONS.md
+    F009 item 3): never deletes or overwrites an existing (symbol,
+    report_type, period_end) row. Compares each incoming row's data_json
+    against the most recent existing revision for that period; inserts
+    only if new or changed. This means a later restatement is recorded as
+    an ADDITIONAL row, not a silent overwrite of the original -- avoiding
+    a look-ahead-bias leak where a backtest querying 'what was known as of
+    date X' would otherwise see a revised figure that didn't exist yet.
+
+    Returns the count of rows actually written (new or changed) -- NOT
+    len(df), since unchanged periods on a re-crawl are correctly skipped
+    as idempotent no-ops rather than reinserted as duplicate vintages.
     """
     missing = set(FUNDAMENTAL_COLUMNS) - set(df.columns)
     if missing:
         raise ValueError(f"Fundamental DataFrame missing columns: {missing}")
 
     con = con or db.bootstrap_schema()
-    keys = df[["symbol", "report_type"]].drop_duplicates().to_records(index=False).tolist()
-
     con.register("fund_df", df[FUNDAMENTAL_COLUMNS])
-    for symbol, report_type in keys:
-        con.execute(
-            "DELETE FROM staging.fundamentals WHERE symbol = ? AND report_type = ?",
-            [symbol, report_type],
+
+    to_write = con.execute(
+        """
+        WITH latest_existing AS (
+            SELECT symbol, report_type, period_end, data_json,
+                   ROW_NUMBER() OVER (
+                       PARTITION BY symbol, report_type, period_end
+                       ORDER BY fetched_at DESC
+                   ) AS rn
+            FROM core.fundamentals
         )
-        con.execute(
-            "DELETE FROM core.fundamentals WHERE symbol = ? AND report_type = ?",
-            [symbol, report_type],
-        )
-    con.execute("INSERT INTO staging.fundamentals SELECT * FROM fund_df")
-    con.execute("INSERT INTO core.fundamentals SELECT * FROM fund_df")
+        SELECT n.*
+        FROM fund_df n
+        LEFT JOIN (SELECT * FROM latest_existing WHERE rn = 1) e
+          ON n.symbol = e.symbol
+         AND n.report_type = e.report_type
+         AND n.period_end = e.period_end
+        WHERE e.data_json IS NULL OR e.data_json != n.data_json
+        """
+    ).df()
     con.unregister("fund_df")
 
-    return len(df)
+    if to_write.empty:
+        return 0
+
+    con.register("to_write_df", to_write[FUNDAMENTAL_COLUMNS])
+    con.execute("INSERT INTO staging.fundamentals SELECT * FROM to_write_df")
+    con.execute("INSERT INTO core.fundamentals SELECT * FROM to_write_df")
+    con.unregister("to_write_df")
+
+    written: int = len(to_write)
+    return written
+
+
+def get_as_reported(con: "duckdb.DuckDBPyConnection", symbol: str, report_type: str) -> pd.DataFrame:
+    """Returns the AS-REPORTED (first-ever-observed) vintage of each
+    period_end -- the earliest fetched_at per (symbol, report_type,
+    period_end). This is the SAFE DEFAULT for backtesting: a later
+    restatement is typically more accurate but was not knowable at the
+    time, so scoring a historical decision against the as-reported figure
+    (not the eventual revised one) avoids revision look-ahead bias. This
+    matches standard point-in-time-database practice (e.g. Compustat's
+    as-reported vs. as-revised distinction) -- F102 should call this, not
+    a raw SELECT against core.fundamentals, unless it has a specific
+    reason to want a different vintage.
+    """
+    result: pd.DataFrame = con.execute(
+        """
+        SELECT symbol, report_type, period_end, available_at, data_json, fetched_at
+        FROM (
+            SELECT *, ROW_NUMBER() OVER (
+                PARTITION BY symbol, report_type, period_end
+                ORDER BY fetched_at ASC
+            ) AS rn
+            FROM core.fundamentals
+            WHERE symbol = ? AND report_type = ?
+        )
+        WHERE rn = 1
+        ORDER BY period_end
+        """,
+        [symbol, report_type],
+    ).df()
+    return result
+
+
+def get_as_of(
+    con: "duckdb.DuckDBPyConnection", symbol: str, report_type: str, as_of_date: dt.date
+) -> pd.DataFrame:
+    """Returns the most recent vintage of each period_end that our system
+    had actually observed (fetched_at <= as_of_date) AND that vintage's
+    own estimated disclosure date had already passed (available_at <=
+    as_of_date) -- i.e. what this system could plausibly have known if it
+    were running live on as_of_date. NOT the default for backtesting (see
+    get_as_reported) -- use this only when a specific 'best known state as
+    of a date' query is actually what's needed, since it will surface
+    later restatements once both conditions are met, which is correct for
+    'what do we believe today' but wrong for scoring a past decision.
+    """
+    result: pd.DataFrame = con.execute(
+        """
+        SELECT symbol, report_type, period_end, available_at, data_json, fetched_at
+        FROM (
+            SELECT *, ROW_NUMBER() OVER (
+                PARTITION BY symbol, report_type, period_end
+                ORDER BY fetched_at DESC
+            ) AS rn
+            FROM core.fundamentals
+            WHERE symbol = ? AND report_type = ?
+              AND fetched_at <= ?
+              AND available_at <= ?
+        )
+        WHERE rn = 1
+        ORDER BY period_end
+        """,
+        [symbol, report_type, as_of_date, as_of_date],
+    ).df()
+    return result
 
 
 def run(symbol: str, report_type: str, period: str = "quarter") -> int:
