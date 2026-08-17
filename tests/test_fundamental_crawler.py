@@ -9,6 +9,7 @@ items, columns after the id column are period labels ('YYYY-Qn' or
 """
 from __future__ import annotations
 
+import datetime as dt
 import json
 import sys
 import pathlib
@@ -90,19 +91,86 @@ def test_fetch_raw_rejects_unknown_report_type():
         fundamentals.fetch_raw("FPT", "not_a_real_type")
 
 
-def test_write_statements_is_idempotent(tmp_path):
+def test_write_statements_is_idempotent_on_unchanged_data(tmp_path):
+    # APPEND-ONLY semantics (fixed 2026-08-16): a re-crawl with identical
+    # data is a no-op -- returns 0 written, row count stays the same. This
+    # replaces the old DELETE+INSERT idempotency test, since "idempotent"
+    # now means "correctly detects nothing changed", not "same count both
+    # times" (see get_as_reported/get_as_of tests below for the revision
+    # case, where counts SHOULD differ).
     db_path = tmp_path / "test_vesta.duckdb"
     con = db.bootstrap_schema(db_path)
     normalized = fundamentals.melt_pivoted_statement(_sample_pivoted_df(), "FPT", "income_statement")
 
     n1 = fundamentals.write_statements(normalized, con)
-    n2 = fundamentals.write_statements(normalized, con)  # re-run, same input
-    assert n1 == n2 == 2
+    n2 = fundamentals.write_statements(normalized, con)  # re-run, identical data
+    assert n1 == 2
+    assert n2 == 0  # nothing changed -- correctly skipped, not reinserted
 
     row_count = con.execute(
         "SELECT COUNT(*) FROM core.fundamentals WHERE symbol = 'FPT' AND report_type = 'income_statement'"
     ).fetchone()[0]
     assert row_count == 2  # not doubled
+
+
+def test_write_statements_appends_revision_when_data_changes(tmp_path):
+    # THE ACTUAL BUG FIX (2026-08-16, DECISIONS.md F009 item 3): a
+    # restated period must be recorded as an ADDITIONAL row, not silently
+    # overwrite the original -- otherwise a backtest querying "what was
+    # known as of date X" would see the revised figure even for dates
+    # before the revision happened (look-ahead bias).
+    db_path = tmp_path / "test_vesta.duckdb"
+    con = db.bootstrap_schema(db_path)
+    original = fundamentals.melt_pivoted_statement(_sample_pivoted_df(), "FPT", "income_statement")
+    fundamentals.write_statements(original, con)
+
+    # Simulate a restatement: same periods, one value revised.
+    restated_raw = _sample_pivoted_df().copy()
+    restated_raw.loc[restated_raw["item_id"] == "revenue", "2026-Q1"] = 99999.9
+    restated = fundamentals.melt_pivoted_statement(restated_raw, "FPT", "income_statement")
+
+    n2 = fundamentals.write_statements(restated, con)
+    assert n2 == 1  # only the changed period_end got a new revision row
+
+    total_rows = con.execute(
+        "SELECT COUNT(*) FROM core.fundamentals WHERE symbol = 'FPT' AND report_type = 'income_statement'"
+    ).fetchone()[0]
+    assert total_rows == 3  # 2 original periods + 1 new revision -- original NOT deleted
+
+
+def test_get_as_reported_returns_first_seen_vintage_not_the_revision(tmp_path):
+    db_path = tmp_path / "test_vesta.duckdb"
+    con = db.bootstrap_schema(db_path)
+    original = fundamentals.melt_pivoted_statement(_sample_pivoted_df(), "FPT", "income_statement")
+    fundamentals.write_statements(original, con)
+
+    restated_raw = _sample_pivoted_df().copy()
+    restated_raw.loc[restated_raw["item_id"] == "revenue", "2026-Q1"] = 99999.9
+    restated = fundamentals.melt_pivoted_statement(restated_raw, "FPT", "income_statement")
+    fundamentals.write_statements(restated, con)
+
+    as_reported = fundamentals.get_as_reported(con, "FPT", "income_statement")
+    q1_row = as_reported[as_reported["period_end"].astype(str) == "2026-03-31"].iloc[0]
+    metrics = json.loads(q1_row["data_json"])
+    assert metrics["revenue"] == 12000.5  # the ORIGINAL value, not 99999.9
+
+
+def test_get_as_of_surfaces_revision_once_both_observed_and_disclosed(tmp_path):
+    db_path = tmp_path / "test_vesta.duckdb"
+    con = db.bootstrap_schema(db_path)
+    original = fundamentals.melt_pivoted_statement(_sample_pivoted_df(), "FPT", "income_statement")
+    fundamentals.write_statements(original, con)
+
+    restated_raw = _sample_pivoted_df().copy()
+    restated_raw.loc[restated_raw["item_id"] == "revenue", "2026-Q1"] = 99999.9
+    restated = fundamentals.melt_pivoted_statement(restated_raw, "FPT", "income_statement")
+    fundamentals.write_statements(restated, con)
+
+    far_future = dt.date(2099, 1, 1)
+    as_of = fundamentals.get_as_of(con, "FPT", "income_statement", far_future)
+    q1_row = as_of[as_of["period_end"].astype(str) == "2026-03-31"].iloc[0]
+    metrics = json.loads(q1_row["data_json"])
+    assert metrics["revenue"] == 99999.9  # the revision, since it's now fully in the past
 
 
 def test_write_statements_keeps_report_types_independent(tmp_path):
