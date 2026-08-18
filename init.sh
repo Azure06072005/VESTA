@@ -11,6 +11,9 @@ pip install -r requirements.txt --break-system-packages -q
 echo "[init.sh] bootstrapping DuckDB schema (staging, core, meta)..."
 PYTHONPATH=src python3 -m etl.db
 
+echo "[init.sh] applying schema migrations (safe no-op if already applied)..."
+PYTHONPATH=src python3 -m etl.migrations
+
 echo "[init.sh] running test suite..."
 PYTHONPATH=src pytest -x
 
