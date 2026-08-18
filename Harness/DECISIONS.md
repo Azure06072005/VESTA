@@ -1,6 +1,85 @@
 # Design Decisions — VESTA
 
 Newest at the top. Don't reverse any of these without a new, stated reason.
+## 2026-08-16: F009 items 3, 5, 6, 7, 8 — data-engineering remediation batch
+- **Item 3 (fundamentals revision handling)**: fixed the look-ahead-bias
+  leak where a restated financial period silently overwrote its original
+  value. `core.fundamentals` PRIMARY KEY changed from (symbol, report_type,
+  period_end) to (symbol, report_type, period_end, fetched_at);
+  `write_statements()` is now append-only with change detection (a
+  re-crawl with identical data is a no-op; changed data appends a new
+  revision row, original never deleted). Two explicit vintage-selection
+  functions added: `get_as_reported()` (earliest-seen vintage — the SAFE
+  DEFAULT for backtesting, avoids scoring a historical decision against a
+  restatement that wasn't knowable at the time) and `get_as_of()` (latest
+  vintage known as of a given date — for "what do we believe today"
+  queries, NOT backtesting). Since this changes a PRIMARY KEY, a real
+  migration was required (`src/etl/migrations.py:
+  migrate_fundamentals_append_only_pk`) rather than just editing the
+  schema file, specifically to avoid discarding any already-crawled data
+  from the multi-hour full-universe runs already performed. Verified: the
+  migration preserves existing rows byte-for-byte (tested against a
+  simulated pre-existing old-shape database with real data in it) and is
+  a safe no-op on an already-migrated or fresh database.
+- **Item 5 (news dedup policy)**: F003/F004 continue to dedupe only by
+  exact `source_url` (unchanged — still correct for "is this literally
+  the same article"). A separate, additive `duplicate_of` column (nullable
+  VARCHAR) was added to `staging.news`/`core.news` via migration (plain
+  `ALTER TABLE ADD COLUMN`, no PK change needed). `src/etl/news_dedup.py`
+  detects likely cross-source duplicates (same symbol, published within 6
+  hours, headline similarity >= 0.75 via difflib) and flags the
+  later-published row's `duplicate_of` with the earlier row's
+  `source_url` — never deletes either row (raw-payload-preserving
+  principle). F102/F201 should filter `WHERE duplicate_of IS NULL` to
+  count each real-world event once. The 6-hour window and 0.75 threshold
+  are STATED ASSUMPTIONS, not tuned against real labeled duplicate pairs
+  — revisit once F003+F004 have enough real overlapping coverage to
+  manually inspect candidate pairs.
+- **Item 6 (batch orchestrator)**: `src/etl/batch_orchestrator.py` added
+  on top of F008's existing `meta.crawl_progress` tracking — no changes
+  to F008 itself. `get_pending_symbols()` excludes already-'success'/
+  'empty' symbols so a re-run resumes rather than restarts; `run_batched()`
+  chunks a full symbol list (default 100/batch) with an optional
+  inter-batch delay. Verified: a simulated interrupted-then-resumed run
+  never re-invokes `crawl_fn` for an already-succeeded symbol.
+- **Item 7 (raw-payload-preserving convention)**: formalized in
+  `conventions.md` under "Data engineering patterns" — the pattern already
+  used ad hoc by F005/F006/F007 (full raw response preserved as JSON
+  alongside typed columns) is now a stated convention, specifically so a
+  future enrichment data source can be added without a backfill or
+  restart of an already-running pipeline (Tran Dieu's stated concern,
+  2026-08-16 conversation).
+- **Item 8 (per-dataset historical depth)**: documented decision, no code
+  change. OHLCV (F002) and fundamentals (F005): crawl maximum available
+  history — cheap once the API call is already being paid for, and needed
+  for any long-run factor/regime analysis (VN market has had genuinely
+  distinct regimes: 2018 correction, 2020 COVID crash+recovery, 2022
+  real-estate/bond crisis, 2023-24 recovery — a backtest confined to one
+  regime risks looking robust while actually being regime-specific).
+  Corporate events (F006): already full by default (confirmed live,
+  spans 2024-2035 for the test symbol). News (F003/F004): CANNOT be
+  backfilled retroactively — F003 returns ~50 most recent articles per
+  symbol, F004 is page-1-only (~28 recent items) by explicit ToS-driven
+  design (see the 2026-08-13 entry below). News depth only accumulates
+  forward from whenever a symbol is first crawled. Constraint: F201's
+  sentiment-mean-reversion backtest cannot run on a deep historical
+  sample until enough real news has accumulated post-crawl-start —
+  budget for this when planning F201's timeline; it is not a data gap
+  that can be closed by crawling harder.
+- Rejected (item 5): building real near-duplicate detection using
+  semantic embeddings instead of difflib text similarity — rejected for
+  now as premature infrastructure (Simplicity First, PROJECT_
+  INSTRUCTIONS.md A2) until the cheap heuristic is shown to be
+  insufficient against real overlapping F003/F004 data.
+- Rejected (item 8): paying for an archival news data source to backfill
+  historical sentiment data — not rejected outright, but explicitly not
+  decided now; revisit if F201's forward-accumulated sample proves too
+  thin to reach statistical significance within a reasonable timeframe.
+- Constraint: any future PRIMARY KEY change to an existing table follows
+  the item 3 migration pattern (see conventions.md's new "Schema changes
+  that touch a PRIMARY KEY" entry) — never just edit
+  `configs/duckdb_schema.sql` and assume it will apply to an
+  already-populated database.
 
 ## 2026-08-16: F007 evidence retraction — 5-snapshot-type claim was fabricated
 - Reason: F009's re-verification (tier-checkpoint audit before F101) checked

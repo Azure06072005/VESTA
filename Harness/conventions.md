@@ -65,3 +65,40 @@ remove) belong here. Audit each entry when its expiry condition is met.
   reproducible, not just plausible.
   Applicability: `pipeline/`, `models/evaluate.py`.
   Expiry: none.
+
+
+## Data engineering patterns
+
+- **Raw-payload-preserving crawlers**: any crawler whose source API has a
+  wide, source-specific, or unstable column set (F005 fundamentals, F006
+  corporate events, F007 realtime snapshot) stores the FULL raw fetched
+  row as a JSON blob (`data_json`/`detail_json`) alongside a small set of
+  typed columns needed for querying/joining. New fields appearing in a
+  future API response do not require a backfill or a schema migration —
+  they're already captured in the JSON blob; only the typed columns need
+  extending, and that's additive, not destructive.
+  Source: F009 item 7 (2026-08-16) — formalizes a pattern already used
+  ad hoc by F005/F006/F007, adopted specifically to make future
+  enrichment-data additions safe without restarting or breaking an
+  already-running pipeline.
+  Applicability: any crawler with a wide/unstable/source-controlled
+  schema. Crawlers with a small, stable, well-understood schema (F001
+  dim_symbol, F002 OHLCV) are not required to follow this — typed columns
+  are fine when the schema is genuinely simple and unlikely to drift.
+  Expiry: none.
+- **Schema changes that touch a PRIMARY KEY require a migration, not just
+  an updated `CREATE TABLE`**: DuckDB cannot `ALTER` a table's primary key
+  in place. Any change of this shape needs an entry in
+  `src/etl/migrations.py` (create the new-shaped table, copy existing data
+  in with a row-count verification, drop the old table, rename) — never
+  just edit `configs/duckdb_schema.sql` and assume `CREATE TABLE IF NOT
+  EXISTS` will handle it, since that only applies to genuinely new
+  databases and silently no-ops against an existing one, leaving the old
+  (wrong) shape in place.
+  Source: F009 item 3 (2026-08-16) — the fundamentals PRIMARY KEY fix
+  would have required dropping real, multi-hour-crawled data without
+  this. Additive changes (a new nullable column) don't need this — a
+  plain `ALTER TABLE ADD COLUMN` is sufficient (see item 5's
+  `duplicate_of` column).
+  Applicability: `configs/duckdb_schema.sql`, `src/etl/migrations.py`.
+  Expiry: none.
