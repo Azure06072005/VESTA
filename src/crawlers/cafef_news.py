@@ -188,12 +188,13 @@ def write_news(df: pd.DataFrame, con: "duckdb.DuckDBPyConnection | None" = None)
     con = con or db.bootstrap_schema()
     urls = df["source_url"].unique().tolist()
 
+    cols_sql = ", ".join(NEWS_COLUMNS)
     con.execute("DELETE FROM staging.news WHERE source_url IN ?", [urls])
     con.register("news_df", df[NEWS_COLUMNS])
-    con.execute("INSERT INTO staging.news SELECT * FROM news_df")
+    con.execute(f"INSERT INTO staging.news ({cols_sql}) SELECT * FROM news_df")
 
     con.execute("DELETE FROM core.news WHERE source_url IN ?", [urls])
-    con.execute("INSERT INTO core.news SELECT * FROM news_df")
+    con.execute(f"INSERT INTO core.news ({cols_sql}) SELECT * FROM news_df")
     con.unregister("news_df")
 
     return len(df)
