@@ -94,6 +94,7 @@ def build_dim_symbol(exchange_df: pd.DataFrame, industry_df:pd.DataFrame) -> pd.
         on="symbol", 
         how="left",
     )
+    merged["organ_name"] = merged["organ_name"].fillna(merged["en_organ_name"]).fillna(merged["symbol"])
     merged["delisted_date"] = pd.NaT
     merged["fetched_at"] = dt.datetime.now(dt.timezone.utc).replace(tzinfo=None)
 

@@ -1,0 +1,226 @@
+{
+  "dim_symbol": {
+    "status": "success",
+    "total_universe_rows": 3442,
+    "vic_found": true,
+    "vic_data": {
+      "symbol": "VIC",
+      "organ_name": "Tập đoàn VINGROUP - CTCP",
+      "en_organ_name": "Vingroup Joint Stock Company",
+      "exchange": "HOSE",
+      "industry_code": "3.0",
+      "industry_name": "Bất động sản",
+      "delisted_date": "NaT",
+      "fetched_at": "2026-08-20 13:21:23.097855"
+    }
+  },
+  "market_ohlcv": {
+    "status": "success",
+    "rows_written": 100,
+    "date_range": {
+      "min": "2026-03-31 00:00:00",
+      "max": "2026-08-20 00:00:00",
+      "count": 100
+    },
+    "sample": [
+      {
+        "symbol": "VIC",
+        "date": "2026-08-20 00:00:00",
+        "open": 201.8,
+        "high": 204.2,
+        "low": 201.0,
+        "close": 202.0,
+        "volume": 5246400,
+        "fetched_at": "2026-08-20 13:21:24.904085"
+      },
+      {
+        "symbol": "VIC",
+        "date": "2026-08-19 00:00:00",
+        "open": 200.0,
+        "high": 200.9,
+        "low": 199.2,
+        "close": 200.0,
+        "volume": 5248400,
+        "fetched_at": "2026-08-20 13:21:24.904085"
+      },
+      {
+        "symbol": "VIC",
+        "date": "2026-08-18 00:00:00",
+        "open": 198.0,
+        "high": 203.9,
+        "low": 197.5,
+        "close": 200.0,
+        "volume": 4301900,
+        "fetched_at": "2026-08-20 13:21:24.904085"
+      },
+      {
+        "symbol": "VIC",
+        "date": "2026-08-17 00:00:00",
+        "open": 200.4,
+        "high": 200.4,
+        "low": 194.6,
+        "close": 198.0,
+        "volume": 6484400,
+        "fetched_at": "2026-08-20 13:21:24.904085"
+      },
+      {
+        "symbol": "VIC",
+        "date": "2026-08-14 00:00:00",
+        "open": 208.0,
+        "high": 208.1,
+        "low": 195.0,
+        "close": 200.4,
+        "volume": 7976400,
+        "fetched_at": "2026-08-20 13:21:24.904085"
+      }
+    ]
+  },
+  "vnstock_news": {
+    "status": "success",
+    "rows_written": 1,
+    "sample": [
+      {
+        "symbol": "VIC",
+        "source": "vnstock",
+        "published_at": "2026-08-14 16:52:00",
+        "headline": "VIC: CBTT về việc thay đổi mẫu con dấu công ty",
+        "source_url": "None"
+      }
+    ]
+  },
+  "cafef_news": {
+    "status": "success",
+    "rows_written": 3,
+    "sample": [
+      {
+        "symbol": "VIC",
+        "source": "cafef",
+        "published_at": "2026-08-19 04:14:00",
+        "headline": "Vingroup dự kiến tặng căn hộ hoặc 800 triệu đồng/người cho 36 Bà mẹ Việt Nam Anh hùng ở Hải Phòng",
+        "source_url": "https://cafef.vn/VIC-2958855/vingroup-du-kien-tang-can-ho-hoac-800-trieu-dongnguoi-cho-36-ba-me-viet-nam-anh-hung-o-hai-phong.chn"
+      },
+      {
+        "symbol": "VIC",
+        "source": "cafef",
+        "published_at": "2026-08-18 11:04:00",
+        "headline": "Phía sau khu “Cao Xà Lá” 11 ha đang nóng trên đường Nguyễn Trãi: Chủ đầu tư từng chi bao nhiêu tiền hỗ trợ cho cuộc di dời?",
+        "source_url": "https://cafef.vn/VIC-2957665/phia-sau-khu-cao-xa-la-11-ha-dang-nong-tren-duong-nguyen-trai-chu-dau-tu-tung-chi-bao-nhieu-tien-ho-tro-cho-cuoc-di-doi.chn"
+      },
+      {
+        "symbol": "VIC",
+        "source": "cafef",
+        "published_at": "2026-08-17 06:49:00",
+        "headline": "Đằng sau 1,2 triệu việc làm: Vingroup, FPT cùng PVN, Viettel ... đang gồng gánh bức tranh lao động ra sao?",
+        "source_url": "https://cafef.vn/VIC-2956198/dang-sau-12-trieu-viec-lam-vingroup-fpt-cung-pvn-viettel--dang-gong-ganh-buc-tranh-lao-dong-ra-sao.chn"
+      }
+    ]
+  },
+  "fundamentals": {
+    "income_statement": {
+      "status": "success",
+      "rows_written": 0,
+      "period_min": "2025-12-31 00:00:00",
+      "period_max": "2026-06-30 00:00:00",
+      "count": 3
+    },
+    "balance_sheet": {
+      "status": "empty (accepted API gap)",
+      "message": "fetch_raw returned an empty DataFrame for symbol='VIC', report_type='balance_sheet' -- F008-compatible: recorded as genuine emptiness via record_empty(), NOT retried. (Confirmed live 2026-08-12: balance_sheet returned empty for the test symbol -- FORMALLY ACCEPTED as a real vnstock API gap, not a bug, see DECISIONS.md.)"
+    },
+    "cash_flow": {
+      "status": "success",
+      "rows_written": 0,
+      "period_min": "2025-09-30 00:00:00",
+      "period_max": "2025-12-31 00:00:00",
+      "count": 2
+    },
+    "ratio": {
+      "status": "success",
+      "rows_written": 0,
+      "period_min": "2025-12-31 00:00:00",
+      "period_max": "2026-06-30 00:00:00",
+      "count": 3
+    }
+  },
+  "corporate_events": {
+    "status": "success",
+    "rows_written": 50,
+    "type_breakdown": [
+      {
+        "event_type": "OTHER",
+        "cnt": 5
+      },
+      {
+        "event_type": "DIVIDEND",
+        "cnt": 6
+      },
+      {
+        "event_type": "MAJOR_SHAREHOLDER_TRADING",
+        "cnt": 35
+      },
+      {
+        "event_type": "SHAREHOLDER_MEETING",
+        "cnt": 4
+      }
+    ],
+    "sample": [
+      {
+        "event_id": "6a72825b35a7497fa791a8ab",
+        "event_type": "OTHER",
+        "event_date": "2026-07-30 00:00:00",
+        "detail_json": "{\"id\": \"6a72825b35a7497fa791a8ab\", \"event_name_vi\": \"Niêm yết thêm\", \"event_name_en\": \"Additional Listing\", \"ticker\": \"VIC\", \"event_code\": \"AIS\", \"event_title_vi\": \"VIC - Niêm yết bổ sung 56.155.405 cổ phiếu\", \"event_title_en\": \"VIC- Lists additional 56,155,405 shares\", \"display_date1\": \"2026-07-30T00:00:00\", \"display_date2\": \"2026-08-04T00:00:00\", \"public_date\": \"2026-08-04\", \"issue_date\": \"2026-07-30\", \"category\": \"OTHER\", \"record_date\": NaN, \"exright_date\": NaN, \"listing_date\": NaN, \"exercise_ratio\": NaN, \"start_date\": NaN, \"end_date\": NaN, \"action_type_vi\": NaN, \"action_type_en\": NaN}"
+      },
+      {
+        "event_id": "6a5581c93711162a7e8083e8",
+        "event_type": "DIVIDEND",
+        "event_date": "2026-07-10 00:00:00",
+        "detail_json": "{\"id\": \"6a5581c93711162a7e8083e8\", \"event_name_vi\": \"Phát hành cổ phiếu\", \"event_name_en\": \"Share Issue\", \"ticker\": \"VIC\", \"event_code\": \"ISS\", \"event_title_vi\": \"Phát hành cổ phiếu - Phát hành riêng lẻ\", \"event_title_en\": \"Share Issue - Private Placements\", \"display_date1\": \"2026-07-10T00:00:00\", \"display_date2\": \"2026-07-10T00:00:00\", \"public_date\": \"2026-07-10\", \"issue_date\": NaN, \"category\": \"DIVIDEND\", \"record_date\": \"2026-07-10\", \"exright_date\": \"2026-07-10\", \"listing_date\": \"2026-07-10T00:00:00\", \"exercise_ratio\": 0.0, \"start_date\": NaN, \"end_date\": NaN, \"action_type_vi\": NaN, \"action_type_en\": NaN}"
+      },
+      {
+        "event_id": "6a5581c93711162a7e8083e7",
+        "event_type": "DIVIDEND",
+        "event_date": "2026-07-10 00:00:00",
+        "detail_json": "{\"id\": \"6a5581c93711162a7e8083e7\", \"event_name_vi\": \"Phát hành cổ phiếu\", \"event_name_en\": \"Share Issue\", \"ticker\": \"VIC\", \"event_code\": \"ISS\", \"event_title_vi\": \"Phát hành cổ phiếu - Phát hành riêng lẻ tỉ lệ 0.7%\", \"event_title_en\": \"Share Issue - Private Placements ratio 0.7%\", \"display_date1\": \"2026-07-10T00:00:00\", \"display_date2\": \"2026-07-10T00:00:00\", \"public_date\": \"2026-07-10\", \"issue_date\": NaN, \"category\": \"DIVIDEND\", \"record_date\": \"2026-07-10\", \"exright_date\": \"2026-07-10\", \"listing_date\": \"2026-08-10T00:00:00\", \"exercise_ratio\": 0.007287, \"start_date\": NaN, \"end_date\": NaN, \"action_type_vi\": NaN, \"action_type_en\": NaN}"
+      }
+    ]
+  },
+  "realtime_snapshot": {
+    "status": "success",
+    "rows_written": 1,
+    "snapshot_at": "2026-08-20 13:21:35.893983",
+    "key_metrics": {
+      "listing_symbol": "VIC",
+      "listing_ceiling": 214000,
+      "listing_floor": 186000,
+      "listing_ref_price": 200000,
+      "match_match_price": 202000,
+      "match_accumulated_volume": 5246400,
+      "match_highest": 204200,
+      "match_lowest": 201000,
+      "bid_1_price": 202000,
+      "ask_1_price": 202100
+    }
+  },
+  "f009_post_processing": {
+    "news_dedup_flagged": 0,
+    "price_adjustment_events_written": 2,
+    "adjustment_sample": [
+      {
+        "symbol": "VIC",
+        "ex_date": "2026-07-10 00:00:00",
+        "adjustment_type": "share_issue",
+        "multiplier": 0.9927657162258621,
+        "source_event_id": "6a5581c93711162a7e8083e7",
+        "computed_at": "2026-08-20 13:21:35.926538"
+      },
+      {
+        "symbol": "VIC",
+        "ex_date": "2025-12-05 00:00:00",
+        "adjustment_type": "share_issue",
+        "multiplier": 0.5,
+        "source_event_id": "690d3ca37f917761c5d02bee",
+        "computed_at": "2026-08-20 13:21:35.926538"
+      }
+    ]
+  }
+}
