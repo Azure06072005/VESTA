@@ -146,8 +146,18 @@ def write_ohlcv(df: pd.DataFrame, con: "duckdb.DuckDBPyConnection | None" = None
     return len(df)
 
 
-def run(symbol: str, start: str, end: str) -> int:
-    """Entry point: fetch live, normalize, write. Returns row count written."""
+def run(symbol: str, start: str = "2000-01-01", end: str | None = None) -> int:
+    """Entry point: fetch live, normalize, write. Returns row count written.
+
+    Defaults per DECISIONS.md item 8 (crawl maximum available history):
+    start defaults to 2000-01-01 (before HOSE's 2000 founding, safely
+    covers any listing date), end defaults to today if not given -- these
+    defaults exist specifically so this function is orchestrator-
+    compatible (src/etl/batch_orchestrator.py calls crawl_fn(symbol) with
+    no other args).
+    """
+    if end is None: 
+        end = dt.date.today().isoformat()
     raw = fetch_raw(symbol, start, end)
     normalized = normalize_ohlcv(raw, symbol)
     return write_ohlcv(normalized)

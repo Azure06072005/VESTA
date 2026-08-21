@@ -102,3 +102,23 @@ def test_write_ohlcv_rejects_schema_mismatch(tmp_path):
     bad_df = pd.DataFrame({"symbol": ["FPT"]})
     with pytest.raises(ValueError, match="missing columns"):
         market_ohlcv.write_ohlcv(bad_df, con)
+
+
+def test_run_defaults_start_and_end_when_omitted(tmp_path, monkeypatch):
+    db_path = tmp_path / "test.duckdb"
+    con = db.bootstrap_schema(db_path)
+    monkeypatch.setattr(market_ohlcv.db, "bootstrap_schema", lambda *a, **kw: con)
+
+    captured_args: dict[str, str] = {}
+
+    def fake_fetch_raw(symbol: str, start: str, end: str) -> pd.DataFrame:
+        captured_args["start"] = start
+        captured_args["end"] = end
+        return _sample_raw_df(2)
+
+    monkeypatch.setattr(market_ohlcv, "fetch_raw", fake_fetch_raw)
+
+    n = market_ohlcv.run("FPT")
+    assert n == 2
+    assert captured_args["start"] == "2000-01-01"
+    assert captured_args["end"] != ""

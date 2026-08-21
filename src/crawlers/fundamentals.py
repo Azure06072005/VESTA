@@ -313,11 +313,42 @@ def get_as_of(
     return result
 
 
-def run(symbol: str, report_type: str, period: str = "quarter") -> int:
-    """Entry point: fetch live, normalize, write. Returns row count written."""
-    raw = fetch_raw(symbol, report_type, period)
-    normalized = melt_pivoted_statement(raw, symbol, report_type)
-    return write_statements(normalized)
+def run(symbol: str, report_type: str = "all", period: str = "quarter") -> int:
+    """Entry point: fetch live, normalize, write. Returns row count written.
+
+    report_type="all" (the default, added so this is orchestrator-
+    compatible) loops over every REPORT_TYPES entry. EmptyResultError from
+    one report type (e.g. balance_sheet's known live-empty gap, see
+    DECISIONS.md) is caught and skipped so the other 3 report types still
+    get written -- only re-raised if EVERY report type came back empty for
+    this symbol (a genuinely empty/delisted symbol, which F008 should
+    correctly record as empty). Any other exception (a real transient
+    failure) propagates immediately, aborting the remaining report types
+    for this call -- F008 marks the whole (F005, symbol) unit as failed,
+    and a retry re-attempts all 4 report types together.
+    """
+    if report_type != "all": 
+        raw = fetch_raw(symbol, report_type, period)
+        normalized = melt_pivoted_statement(raw, symbol, report_type)
+        return write_statements(normalized)
+
+    total_written = 0
+    any_succeeded = False
+    last_empty_error: EmptyResultError | None = None
+    for rt in REPORT_TYPES: 
+        try: 
+            raw = fetch_raw(symbol, rt, period)
+            normalized = melt_pivoted_statement(raw, symbol, rt)
+            total_written += write_statements(normalized)
+            any_succeeded = True
+        except EmptyResultError as e: 
+            last_empty_error = e
+            continue
+    
+    if not any_succeeded and last_empty_error is not None: 
+        raise last_empty_error 
+    return total_written
+
 
 
 if __name__ == "__main__":
@@ -325,7 +356,9 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description="F005: crawl one fundamental report type for one symbol")
     parser.add_argument("symbol")
-    parser.add_argument("report_type", choices=list(REPORT_TYPES))
+    parser.add_argument(
+        "report_type", nargs="?", default="all", choices=[*REPORT_TYPES, "all"]
+    )    
     parser.add_argument("--period", default="quarter", choices=["quarter", "year"])
     args = parser.parse_args()
 

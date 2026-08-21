@@ -113,3 +113,21 @@ def test_write_snapshot_rejects_schema_mismatch(tmp_path):
     bad_df = pd.DataFrame({"symbol": ["FPT"]})
     with pytest.raises(ValueError, match="missing columns"):
         snapshots.write_snapshot(bad_df, con)
+
+
+def test_run_accepts_a_single_string_symbol(tmp_path, monkeypatch):
+    db_path = tmp_path / "test.duckdb"
+    con = db.bootstrap_schema(db_path)
+    monkeypatch.setattr(snapshots.db, "bootstrap_schema", lambda *a, **kw: con)
+
+    captured: dict[str, list[str]] = {}
+
+    def fake_fetch_raw(symbols: list[str]) -> pd.DataFrame:
+        captured["symbols"] = symbols
+        return _sample_price_board_df()
+
+    monkeypatch.setattr(snapshots, "fetch_raw", fake_fetch_raw)
+
+    n = snapshots.run("FPT")
+    assert captured["symbols"] == ["FPT"]
+    assert n == 2
