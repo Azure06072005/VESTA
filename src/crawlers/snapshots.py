@@ -186,8 +186,16 @@ def write_snapshot(df: pd.DataFrame, con: "duckdb.DuckDBPyConnection | None" = N
     return len(df)
 
 
-def run(symbols: list[str]) -> int:
-    """Entry point: fetch live, normalize, write. Returns row count written."""
+def run(symbols: "list[str] | str") -> int:
+    """Entry point: fetch live, normalize, write. Returns row count written.
+
+    Accepts either a single symbol (str, normalized to a 1-element list --
+    makes this orchestrator-compatible, since batch_orchestrator calls
+    crawl_fn(symbol) with a bare string) or a list of symbols for a
+    genuine multi-symbol price-board snapshot in one call.
+    """
+    if isinstance(symbols, str):
+        symbols = [symbols]
     raw = fetch_raw(symbols)
     normalized = normalize_snapshot(raw)
     return write_snapshot(normalized)
