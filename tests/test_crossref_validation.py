@@ -54,7 +54,7 @@ def test_orphan_symbol_reported_for_the_correct_table(tmp_path):
     con = db.bootstrap_schema(tmp_path / "test.duckdb")
     _seed_dim_symbol(con, ["FPT"])
     con.execute(
-        "INSERT INTO core.news VALUES "
+        "INSERT INTO core.news (symbol, source, published_at, available_at, headline, body, source_url, fetched_at) VALUES "
         "('BADSYM','vnstock','2026-01-01 00:00:00','2026-01-01 00:00:00','H',NULL,'u1','2026-01-01 00:00:00')"
     )
     report = vcr.run_validation(con)

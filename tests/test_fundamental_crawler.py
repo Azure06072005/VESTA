@@ -199,3 +199,46 @@ def test_write_statements_rejects_schema_mismatch(tmp_path):
     bad_df = pd.DataFrame({"symbol": ["FPT"]})
     with pytest.raises(ValueError, match="missing columns"):
         fundamentals.write_statements(bad_df, con)
+
+
+def test_run_with_report_type_all_aggregates_across_report_types(tmp_path, monkeypatch):
+    db_path = tmp_path / "test.duckdb"
+    con = db.bootstrap_schema(db_path)
+    monkeypatch.setattr(fundamentals.db, "bootstrap_schema", lambda *a, **kw: con)
+
+    call_log: list[str] = []
+
+    def fake_fetch_raw(symbol: str, report_type: str, period: str = "quarter") -> pd.DataFrame:
+        call_log.append(report_type)
+        if report_type == "balance_sheet":
+            return pd.DataFrame()
+        return _sample_pivoted_df()
+
+    monkeypatch.setattr(fundamentals, "fetch_raw", fake_fetch_raw)
+
+    total = fundamentals.run("FPT")
+
+    assert set(call_log) == set(fundamentals.REPORT_TYPES)
+    assert total > 0
+
+    written_types = {
+        r[0]
+        for r in con.execute("SELECT DISTINCT report_type FROM core.fundamentals WHERE symbol = 'FPT'").fetchall()
+    }
+    assert written_types == {"income_statement", "cash_flow", "ratio"}
+
+
+def test_run_with_report_type_all_raises_only_if_every_type_is_empty(tmp_path, monkeypatch):
+    from etl.retry_failed_jobs import EmptyResultError
+
+    db_path = tmp_path / "test.duckdb"
+    con = db.bootstrap_schema(db_path)
+    monkeypatch.setattr(fundamentals.db, "bootstrap_schema", lambda *a, **kw: con)
+
+    def always_empty_fetch(symbol: str, report_type: str, period: str = "quarter") -> pd.DataFrame:
+        return pd.DataFrame()
+
+    monkeypatch.setattr(fundamentals, "fetch_raw", always_empty_fetch)
+
+    with pytest.raises(EmptyResultError):
+        fundamentals.run("DELISTED_SYMBOL")

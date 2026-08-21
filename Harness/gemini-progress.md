@@ -205,3 +205,11 @@ Template for future entries:
 - In progress: F007 (Insights/Analytics snapshot crawler + retention policy decision).
 - Blocked: None for data tier (F901/F902 remain blocked on compliance/paper-trading gate).
 - Next session should: Formulate retention policy for F007 in `DECISIONS.md` (accumulate daily vs overwrite latest per snapshot type) and implement F007 crawler suite.
+
+## Session 3 — 2026-08-21
+- Completed: F101 (Cross-dataset validation gate) — built `src/pipeline/validate_crossref.py` and `tests/test_crossref_validation.py`. Fails loudly with `ValidationError` on orphan symbols, future timestamps, and orphan adjustment events.
+- Completed: Crawler `run()` signature fixes for orchestrator compatibility (`market_ohlcv.py`, `fundamentals.py`, `snapshots.py`).
+- Completed: Created `scratch/export_symbols.py` (exports 3,442 symbols to plain text file).
+- Verification: 108 passed, 1 xfailed (full test suite, 109 collected); `ruff` clean; `mypy` clean on 31 source files.
+- Status in `feature_list.json`: F101 marked `passing`.
+- Next session should: Implement F102 (Point-in-time news+price+fundamental join) — `src/pipeline/pit_join.py` and `tests/test_pit_join.py`.

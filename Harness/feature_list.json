@@ -126,8 +126,8 @@
         "F009"
       ],
       "verification": "python -m pipeline.validate_crossref --all && echo PASS; pytest tests/test_crossref_validation.py -x  (fails loudly on a deliberately injected orphan symbol)",
-      "state": "not_started",
-      "evidence": null
+      "state": "passing",
+      "evidence": "108 passed, 1 xfailed across full test suite (109 collected); ruff check src tests: All checks passed; mypy src tests --ignore-missing-imports: Success (31 source files). python -m pipeline.validate_crossref --all outputs PASS on clean DB and raises ValidationError on injected orphan symbol / future timestamp / orphan adjustment event."
     },
     {
       "id": "F102",
