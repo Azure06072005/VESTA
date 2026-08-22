@@ -213,3 +213,9 @@ Template for future entries:
 - Verification: 108 passed, 1 xfailed (full test suite, 109 collected); `ruff` clean; `mypy` clean on 31 source files.
 - Status in `feature_list.json`: F101 marked `passing`.
 - Next session should: Implement F102 (Point-in-time news+price+fundamental join) — `src/pipeline/pit_join.py` and `tests/test_pit_join.py`.
+
+## Session 4 — 2026-08-22
+- Completed: F102 (Point-in-time news+price+fundamental join) — added `staging.pit_events` and `core.pit_events` to `configs/duckdb_schema.sql`, implemented `src/pipeline/pit_join.py` and `tests/test_pit_join.py`.
+- Verification: 13/13 passed (`test_pit_join.py`); 121 passed, 1 xfailed (full suite, 122 collected); `ruff` clean; `mypy` clean on 33 source files.
+- Status in `feature_list.json`: F102 marked `passing`.
+- Next session should: Implement F201 (PROOF: sentiment mean-reversion backtest on VN30).

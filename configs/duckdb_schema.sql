@@ -215,3 +215,44 @@ CREATE TABLE IF NOT EXISTS core.price_adjustment_events (
     computed_at      TIMESTAMP NOT NULL,
     PRIMARY KEY (symbol, ex_date, source_event_id)
 );
+
+-- staging/core.pit_events (F102): point-in-time news+price+fundamental
+-- join. One row per (non-duplicate) news article, joined against
+-- adjusted prices (src/etl/adjustments.py) at trading-day offsets and
+-- point-in-time-correct fundamentals (fundamentals.get_as_of(), which
+-- respects both fetched_at and available_at -- never a future revision
+-- leaking into a past query). sentiment is NULL here -- F201 fills it in
+-- with the rule-based scorer, this table only proves the join is
+-- look-ahead-bias-free. price_t1/t5/t30 are NULL (not fabricated) when
+-- fewer than N trading days of future data exist yet for that symbol --
+-- see src/pipeline/pit_join.py module docstring.
+CREATE TABLE IF NOT EXISTS staging.pit_events (
+    symbol             VARCHAR NOT NULL,
+    source_url         VARCHAR NOT NULL,
+    published_at       TIMESTAMP NOT NULL,
+    headline           VARCHAR NOT NULL,
+    sentiment          DOUBLE,
+    price_at_publish   DOUBLE,
+    price_t1           DOUBLE,
+    price_t5           DOUBLE,
+    price_t30          DOUBLE,
+    fundamentals_json  VARCHAR,
+    fundamentals_as_of DATE,
+    built_at           TIMESTAMP NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS core.pit_events (
+    symbol             VARCHAR NOT NULL,
+    source_url         VARCHAR NOT NULL,
+    published_at       TIMESTAMP NOT NULL,
+    headline           VARCHAR NOT NULL,
+    sentiment          DOUBLE,
+    price_at_publish   DOUBLE,
+    price_t1           DOUBLE,
+    price_t5           DOUBLE,
+    price_t30          DOUBLE,
+    fundamentals_json  VARCHAR,
+    fundamentals_as_of DATE,
+    built_at           TIMESTAMP NOT NULL,
+    PRIMARY KEY (symbol, source_url)
+);
