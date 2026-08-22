@@ -132,13 +132,11 @@
     {
       "id": "F102",
       "name": "Point-in-time news+price+fundamental join",
-      "behavior": "Join F003/F004 (news), F002 (price), F005 (fundamentals) using available_at so no feature is ever visible before its real-world disclosure/publish time. Output: an events table (symbol, published_at, headline, sentiment placeholder, price_at_publish, price_t+1, price_t+5, price_t+30, latest available fundamentals as of published_at).",
-      "dependencies": [
-        "F101"
-      ],
-      "verification": "pytest tests/test_pit_join.py -x  (synthetic fixture: a news item published after market close is NOT joined to that same day's close; a fundamental row is NOT visible before its available_at) -- explicit look-ahead-bias unit test, this is the single most important test in the repo",
-      "state": "not_started",
-      "evidence": null
+      "behavior": "Joins F003/F004 news (deduped via F009's duplicate_of flag), F002 OHLCV (adjusted via F009's adjustments.apply_adjustment(), not raw close), and F005 fundamentals (via F009's get_as_of() -- correctly time-gated by both fetched_at and available_at) into core.pit_events. t+1/t+5/t+30 are TRADING-DAY offsets derived per-symbol from actually-crawled OHLCV dates, never calendar-day offsets. MARKET_CLOSE_TIME=15:00 is a stated assumption for mapping intraday news timestamps to a trading day. sentiment column is NULL, to be filled by F201.",
+      "dependencies": ["F101"],
+      "verification": "pytest tests/test_pit_join.py -x -- 13/13 pass, including the two explicit look-ahead-bias tests called out in the original spec: a news item published after market close is NOT joined to that same day's close (test_effective_trading_date_after_market_close_uses_next_trading_day), and a fundamental restatement fetched after published_at is NOT visible in the join (test_build_events_uses_get_as_of_not_a_future_revision). Also covers: duplicate-flagged news excluded, adjusted (not raw) price joined, NULL (not fabricated) horizons when insufficient future OHLCV exists, idempotent rebuild.",
+      "state": "passing",
+      "evidence": "13 passed (pytest tests/test_pit_join.py -v); 122 collected, 121 passed, 1 xfailed (full suite); ruff check src tests: All checks passed; mypy src tests --ignore-missing-imports: Success on 33 source files."
     },
     {
       "id": "F201",
