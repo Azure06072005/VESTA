@@ -1,7 +1,7 @@
 import sys
-import io
 import json
 import os
+import pathlib
 import warnings
 
 warnings.filterwarnings("ignore")
@@ -11,7 +11,10 @@ if hasattr(sys.stderr, "reconfigure"):
     sys.stderr.reconfigure(encoding="utf-8")
 
 if not os.environ.get("VNSTOCK_API_KEY"):
-    os.environ["VNSTOCK_API_KEY"] = "vnstock_85ab49abed2035a64e3bdb0f7dc0467a"
+    key_path = pathlib.Path.home() / ".vnstock" / "api_key.json"
+    if key_path.exists():
+        with open(key_path, "r", encoding="utf-8") as f:
+            os.environ["VNSTOCK_API_KEY"] = json.load(f).get("api_key", "")
 
 sys.path.insert(0, "src")
 
