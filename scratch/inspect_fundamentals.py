@@ -1,6 +1,10 @@
-import os, sys
+import os, sys, json, pathlib
 sys.stdout.reconfigure(encoding="utf-8")
-os.environ["VNSTOCK_API_KEY"] = "vnstock_85ab49abed2035a64e3bdb0f7dc0467a"
+if not os.environ.get("VNSTOCK_API_KEY"):
+    key_path = pathlib.Path.home() / ".vnstock" / "api_key.json"
+    if key_path.exists():
+        with open(key_path, "r", encoding="utf-8") as f:
+            os.environ["VNSTOCK_API_KEY"] = json.load(f).get("api_key", "")
 sys.path.insert(0, "src")
 import vnstock
 
