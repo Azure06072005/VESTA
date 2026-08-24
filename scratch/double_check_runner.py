@@ -1,7 +1,7 @@
 import sys
+import io
 import json
 import os
-import pathlib
 import warnings
 
 warnings.filterwarnings("ignore")
@@ -11,10 +11,7 @@ if hasattr(sys.stderr, "reconfigure"):
     sys.stderr.reconfigure(encoding="utf-8")
 
 if not os.environ.get("VNSTOCK_API_KEY"):
-    key_path = pathlib.Path.home() / ".vnstock" / "api_key.json"
-    if key_path.exists():
-        with open(key_path, "r", encoding="utf-8") as f:
-            os.environ["VNSTOCK_API_KEY"] = json.load(f).get("api_key", "")
+    raise SystemExit("Set VNSTOCK_API_KEY env var first -- never hardcode credentials in this file.")
 
 sys.path.insert(0, "src")
 
@@ -107,7 +104,7 @@ try:
     n_ra = fundamentals.run("FPT", report_type="ratio", period="quarter")
     total_fund = con.execute("SELECT count(*) FROM core.fundamentals WHERE symbol = 'FPT'").fetchone()[0]
     types_fund = [r[0] for r in con.execute("SELECT DISTINCT report_type FROM core.fundamentals WHERE symbol = 'FPT'").fetchall()]
-    df_fund = con.execute("SELECT symbol, report_type, period, period_end, available_at FROM core.fundamentals WHERE symbol = 'FPT' LIMIT 4").df()
+    df_fund = con.execute("SELECT symbol, report_type, period_end, available_at FROM core.fundamentals WHERE symbol = 'FPT' LIMIT 4").df()
     print(f"  ✓ Written: income_statement ({n_is}), cash_flow ({n_cf}), ratio ({n_ra})")
     print(f"  ✓ Total in core.fundamentals: {total_fund} rows")
     print("  ✓ Report Types Covered:", types_fund)
@@ -122,7 +119,7 @@ except Exception as e:
 print("\n[CHECK 7/8] F006: Corporate Events Crawler")
 try:
     n_events = corporate_events.run("FPT")
-    df_events = con.execute("SELECT symbol, event_id, event_date, event_type, event_title FROM core.corporate_events WHERE symbol = 'FPT' LIMIT 3").df()
+    df_events = con.execute("SELECT symbol, event_id, event_date, event_type, detail_json FROM core.corporate_events WHERE symbol = 'FPT' LIMIT 3").df()
     total_events = con.execute("SELECT count(*) FROM core.corporate_events WHERE symbol = 'FPT'").fetchone()[0]
     types_events = [r[0] for r in con.execute("SELECT DISTINCT event_type FROM core.corporate_events WHERE symbol = 'FPT'").fetchall()]
     print(f"  ✓ Written: {n_events} rows for FPT (Total in DB: {total_events})")
@@ -137,21 +134,18 @@ except Exception as e:
 # --- 8. F008 ---
 print("\n[CHECK 8/8] F008: Retry / Reconciliation Module")
 try:
-    # 1. Transient failure
     retry_failed_jobs.record_transient_failure(con, "audit_dataset", "AUDIT_SYM")
     jobs_1 = [j for j in retry_failed_jobs.get_retryable_jobs(con) if j[0] == "audit_dataset"]
     assert len(jobs_1) == 1, "Failed to record transient error"
-    
-    # 2. Success recovery
+
     retry_failed_jobs.record_success(con, "audit_dataset", "AUDIT_SYM")
     jobs_2 = [j for j in retry_failed_jobs.get_retryable_jobs(con) if j[0] == "audit_dataset"]
     assert len(jobs_2) == 0, "Failed to clear retry after success"
-    
-    # 3. Permanent empty
+
     retry_failed_jobs.record_empty(con, "audit_dataset", "EMPTY_SYM")
     jobs_3 = [j for j in retry_failed_jobs.get_retryable_jobs(con) if j[0] == "audit_dataset"]
     assert len(jobs_3) == 0, "Permanent empty should not be retryable"
-    
+
     print("  ✓ Transient failure recorded & retried")
     print("  ✓ Recovery recorded & cleared from retry queue")
     print("  ✓ Permanent empty recorded with max retry budget (fail-closed)")
