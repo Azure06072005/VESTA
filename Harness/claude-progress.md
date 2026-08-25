@@ -104,6 +104,52 @@ next session reads to avoid starting from zero.
 
 - Resolved: F003 (vnstock news crawler) marked passing after test suite passed and schema was verified live.
 
+## Session 5 — 2026-08-25
+- Completed (harness audit): re-verified F001/F005/F006 against a fresh
+  clone of the pushed repo after a Gemini session claimed these three had
+  failed a live pilot double-check. Confirmed crawler code was
+  byte-for-byte unchanged between the failing and passing
+  scratch/double_check_summary.json runs -- root cause was a stale
+  committed test artifact (an earlier double_check_runner.py version
+  querying a nonexistent event_title column), not a real crawler bug.
+  DECISIONS.md and feature_list.json evidence updated accordingly (see
+  2026-08-25 DECISIONS.md entry). requirements.txt gap found and fixed
+  (missing requests/beautifulsoup4/types-requests for F004).
+- In progress: F201 (PROOF: sentiment mean-reversion backtest). Resolved
+  both previously-open design questions (f201-open1 scoring rule,
+  f201-open2 sample-size sufficiency) via explicit clarifying questions
+  before writing code, per this project's stated preference. Implemented
+  src/pipeline/sentiment_lexicon.py (hand-built VN financial keyword
+  lexicon, explicitly flagged as an unsourced stated assumption after a
+  web search found no citable existing VN finance-specific lexicon) and
+  src/pipeline/backtest_meanreversion.py (paired t-test on return_t30 vs
+  return_t5, per-regime breakdown, Cohen's d, MIN_SAMPLE_SIZE=10 honesty
+  gate that reports status="insufficient_data" instead of computing a
+  statistic on too few events). tests/test_meanreversion_stats.py: 16
+  tests against synthetic fixtures -- an engineered-effect fixture (must
+  detect p<0.05) AND a null-effect control fixture (must NOT detect an
+  effect), small-sample insufficient_data guard, NULL-price exclusion
+  (not imputation), and bit-identical-report-on-rerun reproducibility.
+  Full suite: 137 passed, 1 xfailed (up from 121+1); ruff check src
+  tests: All checks passed; mypy src tests --ignore-missing-imports:
+  Success on 36 source files. CLI --dry-run verified end-to-end.
+- Blocked: F201 is `active`, not `passing` -- the pipeline is proven
+  correct on synthetic data but has NOT yet been run against real
+  crawled core.pit_events data (per B6, a feature needs its actual real
+  proof, not just a working pipeline). Real news volume is currently
+  thin (scratch/vic_crawl_report.json shows ~1-4 items/symbol/crawl) --
+  a meaningful real run likely needs either more pilot-universe crawl
+  cycles to accumulate news, or the full ~1800-symbol crawl, before a
+  real n large enough to trust shows up.
+- Next session should: run `python -m pipeline.backtest_meanreversion
+  --report out/meanreversion_report.json` (no --dry-run) against
+  whatever real core.pit_events data exists, report the actual n/p-value/
+  effect-size honestly (including if it's "insufficient_data" still),
+  and only move F201 to `passing` once a real result -- of any kind -- is
+  reported. If n is still too thin, consider running the pilot crawl
+  again or expanding the pilot symbol list to accumulate more real news
+  before re-attempting.
+
 <!--
 Template for future entries:
 
