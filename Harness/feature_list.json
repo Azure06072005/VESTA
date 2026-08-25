@@ -19,7 +19,7 @@
       ],
       "verification": "pytest tests/test_dim_symbol.py -x  (row count sane vs a known public reference count; delisted_date is non-null for a known-delisted sample ticker, guarding survivorship bias from the start)",
       "state": "passing",
-      "evidence": "Tests passed with xfail for delisted gap (Accepted via DECISIONS.md)."
+      "evidence": "Tests passed with xfail for delisted gap (Accepted via DECISIONS.md). Re-verified live 2026-08-25 pilot double-check (scratch/double_check_summary.json, committed): 3,446 rows written to core.dim_symbol against live vnstock data, no NOT NULL violations on organ_name. See DECISIONS.md 2026-08-25 entry -- an earlier reported F001 failure traced to a stale committed test artifact, not a code defect; crawler code unchanged."
     },
     {
       "id": "F002",
@@ -63,7 +63,7 @@
       ],
       "verification": "pytest tests/test_fundamental_crawler.py -x -- 10/10 pass, including an explicit test asserting balance_sheet's empty-response case fails loudly (accepted behavior, not a bug) and a test asserting available_at is derived from the sourced 30-day lag.",
       "state": "passing",
-      "evidence": "10 passed (pytest tests/test_fundamental_crawler.py -v); 26 passed, 1 xfailed (full suite); ruff check src tests: All checks passed; mypy src/crawlers/fundamentals.py --strict: Success. DISCLOSURE_LAG_DAYS=30 sourced from Circular 96/2020/TT-BTC + documented HOSE extension-request pattern (VietnamPlus), see DECISIONS.md 2026-08-12 entry. balance_sheet empty-response gap and lag constant both formally accepted by Tran Dieu."
+      "evidence": "10 passed (pytest tests/test_fundamental_crawler.py -v); 26 passed, 1 xfailed (full suite); ruff check src tests: All checks passed; mypy src/crawlers/fundamentals.py --strict: Success. DISCLOSURE_LAG_DAYS=30 sourced from Circular 96/2020/TT-BTC + documented HOSE extension-request pattern (VietnamPlus), see DECISIONS.md 2026-08-12 entry. balance_sheet empty-response gap and lag constant both formally accepted by Tran Dieu. Re-verified live 2026-08-25 pilot double-check (scratch/double_check_summary.json, committed): 8 rows written to core.fundamentals for FPT across income_statement/cash_flow/ratio; balance_sheet still empty per the accepted API-gap decision. See DECISIONS.md 2026-08-25 entry -- an earlier reported F005 failure traced to a stale committed test artifact, not a code defect; crawler code unchanged."
     },
     {
       "id": "F006",
@@ -74,7 +74,7 @@
       ],
       "verification": "pytest tests/test_corporate_events.py -x  (event_type is one of a known closed set or explicitly logged as unrecognized, never silently dropped)",
       "state": "passing",
-      "evidence": "Confirmed live 2026-08-13 via discover_corporate_events_schema.py; 35 passed, 1 xfailed; schema and categories hardcoded to verified reality."
+      "evidence": "Confirmed live 2026-08-13 via discover_corporate_events_schema.py; 35 passed, 1 xfailed; schema and categories hardcoded to verified reality. Re-verified live 2026-08-25 pilot double-check (scratch/double_check_summary.json, committed): 50 rows written to core.corporate_events for FPT across MAJOR_SHAREHOLDER_TRADING/SHAREHOLDER_MEETING/OTHER/DIVIDEND; event_id/event_date/event_type/detail_json all present and queryable. See DECISIONS.md 2026-08-25 entry -- an earlier reported F006 failure traced to a stale committed test artifact (a query against a column that never existed), not a code defect; crawler code unchanged."
     },
     {
       "id": "F007",
@@ -141,13 +141,13 @@
     {
       "id": "F201",
       "name": "PROOF: sentiment mean-reversion backtest on VN30 (gate for the model layer)",
-      "behavior": "Cheap rule-based sentiment scorer (not the fine-tuned SLM yet) on the F102 events table. Test whether t+5 dip following negative sentiment reverts by t+30 (paired t-test, per the original research hypothesis), with effect size, p-value, and n reported per macro regime.",
+      "behavior": "Cheap rule-based sentiment scorer (not the fine-tuned SLM yet) on the F102 events table. Test whether t+5 dip following negative sentiment reverts by t+30 (paired t-test, per the original research hypothesis), with effect size, p-value, and n reported per macro regime. IMPLEMENTED 2026-08-25: src/pipeline/sentiment_lexicon.py (hand-built VN financial keyword lexicon -- explicitly flagged as a STATED ASSUMPTION, not sourced from a validated dataset; a 2026-08-25 web search found no publicly available, citable Vietnamese finance-specific sentiment lexicon, see module docstring and DECISIONS.md) and src/pipeline/backtest_meanreversion.py (paired t-test on return_t30 vs return_t5 within the negative-sentiment group, per-regime breakdown per the 2026-08-16 regime decision, Cohen's d effect size, sorted deterministic JSON report). MIN_SAMPLE_SIZE=10 gate: any group/regime with fewer events reports status='insufficient_data' with p_value=null rather than computing a statistic on too few points -- this directly addresses the previously-open f201-open2 concern (real news volume is structurally thin, ~1-4 items per symbol per pilot crawl per scratch/vic_crawl_report.json) by making a thin sample impossible to mistake for a tested-and-found-nothing result. STATE IS active, NOT passing: the statistical logic is verified correct against synthetic engineered-effect and null-effect fixtures (tests/test_meanreversion_stats.py), but no run against real crawled core.pit_events data has been performed or reported yet -- per B3/B6, passing requires an actual reported n/p-value/effect-size from real data, not just a working pipeline. Full-universe or pilot-universe crawl volume must increase before a real run can produce a meaningful (or honestly-inconclusive) result.",
       "dependencies": [
         "F102"
       ],
       "verification": "python -m pipeline.backtest_meanreversion --report out/meanreversion_report.json && pytest tests/test_meanreversion_stats.py -x  (report contains effect size + p-value + n; bit-identical output on re-run)",
-      "state": "not_started",
-      "evidence": null
+      "state": "active",
+      "evidence": "16 passed (pytest tests/test_meanreversion_stats.py -v): lexicon classification (positive/negative/neutral/accent-insensitive/mixed-sentiment netting), paired t-test correctly detects an engineered reversion effect (p<0.05) AND correctly finds no effect in a null-effect control fixture (p>0.05) -- both directions tested, not just the 'yes' case. Small-sample (n=3) correctly flagged insufficient_data with p_value=null, not silently tested. Bit-identical JSON report on re-run with identical input (conventions.md reproducibility rule). Full suite: 137 passed, 1 xfailed (was 121+1 before F201); ruff check src tests: All checks passed; mypy src tests --ignore-missing-imports: Success on 36 source files. CLI --dry-run mode verified end-to-end (writes a valid report with total_events_loaded=0 against an empty frame, per verification.md's smoke-run row). NOT YET RUN against real core.pit_events data -- see DECISIONS.md 2026-08-25 entry for the sample-size decision and why this stays active, not passing, until a real run is reported."
     },
     {
       "id": "F301",
