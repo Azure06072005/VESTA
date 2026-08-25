@@ -7,10 +7,10 @@ should be copy-pasteable and give a clean pass/fail signal.
 |-------------|------------------------------------------------------------------|
 | Install     | `pip install -r requirements.txt --break-system-packages`        |
 | Tests       | `pytest -x`                                                       |
-| Lint        | `ruff check .`                                                    |
-| Type-check  | `mypy crawlers pipeline models service --strict`                  |
+| Lint        | `ruff check src tests`                                            |
+| Type-check  | `mypy src tests --ignore-missing-imports`                         |
 | Build       | `python -m build --wheel` *(only if packaging is needed; else N/A — a pure pipeline repo may skip this row, note why in DECISIONS.md if so)* |
-| Smoke run   | `python -m pipeline.validate --all && python -m pipeline.backtest_meanreversion --report out/smoke_report.json --dry-run` |
+| Smoke run   | `python -m pipeline.validate_crossref --all && python -m pipeline.backtest_meanreversion --report out/smoke_report.json --dry-run` |
 
 ## Per-feature verification (in addition to the table above)
 
@@ -21,8 +21,8 @@ the feature-specific gate. **Both must pass** before a feature moves to
 
 Example:
 ```
-F001 verification: pytest tests/test_market_crawler.py -x
-Repo-wide gate:     pytest -x && ruff check . && mypy crawlers pipeline models service --strict
+F001 verification: pytest tests/test_dim_symbol.py -x
+Repo-wide gate:     pytest -x && ruff check src tests && mypy src tests --ignore-missing-imports
 ```
 
 ## GPU/hardware-specific checks

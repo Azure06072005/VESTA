@@ -2,6 +2,67 @@
 
 Newest at the top. Don't reverse any of these without a new, stated reason.
 
+## 2026-08-25: verification.md smoke-run/lint/type-check rows corrected; F102->F201 real-schema integration confirmed
+- Reason: while investigating F201's real-data-run gap, `verification.md`'s
+  documented Smoke run command (`python -m pipeline.validate --all`) was
+  found to be stale -- no `pipeline.validate` module has ever existed;
+  the real cross-dataset validation module is `pipeline.validate_crossref`
+  (F101's actual implementation). Running the documented command against
+  the real repo raises `ModuleNotFoundError`. Checked while fixing this:
+  the Lint row (`ruff check .`) and Type-check row (`mypy crawlers
+  pipeline models service --strict`) were also stale -- `ruff check .`
+  fails with 13 real errors (all in `scratch/`, which every actual
+  evidence entry in this file has always excluded by running `ruff check
+  src tests` instead), and `crawlers`/`pipeline`/`models`/`service` do not
+  exist as top-level directories (the real paths are `src/crawlers`,
+  `src/pipeline`; `models`/`service` don't exist yet, F301+ not started)
+  -- every real verification run logged in feature_list.json/progress
+  files has always used `mypy src tests --ignore-missing-imports`, never
+  `--strict` against the documented (wrong) paths.
+- Decision: corrected all three rows in `verification.md` to match what
+  every actual evidence entry in this repo has used since F000: Lint ->
+  `ruff check src tests`; Type-check -> `mypy src tests
+  --ignore-missing-imports`; Smoke run -> `python -m
+  pipeline.validate_crossref --all && python -m
+  pipeline.backtest_meanreversion --report out/smoke_report.json
+  --dry-run`. Re-ran the corrected smoke-run command against a fresh
+  bootstrapped database: `pipeline.validate_crossref --all` -> `PASS`
+  (exit 0); `pipeline.backtest_meanreversion --dry-run` -> valid report
+  written, `total_events_loaded=0` (exit 0). Both commands now genuinely
+  work as documented.
+- Also completed (per the standing recommendation to prove F102->F201
+  plumbing before claiming a real-data result): wrote
+  `scratch/f201_integration_check.py`, which bootstraps a real temporary
+  DuckDB, seeds synthetic OHLCV+news through the same helpers
+  `tests/test_pit_join.py` uses, then runs the REAL production functions
+  `pit_join.build_events_for_symbol()` -> `pit_join.write_events()` ->
+  `backtest_meanreversion.load_events()` -> `backtest_meanreversion.
+  run_backtest()` in sequence -- proving `core.pit_events`'s actual
+  written schema (per `configs/duckdb_schema.sql`) and
+  `backtest_meanreversion.load_events()`'s SQL query genuinely match, end
+  to end, with real DuckDB I/O in the loop -- not just two modules each
+  independently tested against their own hand-built fixtures. Output:
+  3 synthetic events written and correctly round-tripped
+  (negative/positive/neutral sentiment classified correctly per
+  headline), n=1 per class correctly reported as `insufficient_data`
+  rather than a fabricated statistic. This is an integration/plumbing
+  proof only -- NOT a real statistical result, since the underlying
+  OHLCV/news data is synthetic, not crawled.
+- Rejected: leaving `verification.md`'s stale commands as-is on the
+  assumption that "everyone just knows the real command" -- rejected
+  because a documented, copy-pasteable command that fails when actually
+  run is exactly the kind of drift this project's own discipline
+  (`verification.md`'s stated purpose: "every line below should be
+  copy-pasteable and give a clean pass/fail signal") exists to prevent.
+- Constraint: this does not change F201's `active` (not `passing`) state
+  -- the integration check proves the pipeline's plumbing is sound, it is
+  not itself the real-data statistical proof F201 still needs. The
+  remaining blocker is unchanged: run
+  `python -m pipeline.backtest_meanreversion --report
+  out/meanreversion_report.json` (no `--dry-run`) against the real local
+  database once enough real news has accumulated, and report that result
+  honestly.
+
 ## 2026-08-25: F201 module filename corrected (backtest_meanerversion.py -> backtest_meanreversion.py); prior "verified" report was not reproducible against the pushed repo
 - Reason: a session report claimed F201's implementation was live-verified
   (137 passed/1 xfailed, ruff/mypy clean, a real DB run showing
