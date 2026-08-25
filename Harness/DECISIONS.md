@@ -2,6 +2,60 @@
 
 Newest at the top. Don't reverse any of these without a new, stated reason.
 
+## 2026-08-25: F201 module filename corrected (backtest_meanerversion.py -> backtest_meanreversion.py); prior "verified" report was not reproducible against the pushed repo
+- Reason: a session report claimed F201's implementation was live-verified
+  (137 passed/1 xfailed, ruff/mypy clean, a real DB run showing
+  total_events_loaded=4/all-neutral, and a filename typo fix from
+  `backtest_meanerversion.py` to `backtest_meanreversion.py`). Per this
+  project's standing discipline (never trust a session's claimed fix --
+  verify against the real repo), the actual pushed repo state (commit
+  `760e677`, "Create README.md") was checked directly.
+- Finding: the file was still named `src/pipeline/backtest_meanerversion.py`
+  (with the typo) on GitHub -- no correctly-named file existed anywhere in
+  the tree or git history, despite `tests/test_meanreversion_stats.py`,
+  `Harness/feature_list.json`, and `Harness/verification.md` all already
+  referencing the correct `pipeline.backtest_meanreversion` module name
+  (from the 2026-08-25 F201 implementation entry below). Running
+  `pytest tests/` against the actual pushed repo produced a collection
+  ERROR (`ImportError: cannot import name 'backtest_meanreversion' from
+  'pipeline'`), not the reported 137 passed/1 xfailed -- the reported test
+  run is not reproducible against what was actually pushed. The claimed
+  `gemini-progress.md` Session 5 entry also does not exist in the pushed
+  file (still ends at Session 4).
+- Also checked: the CODE CONTENT of the mis-named file was byte-for-byte
+  identical (module logic, docstrings, CLI entry point) to the correctly
+  implemented version already described in this file's other 2026-08-25
+  entry -- only the filename and a missing trailing newline were wrong.
+  This means the underlying implementation work was real; what failed was
+  the git rename/commit/push step, not the code itself.
+- Decision: renamed `src/pipeline/backtest_meanerversion.py` to
+  `src/pipeline/backtest_meanreversion.py` (no code changes). Re-ran the
+  full verification suite against the corrected file and got genuinely
+  reproducible results: 137 passed, 1 xfailed; `ruff check src tests`:
+  All checks passed; `mypy src tests --ignore-missing-imports`: Success on
+  36 source files; `python -m pipeline.backtest_meanreversion --dry-run`
+  writes a valid report. The REAL-DATABASE run (`total_events_loaded=4`,
+  all neutral) reported in the same session could not be independently
+  reproduced here (no access to the local `db/vesta.duckdb`) -- it is
+  plausible given the known thin-news-volume constraint, but is NOT
+  treated as confirmed evidence until it is re-run and its output
+  re-verified against the corrected, actually-pushed module.
+- Rejected: accepting the prior report's pytest/ruff/mypy/real-run numbers
+  as current evidence for F201 -- rejected because they are not
+  reproducible against the repo as pushed; a number that can't be
+  reproduced from the actual repo state is not evidence, regardless of
+  how plausible it looks (same standard applied to the F007 fabrication
+  incident and the F001/F005/F006 stale-artifact incident, both earlier
+  in this file).
+- Constraint: F201 remains `active`, not `passing` -- this entry only
+  fixes a packaging/push defect and re-establishes a reproducible test
+  suite; it does not constitute the real-data run F201 still needs to
+  reach `passing` (see the other 2026-08-25 entry's constraint). Any
+  future session reporting "verified" results must be checked against a
+  fresh clone before those results are written into `feature_list.json`
+  evidence -- a local venv/test run is not evidence of what's on GitHub
+  until the corresponding files are confirmed pushed.
+
 ## 2026-08-25: F001/F005/F006 re-verified live via pilot double-check; stale scratch artifact was the actual cause of the earlier reported failures
 - Reason: a pilot run of `scratch/double_check_runner.py` against live vnstock
   data (symbol=FPT, 2026-08-25) was reported as showing F001, F005, and F006
