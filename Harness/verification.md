@@ -21,8 +21,8 @@ the feature-specific gate. **Both must pass** before a feature moves to
 
 Example:
 ```
-F001 verification: pytest tests/test_market_crawler.py -x
-Repo-wide gate:     pytest -x && ruff check . && mypy crawlers pipeline models service --strict
+F001 verification: pytest tests/test_dim_symbol.py -x
+Repo-wide gate:     pytest -x && ruff check src tests && mypy src tests --ignore-missing-imports
 ```
 
 ## GPU/hardware-specific checks
