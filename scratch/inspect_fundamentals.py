@@ -1,4 +1,5 @@
-import os, sys
+import os
+import sys
 sys.stdout.reconfigure(encoding="utf-8")
 
 api_key = os.environ.get("VNSTOCK_API_KEY")
