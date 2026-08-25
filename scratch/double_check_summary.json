@@ -16,12 +16,25 @@
       "dim_symbol",
       "fundamentals",
       "market_ohlcv_daily",
-      "news"
+      "news",
+      "pit_events",
+      "price_adjustment_events",
+      "realtime_quote_snapshot"
     ]
   },
   "F001": {
-    "status": "FAIL",
-    "error": "Constraint Error: NOT NULL constraint failed: dim_symbol.organ_name"
+    "status": "PASS",
+    "row_count": 3446,
+    "columns": [
+      "symbol",
+      "organ_name",
+      "en_organ_name",
+      "exchange",
+      "industry_code",
+      "industry_name",
+      "delisted_date",
+      "fetched_at"
+    ]
   },
   "F002": {
     "status": "PASS",
@@ -35,7 +48,7 @@
         "low": 69.1,
         "close": 69.24,
         "volume": 1714500,
-        "fetched_at": "2026-08-14 07:22:31.893967"
+        "fetched_at": "2026-08-25 01:49:40.759500"
       },
       {
         "symbol": "FPT",
@@ -45,7 +58,7 @@
         "low": 68.88,
         "close": 69.53,
         "volume": 1436900,
-        "fetched_at": "2026-08-14 07:22:31.893967"
+        "fetched_at": "2026-08-25 01:49:40.759500"
       }
     ]
   },
@@ -56,16 +69,16 @@
       {
         "symbol": "FPT",
         "source": "vnstock",
-        "published_at": "2026-08-03 16:13:52",
-        "available_at": "2026-08-03 16:13:52",
-        "headline": "FPT: Ngh\u1ecb quy\u1ebft H\u0110QT v\u1ec1 vi\u1ec7c tri\u1ec3n khai ph\u01b0\u01a1ng \u00e1n ph\u00e1t h\u00e0nh c\u1ed5 phi\u1ebfu \u0111\u1ec3 t\u0103ng v\u1ed1n c\u1ed5 ph\u1ea7n t\u1eeb ngu\u1ed3n v\u1ed1n ch\u1ee7 s\u1edf h\u1eefu",
+        "published_at": "2026-08-20 17:46:00",
+        "available_at": "2026-08-20 17:46:00",
+        "headline": "FPT: Quy\u1ebft \u0111\u1ecbnh v\u1ec1 vi\u1ec7c thay \u0111\u1ed5i \u0111\u0103ng k\u00fd ni\u00eam y\u1ebft",
         "source_url": "None"
       }
     ]
   },
   "F004": {
     "status": "PASS",
-    "total_rows": 3,
+    "total_rows": 6,
     "sample": [
       {
         "symbol": "FPT",
@@ -86,12 +99,23 @@
     ]
   },
   "F005": {
-    "status": "FAIL",
-    "error": "Could not find a period-end column in fetched fundamental data. Columns present: ['item', 'item_id', '2026-Q2', '2025-Q4', '2026-Q1', '2025-Q4_1']. PERIOD_END_ALIASES tried: ['period_end', 'date', 'report_date', 'period']. Run discover_fundamentals_schema.py against a live key and update PERIOD_END_ALIASES rather than guessing."
+    "status": "PASS",
+    "total_rows": 8,
+    "report_types": [
+      "cash_flow",
+      "ratio",
+      "income_statement"
+    ]
   },
   "F006": {
-    "status": "FAIL",
-    "error": "Binder Error: Referenced column \"event_title\" not found in FROM clause!\nCandidate bindings: \"event_date\", \"event_type\", \"event_id\", \"fetched_at\", \"detail_json\"\n\nLINE 1: SELECT symbol, event_id, event_date, event_type, event_title FROM core.corporate_events WHERE symbol = 'FPT...\n                                                         ^"
+    "status": "PASS",
+    "total_rows": 50,
+    "event_types": [
+      "MAJOR_SHAREHOLDER_TRADING",
+      "SHAREHOLDER_MEETING",
+      "OTHER",
+      "DIVIDEND"
+    ]
   },
   "F008": {
     "status": "PASS"

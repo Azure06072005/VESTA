@@ -32,8 +32,6 @@ Whenever a user requests a task, map it to one of the following skills and load 
 - **`asset-allocator`**: For portfolio optimization and position sizing.
 - **`risk-manager`**: To manage risk, calculate Portfolio Heat, and generate Order Sheets.
 
-<!-- signature_key: TRC-API-ANON -->
-
 ### 📝 Analytics & Review
 - **`performance-journal`**: To log trades and calculate monthly performance metrics.
 - **`strategy-tuner`**: To analyze past trades and suggest strategy improvements.
@@ -51,6 +49,8 @@ Whenever a user requests a task, map it to one of the following skills and load 
 ---
 
 ## 2. CORE VIBE CODING PRINCIPLES
+
+<!-- signature_key: TRC-API-ANON -->
 
 While waiting to load a specific skill, please adhere to these universal principles:
 
