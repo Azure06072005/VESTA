@@ -23,6 +23,7 @@ from etl import migrations  # noqa: E402
 from etl import batch_orchestrator as bo  # noqa: E402
 from pipeline import validate_crossref  # noqa: E402
 from pipeline import pit_join  # noqa: E402
+from pipeline import backtest_meanreversion as bmr  # noqa: E402
 from crawlers import market_ohlcv, fundamentals, corporate_events  # noqa: E402
 
 
@@ -102,18 +103,89 @@ def run_validation_and_join_stage(symbols: list[str]) -> None:
     print(f"[staged_pilot_run] F102 done: {total_events} total events written across {len(symbols)} symbols")
 
 
+def run_backtest_stage() -> dict[str, object]:
+    """Step 5 (optional, --run-backtest): F201's real (non-dry-run)
+    backtest against whatever real core.pit_events data now exists.
+
+    This is deliberately a SEPARATE, opt-in stage rather than always-on
+    at the end of the pilot run -- F102's own step already ran F101/F102
+    against whatever news happened to be crawled *before* this run
+    started; the background F003/F004 crawls launched by this same
+    invocation will NOT have landed yet (news crawling takes real wall-
+    clock time and this function returns immediately after step 2/4).
+    Running F201 here reports on real, already-joined data -- it does
+    NOT wait for the background crawls to finish, and the report's own
+    n/insufficient_data status is what tells you honestly whether enough
+    real news has accumulated yet. Re-run this stage alone later (once
+    background crawls have had more time) with:
+        python scratch/staged_pilot_run.py --backtest-only
+
+    Calls migrations.run_all_migrations() first (schema bootstrap + all
+    F009 migrations) so this also works standalone against a fresh/never-
+    bootstrapped database -- backtest_meanreversion.run()'s own
+    db.connect() does NOT bootstrap schema (only db.bootstrap_schema()
+    does), so without this the first-ever --backtest-only invocation
+    would fail with a raw CatalogException instead of a clean result.
+    """
+    migrations.run_all_migrations()  # ensure schema exists before bmr.run()'s db.connect()
+
+    print("[staged_pilot_run] F201 (real, non-dry-run backtest)...")
+    report = bmr.run(report_path="out/meanreversion_report.json", dry_run=False)
+    print("[staged_pilot_run] F201 report written to out/meanreversion_report.json")
+    print(f"[staged_pilot_run] total_events_loaded={report['total_events_loaded']}")
+    print(f"[staged_pilot_run] sentiment_class_counts={report['sentiment_class_counts']}")
+    neg = report["overall"]["negative_sentiment_group"]
+    print(f"[staged_pilot_run] negative_sentiment_group status={neg['status']} n={neg['n']}")
+    if neg["status"] == "ok":
+        print(f"[staged_pilot_run]   p_value={neg['p_value']} cohens_d={neg['cohens_d']}")
+    else:
+        print(
+            "[staged_pilot_run]   NOT ENOUGH real negative-sentiment events yet "
+            f"(n={neg['n']} < {report['min_sample_size']}) -- this is an honest "
+            "result, not a failure. Let background F003/F004 crawls run longer, "
+            "then re-run with --backtest-only."
+        )
+    return report
+
+
 if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser(description="Run the staged pilot plan end-to-end")
-    parser.add_argument("symbols_file", help="e.g. scratch/pilot_symbols.txt")
+    parser.add_argument(
+        "symbols_file",
+        nargs="?",
+        default=None,
+        help="e.g. scratch/pilot_symbols.txt (not required with --backtest-only)",
+    )
     parser.add_argument(
         "--skip-news", action="store_true", help="don't start F003/F004 background crawls (e.g. on a re-run)"
     )
     parser.add_argument(
         "--stock-only", action="store_true", help="run step 2 only, skip F101/F102 (e.g. to check progress first)"
     )
+    parser.add_argument(
+        "--run-backtest",
+        action="store_true",
+        help="after F101/F102, also run F201's real (non-dry-run) backtest and print an honest "
+        "n/p-value/effect-size summary -- reports insufficient_data plainly if there isn't enough "
+        "real news yet, never fabricates a result",
+    )
+    parser.add_argument(
+        "--backtest-only",
+        action="store_true",
+        help="skip crawling and F101/F102 entirely -- just re-run F201's backtest against "
+        "whatever core.pit_events data already exists (e.g. after background news crawls "
+        "have had more time to accumulate)",
+    )
     args = parser.parse_args()
+
+    if args.backtest_only:
+        run_backtest_stage()
+        raise SystemExit(0)
+
+    if args.symbols_file is None:
+        parser.error("symbols_file is required unless --backtest-only is given")
 
     symbol_list = load_symbols(args.symbols_file)
     print(f"[staged_pilot_run] pilot universe: {len(symbol_list)} symbols")
@@ -125,6 +197,9 @@ if __name__ == "__main__":
 
     if not args.stock_only:
         run_validation_and_join_stage(symbol_list)
+
+        if args.run_backtest:
+            run_backtest_stage()
 
     print("[staged_pilot_run] complete. Background F003/F004 crawls (if started) continue independently --")
     print("[staged_pilot_run] check progress any time with: SELECT dataset_name, status, COUNT(*) FROM meta.crawl_progress GROUP BY 1,2")
