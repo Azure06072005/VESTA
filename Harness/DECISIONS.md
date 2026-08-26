@@ -2,6 +2,61 @@
 
 Newest at the top. Don't reverse any of these without a new, stated reason.
 
+## 2026-08-26: F007b tracking entry added -- vnstock_data Insights/Analytics/Macro claim not yet at this project's evidence standard; snapshots.py docstring desync fixed
+- Reason: the 2026-08-26 "vnstock_data (Sponsor Package) verified live" entry
+  below documents a real, checkable fact (`pip show vnstock_data` output --
+  package genuinely installed, version 3.2.7, official homepage, proprietary
+  license, author Thinh Vu -- the real vnstock maintainer) but reports the
+  SPECIFIC API surface (`Insights.ranking`/`.screener`/`.sentiment`/`.flow`,
+  `Analytics.valuation()`, `Macro.economy()`/`.currency()`/`.commodity()`) as
+  a summary claim ("returned live DataFrames successfully") rather than the
+  pasted raw stdout (shapes, column names, sample rows) every other
+  confirmed schema in this repo has been held to -- F002's OHLCV columns,
+  F006's corporate events columns, and this exact file's own F007 82-column
+  MultiIndex discovery were all established by pasting literal terminal
+  output, not a summary. Per this project's own standing discipline
+  ("confirmed means pasted stdout"), a claim that doesn't meet that bar
+  shouldn't silently be treated as equivalent to one that does, even when
+  (as here) the underlying package installation is independently verifiable
+  and the claim is plausible.
+- Also found: `src/crawlers/snapshots.py`'s F007 docstring still stated,
+  unedited, "`Insights` class does not exist anywhere in the package" --
+  true of the community `vnstock==4.0.5` package that finding was based on,
+  but left in place without qualification after the 2026-08-26 entry below
+  reported a different, broader proprietary package DOES have `Insights`.
+  This is not a contradiction between the two findings (they're about
+  different packages), but leaving the docstring unedited made the repo
+  internally inconsistent -- a future session reading only `snapshots.py`
+  would have no idea the newer finding existed at all.
+- Decision: (1) updated `snapshots.py`'s docstring to note the 2026-08-26
+  finding explicitly, make clear it applies to a different package than the
+  one originally surveyed, and state plainly that this has NOT yet reached
+  this project's evidence bar. (2) Added `F007b` to `feature_list.json` as
+  a tracking feature (state: `active`, not `passing`) so the gap is visible
+  in the harness's own source of truth, not just in a docstring comment.
+  (3) F007 itself is explicitly UNCHANGED -- still `passing`, still
+  realtime-quote-only; no crawler code has been written against `Insights`/
+  `Analytics`/`Macro`, and none should be until F007b's verification
+  command (paste raw `df.shape`/`df.columns.tolist()`/`df.head()` output
+  for at least `gainer()`, `filter()`, and `breadth()`) is satisfied.
+- Rejected: treating the 2026-08-26 entry's summary claim as sufficient to
+  mark F007b (or an expanded F007) `passing` outright -- rejected because
+  doing so would be the same category of mistake this project has already
+  caught and corrected multiple times (the original F007 `Insights.ranking
+  .gainer()` fabrication in 2026-08-11, and the F001/F005/F006 stale-
+  artifact incident on 2026-08-25) -- a plausible, even probably-true claim
+  is still not evidence until it's independently checkable.
+- Rejected: rewriting or removing the existing 2026-08-26 "vnstock_data
+  verified live" entry -- rejected because it contains real, useful,
+  independently-checkable information (the `pip show` output, the taxonomy
+  CSV, the crawler fallback pattern) alongside the unverified claim; this
+  addendum entry narrows what still needs evidence rather than discarding
+  what's already solid.
+- Constraint: once the raw stdout is pasted, update F007b's evidence field
+  and decide explicitly whether F007's own scope/state changes as a result,
+  or whether the new capability becomes its own separate feature (e.g.
+  F007c) -- don't fold it silently into F007's existing `passing` evidence.
+
 ## 2026-08-26: vnstock_data (Sponsor Package) verified live -- Insights, Analytics, Macro, 300 req/min limit, and Taxonomy Dictionary
 - Reason: On 2026-08-14, F007 scope was shrunk because the community package (`vnstock==4.0.5`)
   lacked `Insights`, `Analytics`, and technical screeners. With the user's Silver Sponsor

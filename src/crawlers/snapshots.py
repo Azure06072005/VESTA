@@ -3,8 +3,9 @@ snapshot crawler only.
 
 Original spec called for 4 sub-features: market valuation history,
 technical/flow screener, gainer/loser/volume rankings, realtime quote.
-Confirmed live 2026-08-13/14 against the installed vnstock==4.0.5:
-- `Insights` class does not exist anywhere in the package (confirmed
+Confirmed live 2026-08-13/14 against the installed COMMUNITY package
+(`vnstock==4.0.5`):
+- `Insights` class does not exist anywhere in that package (confirmed
   absent -- an earlier report's `Insights.ranking.gainer()` claim was
   hallucinated, see DECISIONS.md 2026-08-11 entry).
 - A full survey of every top-level vnstock class (Trading, Retail, Fund,
@@ -15,6 +16,24 @@ Confirmed live 2026-08-13/14 against the installed vnstock==4.0.5:
   confirmed-callable method and plausibly covers "realtime quote" -- this
   is the one piece of F007 this module implements. The other 3
   sub-features are deferred, not built here -- see DECISIONS.md.
+
+UPDATE 2026-08-26 -- POSSIBLY SUPERSEDED, NOT YET ACTED ON: DECISIONS.md's
+2026-08-26 entry reports that a separate PROPRIETARY package
+(`vnstock_data==3.2.7`, a paid Sponsor-tier extension, distinct from the
+community `vnstock` surveyed above) does provide an `Insights` class with
+`ranking`/`screener`/`sentiment`/`flow` submodules, and that `gainer()`,
+`breadth()`, and `filter()` were called live and returned data. That
+finding does NOT yet meet this project's own evidence standard (a pasted
+raw stdout dump -- shapes, column names, sample rows -- the way every
+other confirmed schema in this repo was established, e.g. F002's OHLCV
+columns or this file's own 82-column MultiIndex discovery above). Until
+that raw output is pasted and reviewed, F007's SCOPE AND STATE ARE
+UNCHANGED -- this module still implements realtime-quote-only, and no
+code here has been written against `Insights`/`Analytics`/`Macro`. Do not
+assume the 4-sub-feature original spec is restorable until that
+verification gap is closed; see the tracking entry for this at F007b in
+feature_list.json (state: active, not started) and the 2026-08-26
+DECISIONS.md addendum.
 
 CONFIRMED SCHEMA (2026-08-14, real discovery output pasted by Tran Dieu,
 replaces the flat-DataFrame first guess): `price_board()` returns an
