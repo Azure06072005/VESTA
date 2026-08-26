@@ -14,6 +14,7 @@ every step it calls is itself already resumable (F009 item 6).
 """
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
 import pathlib
@@ -40,6 +41,9 @@ def start_background_news_crawls(symbols_file: str) -> list[subprocess.Popen]:
     does not wait for them.
     """
     repo_root = pathlib.Path(__file__).resolve().parents[1]
+    env = os.environ.copy()
+    env["PYTHONPATH"] = "src"
+    env["PYTHONUTF8"] = "1"
     processes = []
     for dataset_name, module_name in [("F003", "crawlers.vnstock_news"), ("F004", "crawlers.cafef_news")]:
         proc = subprocess.Popen(
@@ -56,7 +60,7 @@ def start_background_news_crawls(symbols_file: str) -> list[subprocess.Popen]:
                 "15",
             ],
             cwd=repo_root,
-            env={"PYTHONPATH": "src"},
+            env=env,
         )
         print(f"[staged_pilot_run] started {dataset_name} in background, pid={proc.pid}")
         processes.append(proc)

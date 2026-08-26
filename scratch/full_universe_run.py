@@ -49,6 +49,7 @@ unrecoverable lost time (see DECISIONS.md 2026-08-16 item 8).
 """
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
 import pathlib
@@ -88,6 +89,10 @@ def start_background_news_crawls_full_universe(symbols: list[str]) -> list[subpr
     symbols_file = repo_root / "scratch" / "full_universe_symbols.txt"
     write_full_universe_file(symbols, str(symbols_file))
 
+    env = os.environ.copy()
+    env["PYTHONPATH"] = "src"
+    env["PYTHONUTF8"] = "1"
+
     processes = []
     for dataset_name, module_name in [("F003", "crawlers.vnstock_news"), ("F004", "crawlers.cafef_news")]:
         proc = subprocess.Popen(
@@ -104,7 +109,7 @@ def start_background_news_crawls_full_universe(symbols: list[str]) -> list[subpr
                 "50",
             ],
             cwd=repo_root,
-            env={"PYTHONPATH": "src"},
+            env=env,
         )
         print(f"[full_universe_run] started {dataset_name} in background over {len(symbols)} symbols, pid={proc.pid}")
         processes.append(proc)
