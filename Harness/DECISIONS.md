@@ -2,6 +2,62 @@
 
 Newest at the top. Don't reverse any of these without a new, stated reason.
 
+## 2026-08-25: scratch/staged_pilot_run.py extended with --run-backtest / --backtest-only (F201 turnkey chaining)
+- Reason: F201 remains `active`, not `passing`, purely because no real,
+  independently-reproduced run against real crawled data has been
+  reported yet (see the other 2026-08-25 entries). The blocker is not
+  code -- it's that running the real backtest was a separate, easy-to-
+  forget manual step after the pilot crawl. Chaining it directly into the
+  existing pilot orchestrator removes that friction without changing any
+  crawler, join, or backtest logic.
+- Decision: added two flags to `scratch/staged_pilot_run.py`, which
+  already orchestrates F002/F005/F006 -> (background F003/F004) ->
+  F101/F102 for the pilot symbol universe:
+  - `--run-backtest`: after F101/F102 complete, also runs
+    `backtest_meanreversion.run(dry_run=False)` against whatever real
+    `core.pit_events` data now exists and prints an honest summary
+    (n, status, p-value/effect-size if `status=="ok"`, or a plain
+    "not enough data yet" message if `status=="insufficient_data"` --
+    never a fabricated result either way).
+  - `--backtest-only`: skips crawling/F101/F102 entirely and just re-runs
+    the backtest stage alone -- for re-checking later once the
+    background F003/F004 crawls (which do NOT block the main pilot run,
+    per the existing 2026-08-22 staged-pilot design) have had more real
+    wall-clock time to accumulate news.
+- Found and fixed while implementing this: `backtest_meanreversion.run()`
+  calls `db.connect()` internally, which does NOT bootstrap schema
+  (only `db.bootstrap_schema()` does) -- so a first-ever
+  `--backtest-only` invocation against a fresh/never-bootstrapped
+  database raised a raw `CatalogException` instead of a clean result.
+  Fixed by having `run_backtest_stage()` call
+  `migrations.run_all_migrations()` (schema bootstrap + all F009
+  migrations) before calling `bmr.run()`, matching the pattern already
+  used by the script's other two stages.
+- Verified: `--backtest-only` against a completely fresh DB correctly
+  reports `status=insufficient_data, n=0` with a clear "not enough data
+  yet" message (no crash). Seeded 15 synthetic negative-sentiment events
+  with an engineered dip+reversion pattern directly into `core.market_
+  ohlcv_daily`/`core.news`, ran `pit_join` for real, then `--backtest-
+  only` correctly reported `status=ok, n=15` with a real p-value and
+  Cohen's d -- confirming both the "not enough data" and "real result"
+  code paths work end-to-end through the actual CLI entry point, not
+  just through `run_backtest()` called directly in a test. Full suite
+  still 137 passed/1 xfailed; ruff/mypy clean.
+- Rejected: making `--run-backtest` always-on (no flag) at the end of
+  every pilot run -- rejected because the background F003/F004 crawls
+  this same invocation just started will not have landed any news yet by
+  the time F102 finishes; running the backtest immediately after every
+  pilot run would produce a misleadingly-early `insufficient_data`
+  result on every single run rather than being an explicit, intentional
+  check-in.
+- Constraint: this does not change F201's `active` state or provide the
+  real-data result itself -- it only makes obtaining that result a single
+  command instead of several manual ones. F201 moves to `passing` only
+  once `--run-backtest` or `--backtest-only` is actually run against the
+  real local database and a real (not `insufficient_data`) result is
+  reported and independently reconfirmed, per the existing constraint in
+  the 2026-08-25 F201 scoring-rule entry.
+
 ## 2026-08-25: verification.md smoke-run/lint/type-check rows corrected; F102->F201 real-schema integration confirmed
 - Reason: while investigating F201's real-data-run gap, `verification.md`'s
   documented Smoke run command (`python -m pipeline.validate --all`) was
