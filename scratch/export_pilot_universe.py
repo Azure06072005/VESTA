@@ -63,9 +63,13 @@ def _resolve_api_key() -> str:
 
 def _authenticate() -> None:
     api_key = _resolve_api_key()
-    import vnstock
+    try:
+        import vnstock_data as vs
+    except ImportError:
+        import vnstock as vs  # type: ignore[no-redef]
 
-    vnstock.change_api_key(api_key)
+    if hasattr(vs, "change_api_key"):
+        vs.change_api_key(api_key)
 
 
 def fetch_group_symbols(group: str = "VN30") -> list[str]:
@@ -75,9 +79,12 @@ def fetch_group_symbols(group: str = "VN30") -> list[str]:
     guessing.
     """
     _authenticate()
-    import vnstock
+    try:
+        import vnstock_data as vs
+    except ImportError:
+        import vnstock as vs  # type: ignore[no-redef]
 
-    ref = vnstock.Reference()
+    ref = vs.Reference()
     result = ref.equity.list_by_group(group=group)
 
     if isinstance(result, pd.Series):

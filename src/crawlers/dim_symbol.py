@@ -57,9 +57,13 @@ def _authenticate() -> None:
             f"{REQUIRED_ENV_VAR} is not set. Export it before running this "
             f"crawler -- credentials never go in code or configs/."
         )
-    import vnstock  # local import: keep vnstock optional for pure unit tests
+    try:
+        import vnstock_data as vs
+    except ImportError:
+        import vnstock as vs  # type: ignore[no-redef]
 
-    vnstock.change_api_key(api_key)
+    if hasattr(vs, "change_api_key"):
+        vs.change_api_key(api_key)
 
 def fetch_raw() -> tuple[pd.DataFrame, pd.DataFrame]:
     """Live network call. Requires VNSTOCK_API_KEY to be set.
@@ -69,9 +73,12 @@ def fetch_raw() -> tuple[pd.DataFrame, pd.DataFrame]:
     so that logic stays testable without network access.
     """
     _authenticate()
-    import vnstock
+    try:
+        import vnstock_data as vs
+    except ImportError:
+        import vnstock as vs  # type: ignore[no-redef]
 
-    ref = vnstock.Reference()
+    ref = vs.Reference()
     exchange_df = ref.equity.list_by_exchange()
     industry_df = ref.industry.sectors()
     return exchange_df, industry_df

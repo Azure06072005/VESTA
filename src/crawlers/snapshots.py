@@ -62,9 +62,13 @@ def _authenticate() -> None:
             f"{REQUIRED_ENV_VAR} is not set. Export it before running this "
             f"crawler -- credentials never go in code or configs/."
         )
-    import vnstock  # local import: keep vnstock optional for pure unit tests
+    try:
+        import vnstock_data as vs
+    except ImportError:
+        import vnstock as vs  # type: ignore[no-redef]
 
-    vnstock.change_api_key(api_key)
+    if hasattr(vs, "change_api_key"):
+        vs.change_api_key(api_key)
 
 
 def fetch_raw(symbols: list[str]) -> pd.DataFrame:
@@ -76,9 +80,12 @@ def fetch_raw(symbols: list[str]) -> pd.DataFrame:
     access.
     """
     _authenticate()
-    import vnstock
+    try:
+        import vnstock_data as vs
+    except ImportError:
+        import vnstock as vs  # type: ignore[no-redef]
 
-    trading = vnstock.Trading(source="VCI")
+    trading = vs.Trading(source="VCI")
     result: pd.DataFrame = trading.price_board(symbols_list=symbols)
     return result
 

@@ -49,6 +49,7 @@ unrecoverable lost time (see DECISIONS.md 2026-08-16 item 8).
 """
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
 import pathlib
@@ -88,6 +89,10 @@ def start_background_news_crawls_full_universe(symbols: list[str]) -> list[subpr
     symbols_file = repo_root / "scratch" / "full_universe_symbols.txt"
     write_full_universe_file(symbols, str(symbols_file))
 
+    env = os.environ.copy()
+    env["PYTHONPATH"] = "src"
+    env["PYTHONUTF8"] = "1"
+
     processes = []
     for dataset_name, module_name in [("F003", "crawlers.vnstock_news"), ("F004", "crawlers.cafef_news")]:
         proc = subprocess.Popen(
@@ -104,30 +109,37 @@ def start_background_news_crawls_full_universe(symbols: list[str]) -> list[subpr
                 "50",
             ],
             cwd=repo_root,
-            env={"PYTHONPATH": "src"},
+            env=env,
         )
         print(f"[full_universe_run] started {dataset_name} in background over {len(symbols)} symbols, pid={proc.pid}")
         processes.append(proc)
     return processes
 
 
-def run_stock_data_stage_full_universe(symbols: list[str]) -> None:
+def run_stock_data_stage_full_universe(symbols: list[str], fast: bool = False) -> None:
     """Step 2: F002 -> F005 -> F006, synchronously, in that order --
-    same build-order preference as the pilot script, but with batch/delay
-    parameters sized for the full universe's scale against the 60
-    req/min rate limit (see module docstring)."""
+    same build-order preference as the pilot script.
+    
+    If fast=True (Sponsor tier, e.g. Silver 300 req/min): uses ~240 req/min
+    (batch_size=80/delay=20s, F005 batch_size=20/delay=20s), finishing in ~1.5 hours.
+    Otherwise (Community tier default): uses ~48 req/min (batch_size=40/delay=50s).
+    """
     con = migrations.run_all_migrations()
 
-    print(f"[full_universe_run] F002 (OHLCV) over {len(symbols)} symbols (batch_size=40, delay=50s)...")
-    outcome = bo.run_batched(con, "F002", symbols, market_ohlcv.run, batch_size=40, delay_between_batches_seconds=50)
+    bs_ohlcv = 80 if fast else 40
+    bs_fund = 20 if fast else 10
+    delay = 20 if fast else 50
+
+    print(f"[full_universe_run] F002 (OHLCV) over {len(symbols)} symbols (batch_size={bs_ohlcv}, delay={delay}s)...")
+    outcome = bo.run_batched(con, "F002", symbols, market_ohlcv.run, batch_size=bs_ohlcv, delay_between_batches_seconds=delay)
     print(f"[full_universe_run] F002 done: {len(outcome['succeeded'])} ok, {len(outcome['failed'])} failed, {len(outcome['empty'])} empty")
 
-    print(f"[full_universe_run] F005 (fundamentals) over {len(symbols)} symbols (batch_size=10, delay=50s -- 4 calls/symbol)...")
-    outcome = bo.run_batched(con, "F005", symbols, fundamentals.run, batch_size=10, delay_between_batches_seconds=50)
+    print(f"[full_universe_run] F005 (fundamentals) over {len(symbols)} symbols (batch_size={bs_fund}, delay={delay}s -- 4 calls/symbol)...")
+    outcome = bo.run_batched(con, "F005", symbols, fundamentals.run, batch_size=bs_fund, delay_between_batches_seconds=delay)
     print(f"[full_universe_run] F005 done: {len(outcome['succeeded'])} ok, {len(outcome['failed'])} failed, {len(outcome['empty'])} empty")
 
-    print(f"[full_universe_run] F006 (corporate events) over {len(symbols)} symbols (batch_size=40, delay=50s)...")
-    outcome = bo.run_batched(con, "F006", symbols, corporate_events.run, batch_size=40, delay_between_batches_seconds=50)
+    print(f"[full_universe_run] F006 (corporate events) over {len(symbols)} symbols (batch_size={bs_ohlcv}, delay={delay}s)...")
+    outcome = bo.run_batched(con, "F006", symbols, corporate_events.run, batch_size=bs_ohlcv, delay_between_batches_seconds=delay)
     print(f"[full_universe_run] F006 done: {len(outcome['succeeded'])} ok, {len(outcome['failed'])} failed, {len(outcome['empty'])} empty")
 
 
@@ -188,6 +200,13 @@ if __name__ == "__main__":
         "--stock-only", action="store_true", help="run step 2 only, skip F101/F102 (e.g. to check progress first)"
     )
     parser.add_argument(
+        "--fast",
+        "--silver",
+        action="store_true",
+        dest="fast",
+        help="speed up crawls for Sponsor/Silver tier accounts (300 req/min limit, ~1.5h total crawl time)",
+    )
+    parser.add_argument(
         "--run-backtest",
         action="store_true",
         help="after F101/F102, also run F201's real (non-dry-run) backtest and print an honest summary",
@@ -211,7 +230,7 @@ if __name__ == "__main__":
     if not args.skip_news:
         start_background_news_crawls_full_universe(symbol_list)
 
-    run_stock_data_stage_full_universe(symbol_list)
+    run_stock_data_stage_full_universe(symbol_list, fast=args.fast)
 
     if not args.stock_only:
         run_validation_and_join_stage_full_universe(symbol_list)
