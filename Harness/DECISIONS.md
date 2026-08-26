@@ -2,6 +2,115 @@
 
 Newest at the top. Don't reverse any of these without a new, stated reason.
 
+## 2026-08-26: scratch/full_universe_run.py added -- full 3,446-symbol crawl orchestrator, rate-limit-sized batching
+- Reason: F201's real-data blocker requires more than the 30-symbol
+  `scratch/pilot_symbols.txt` universe can realistically provide (see the
+  same-day entry above tracing F201's first real run to a single VIC test
+  symbol). The person requested a full-universe crawl (all of
+  `core.dim_symbol`, not a VN30-style subset). `scratch/staged_pilot_run.py`
+  was purpose-built for the 30-symbol pilot's batch_size=50/delay=5s,
+  which never triggers a delay at that scale (30 < 50, single batch) --
+  reusing it unmodified at 3,446 symbols would fire thousands of requests
+  with no pacing and almost certainly trip vnstock's confirmed 60
+  requests/minute community-tier rate limit (see
+  `src/etl/batch_orchestrator.py`'s own docstring).
+- Decision: added `scratch/full_universe_run.py`, structurally identical
+  to `staged_pilot_run.py`'s staged plan (F002/F005/F006 synchronous ->
+  F003/F004 background -> F101/F102 -> optional F201), but reading the
+  symbol list directly from `core.dim_symbol` (no separate export step
+  needed -- F001 already crawled all 3,446 symbols live) and using
+  batch_size/delay parameters sized for this scale:
+  - F002/F006 (1 API call/symbol each, confirmed by reading
+    `crawlers/market_ohlcv.py` and `crawlers/corporate_events.py`
+    directly): batch_size=40, delay=50s -> ~48 req/min, 80% of the
+    60/min limit.
+  - F005 (4 API calls/symbol -- income_statement, cash_flow, ratio,
+    balance_sheet -- confirmed by reading `crawlers/fundamentals.py`'s
+    `REPORT_TYPES` loop in its `run()` function): batch_size=10,
+    delay=50s -> same ~48 req/min effective rate (10 symbols x 4 calls
+    per 50s window).
+- STATED ASSUMPTION, explicitly flagged: the 80%-of-rate-limit sizing and
+  the resulting ~7+ hour total duration estimate (F002 ~72min, F005
+  ~287min, F006 ~72min) are back-of-envelope calculations from confirmed
+  call counts and the confirmed rate limit -- NOT measured from an actual
+  real-world run of this script. Documented in
+  `Harness/full_universe_crawl_plan.md` with an explicit instruction to
+  widen delays (not shrink batch size alone) if failures cluster in a
+  rate-limit-like pattern once actually run.
+- Also documented: date-range does NOT reduce crawl time for this
+  universe (each crawler makes one API call per symbol regardless of
+  requested range, per the existing `progress_graph.json` strategy-crawl
+  finding) -- the only lever that reduces total crawl time is symbol
+  count, not date range. Restated explicitly in the new plan document so
+  this isn't rediscovered by trial and error.
+- Rejected: modifying `scratch/staged_pilot_run.py` in place to also
+  handle the full universe via a size-detecting branch -- rejected
+  because the pilot script's whole point is to stay a fast, low-risk
+  sanity check on a small subset; conflating it with a
+  multi-hour/rate-limit-aware full run adds complexity to a script that
+  should stay simple, and the two use cases (fast pilot sanity check vs.
+  full-scale statistically-meaningful crawl) are different enough to
+  warrant separate scripts per Simplicity First (A2) -- duplicating the
+  small `run_backtest_stage()` function between the two files was judged
+  a smaller cost than a branching, harder-to-reason-about single script.
+- Constraint: this does not run itself -- it is new tooling only.
+  F201 still needs an actual completed run of this script (or an
+  equivalent full-universe crawl) with a reported real result before its
+  state can change from `active`.
+
+## 2026-08-26: F201's first real-DB run independently confirmed; result honest but not yet statistically meaningful
+- Reason: `scratch/staged_pilot_run.py --backtest-only` was run against the
+  real local `db/vesta.duckdb` and reported `total_events_loaded=4`,
+  `sentiment_class_counts={negative:0, positive:0, neutral:4}`,
+  `negative_sentiment_group status=insufficient_data n=0`. This exactly
+  matches an earlier claimed real-DB run from a prior session (same
+  numbers: total_events_loaded=4, all neutral) that could not be trusted
+  at the time because it came from the same session where the
+  `backtest_meanerversion.py` filename-push bug happened. Per this
+  project's standing discipline, that earlier claim was never accepted as
+  evidence -- it needed independent reconfirmation once the tooling was
+  fixed and pushed.
+- Verified independently: the 4 events trace exactly to the single-symbol
+  VIC pilot test crawl already on record (`scratch/vic_crawl_report.json`
+  -- 1 row from `vnstock_news`, 3 rows from `cafef_news`, 1+3=4, matching
+  precisely). Re-running `sentiment_lexicon.classify_headline()` directly
+  against the 3 real VIC cafef headlines from that report (a donation
+  announcement, a real-estate redevelopment piece, and a labor-market
+  commentary piece -- none containing any POSITIVE_TERMS/NEGATIVE_TERMS
+  lexicon entry) confirms all three are correctly classified "neutral".
+  This is a correct scoring outcome for this specific real data, not a
+  bug in the lexicon or the pipeline.
+- Decision: the prior real-DB run claim is now RETROACTIVELY CONFIRMED
+  correct (same numbers, independently reproduced by different tooling
+  after the filename fix). `feature_list.json`'s F201 evidence field
+  updated to state this plainly rather than continuing to describe it as
+  unverified.
+- F201 REMAINS `active`, not `passing`. This confirmed run is honest
+  (status=insufficient_data is the objectively correct output for n=0
+  usable negative-sentiment events) but does not constitute the
+  statistically meaningful real result F201 needs to reach `passing` --
+  the local database currently only reflects a single-symbol (VIC) test
+  crawl from an earlier session, not a real run over
+  `scratch/pilot_symbols.txt`'s 30-symbol pilot universe. A single
+  symbol's ~4 accumulated news items was never expected to clear
+  MIN_SAMPLE_SIZE=10 for the negative-sentiment group specifically (see
+  the 2026-08-16 DECISIONS.md item 8 note on structurally thin,
+  forward-only-accumulating news depth).
+- Rejected: treating this confirmed insufficient_data result as
+  sufficient grounds to move F201 to `passing` on the theory that "the
+  pipeline ran against real data, so the proof is done" -- rejected
+  because B6 requires an actual reported effect (or an honestly
+  inconclusive result from a SAMPLE SIZE THAT WAS ACTUALLY GIVEN A FAIR
+  CHANCE, i.e. the full pilot universe, not one symbol) -- a single
+  symbol's thin news feed was never the intended test population for
+  this feature's pilot-scale proof.
+- Constraint: next required action is unchanged from the prior entries --
+  run `python scratch/staged_pilot_run.py scratch/pilot_symbols.txt
+  --run-backtest` (the full 30-symbol pilot crawl, chained into F201) to
+  give the negative-sentiment group a real chance at n>=10. Only a result
+  from that run (whatever it turns out to be) should be used to decide
+  F201's next state.
+
 ## 2026-08-25: scratch/staged_pilot_run.py extended with --run-backtest / --backtest-only (F201 turnkey chaining)
 - Reason: F201 remains `active`, not `passing`, purely because no real,
   independently-reproduced run against real crawled data has been
