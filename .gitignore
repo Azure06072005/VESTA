@@ -87,6 +87,7 @@ trash/
 # ==============================================================================
 # Ignore common data formats
 *.csv
+!configs/*.csv
 *.tsv
 *.dat
 *.jsonl
