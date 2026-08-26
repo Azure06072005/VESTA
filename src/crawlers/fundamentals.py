@@ -90,9 +90,13 @@ def _authenticate() -> None:
             f"{REQUIRED_ENV_VAR} is not set. Export it before running this "
             f"crawler -- credentials never go in code or configs/."
         )
-    import vnstock  # local import: keep vnstock optional for pure unit tests
+    try:
+        import vnstock_data as vs
+    except ImportError:
+        import vnstock as vs  # type: ignore[no-redef]
 
-    vnstock.change_api_key(api_key)
+    if hasattr(vs, "change_api_key"):
+        vs.change_api_key(api_key)
 
 
 def fetch_raw(symbol: str, report_type: str, period: str = "quarter") -> pd.DataFrame:
@@ -106,10 +110,13 @@ def fetch_raw(symbol: str, report_type: str, period: str = "quarter") -> pd.Data
         raise ValueError(f"Unknown report_type {report_type!r}, expected one of {list(REPORT_TYPES)}")
 
     _authenticate()
-    import vnstock
+    try:
+        import vnstock_data as vs
+    except ImportError:
+        import vnstock as vs  # type: ignore[no-redef]
 
     method_name, takes_period = REPORT_TYPES[report_type]
-    fund = vnstock.Fundamental().equity(symbol)
+    fund = vs.Fundamental().equity(symbol)
     method = getattr(fund, method_name)
     result: pd.DataFrame = method(period=period) if takes_period else method()
     return result
