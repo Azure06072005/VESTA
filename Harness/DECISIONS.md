@@ -2,6 +2,24 @@
 
 Newest at the top. Don't reverse any of these without a new, stated reason.
 
+## 2026-08-26: vnstock_data (Sponsor Package) verified live -- Insights, Analytics, Macro, 300 req/min limit, and Taxonomy Dictionary
+- Reason: On 2026-08-14, F007 scope was shrunk because the community package (`vnstock==4.0.5`)
+  lacked `Insights`, `Analytics`, and technical screeners. With the user's Silver Sponsor
+  subscription and installation of `vnstock_data==3.2.7`, `vnstock_ta==1.0.6`, and `vnstock_news==2.2.2`,
+  the broader proprietary ecosystem was verified live.
+- Verification Findings (Live Introspection & Execution):
+  1. `Insights` class genuinely exists in `vnstock_data`:
+     - `Insights.ranking`: `gainer()`, `loser()`, `value()`, `volume()`, `foreign_buy()`, `foreign_sell()`, `deal()`
+     - `Insights.screener`: `filter()`, `criteria()`
+     - `Insights.sentiment`: `breadth()`, `contribution()`, `heatmap()`
+     - `Insights.flow`: `foreign()`, `proprietary()`, `active()`
+     - Real live calls to `gainer()`, `breadth()`, and `filter()` returned live DataFrames successfully.
+  2. `Analytics` class genuinely exists: `valuation()` returns historical index multiples.
+  3. `Macro` module provides `economy()`, `currency()`, and `commodity()` domains.
+  4. Throughput limit is confirmed at 300 req/min (Silver Sponsor tier), enabling `--fast` crawl execution (~1.5h vs ~7h).
+  5. Taxonomy Dictionary: Saved to `configs/taxonomy_dictionary.csv` (257 rows mapping BS, IS, CF, NT between VCI, MAS, KBS and Unified UI keys). Whitelisted `!configs/*.csv` in `.gitignore`.
+- All crawlers in `src/crawlers/` updated to import `vnstock_data` with fallback to `vnstock`.
+
 ## 2026-08-26: scratch/full_universe_run.py added -- full 3,446-symbol crawl orchestrator, rate-limit-sized batching
 - Reason: F201's real-data blocker requires more than the 30-symbol
   `scratch/pilot_symbols.txt` universe can realistically provide (see the
