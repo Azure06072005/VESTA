@@ -45,11 +45,11 @@ import datetime as dt
 import json
 import pathlib
 import sys
+import math
 from dataclasses import dataclass
 
 import duckdb
 import pandas as pd
-from scipy import stats
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 from etl import db  # noqa: E402
@@ -149,6 +149,64 @@ def score_events(df: pd.DataFrame) -> pd.DataFrame:
     return out
 
 
+def _betai(a: float, b: float, x: float) -> float:
+    """Regularized incomplete beta function I_x(a, b)."""
+    if x <= 0.0:
+        return 0.0
+    if x >= 1.0:
+        return 1.0
+
+    if x > (a + 1.0) / (a + b + 2.0):
+        # Symmetry relation: I_x(a, b) = 1.0 - I_{1-x}(b, a)
+        return 1.0 - _betai(b, a, 1.0 - x)
+
+    MAXIT, EPS, FPMIN = 200, 3.0e-12, 1.0e-30
+    qab = a + b
+    qap = a + 1.0
+    qam = a - 1.0
+    c = 1.0
+    d = 1.0 - qab * x / qap
+    if abs(d) < FPMIN:
+        d = FPMIN
+    d = 1.0 / d
+    h = d
+    for m in range(1, MAXIT + 1):
+        m2 = 2 * m
+        aa = m * (b - m) * x / ((qam + m2) * (a + m2))
+        d = 1.0 + aa * d
+        if abs(d) < FPMIN:
+            d = FPMIN
+        c = 1.0 + aa / c
+        if abs(c) < FPMIN:
+            c = FPMIN
+        d = 1.0 / d
+        h *= d * c
+        aa = -(a + m) * (qab + m) * x / ((a + m2) * (qap + m2))
+        d = 1.0 + aa * d
+        if abs(d) < FPMIN:
+            d = FPMIN
+        c = 1.0 + aa / c
+        if abs(c) < FPMIN:
+            c = FPMIN
+        d = 1.0 / d
+        del_h = d * c
+        h *= del_h
+        if abs(del_h - 1.0) < EPS:
+            break
+
+    bt = math.exp(math.lgamma(a + b) - math.lgamma(a) - math.lgamma(b) + a * math.log(x) + b * math.log(1.0 - x))
+    return float(bt * h / a)
+
+
+def _compute_two_tailed_p_value(t_stat: float, df: int) -> float:
+    """Two-tailed p-value for Student's t-distribution with df degrees of freedom."""
+    if df <= 0 or math.isnan(t_stat):
+        return float("nan")
+    t2 = t_stat * t_stat
+    x = df / (df + t2)
+    return float(_betai(df / 2.0, 0.5, x))
+
+
 def _paired_reversion_test(sub: pd.DataFrame) -> GroupResult:
     """Paired t-test: is return_t30 significantly greater (less negative /
     more positive) than return_t5, within the same events? This is the
@@ -162,16 +220,25 @@ def _paired_reversion_test(sub: pd.DataFrame) -> GroupResult:
         return GroupResult(n=n, status="insufficient_data")
 
     diffs = valid["return_t30"] - valid["return_t5"]
-    t_stat, p_value = stats.ttest_rel(valid["return_t30"], valid["return_t5"])
-    # Cohen's d for paired samples: mean difference / std of differences.
-    d = float(diffs.mean() / diffs.std(ddof=1)) if diffs.std(ddof=1) > 0 else 0.0
+    mean_diff = float(diffs.mean())
+    std_diff = float(diffs.std(ddof=1)) if len(diffs) > 1 else 0.0
+
+    if std_diff > 0:
+        se = std_diff / math.sqrt(n)
+        t_stat = mean_diff / se
+        p_val = _compute_two_tailed_p_value(t_stat, n - 1)
+        d = float(mean_diff / std_diff)
+    else:
+        t_stat = 0.0
+        p_val = 1.0
+        d = 0.0
 
     return GroupResult(
         n=n,
         mean_return_t5=float(valid["return_t5"].mean()),
         mean_return_t30=float(valid["return_t30"].mean()),
         t_statistic=float(t_stat),
-        p_value=float(p_value),
+        p_value=float(p_val),
         cohens_d=d,
         status="ok",
     )
