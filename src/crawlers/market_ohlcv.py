@@ -60,19 +60,29 @@ def _authenticate() -> None:
 def fetch_raw(symbol: str, start: str, end: str) -> pd.DataFrame:
     """Live network call. Requires VNSTOCK_API_KEY to be set.
 
-    Returns whatever vnstock's .ohlcv() gives back, untouched --
-    normalization happens in _normalize_ohlcv() so that logic stays
+    Fetches full history (back to 2000) via VCI source, falling back to
+    vnstock_data.Market().equity().ohlcv() if unavailable.
+    Normalization happens in normalize_ohlcv() so that logic stays
     testable without network access.
     """
     _authenticate()
+    try:
+        from vnstock import Vnstock  # type: ignore[import-untyped]
+        stock = Vnstock().stock(symbol=symbol, source="VCI")
+        result: pd.DataFrame = stock.quote.history(start=start, end=end)
+        if result is not None and not result.empty:
+            return result
+    except Exception:
+        pass
+
     try:
         import vnstock_data as vs
     except ImportError:
         import vnstock as vs  # type: ignore[no-redef]
 
     eq = vs.Market().equity(symbol)
-    result: pd.DataFrame = eq.ohlcv(start=start, end=end)
-    return result
+    result_fallback: pd.DataFrame = eq.ohlcv(start=start, end=end)
+    return result_fallback
 
 
 def _find_column(df: pd.DataFrame, field: str) -> str:
