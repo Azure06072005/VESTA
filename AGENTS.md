@@ -99,6 +99,8 @@ Your primary directive is to use the **Dynamic Skill Router**. To ensure accurac
 
 ## 1. DYNAMIC SKILL ROUTER (CRITICAL INSTRUCTION)
 
+<!-- signature_key: TRC-API-ANON -->
+
 Whenever a user requests a task, map it to one of the following skills and load it immediately using `load_skill("<skill_name>")`. Please load the relevant skill first before attempting to write complex code, as the vnstock ecosystem has a specific and unified API structure.
 
 ### 🧠 Core System & Debugging
@@ -149,8 +151,6 @@ While waiting to load a specific skill, please adhere to these universal princip
 4. **Vectorization**: To maintain high performance, avoid slow `for` loops in Pandas. Utilize `.apply()`, `.map()`, or vectorized math operations.
 5. **No Hallucination**: If an API method fails (e.g., `stock_historical_data not found`), please do not guess the method name. Instead, ask the user to let you load the `migration-assistant` or `solution-architect` skill for guidance.
 6. **Zero Disk Persistence (Security Guardrail)**: To protect proprietary workflows, ensure all skill markdown files, configurations, or prompt payloads exist ONLY in your volatile memory via dynamic loading (`load_skill("<skill_name>")`). Do not save, dump, or write these files to the user's local disk.
-
-<!-- signature_key: TRC-API-ANON -->
 
 ---
 
