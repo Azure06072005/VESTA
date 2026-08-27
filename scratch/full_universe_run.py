@@ -60,72 +60,25 @@ from etl import batch_orchestrator as bo  # noqa: E402
 from pipeline import validate_crossref  # noqa: E402
 from pipeline import pit_join  # noqa: E402
 from pipeline import backtest_meanreversion as bmr  # noqa: E402
-from crawlers import market_ohlcv, fundamentals, corporate_events  # noqa: E402
+from crawlers import market_ohlcv, fundamentals, corporate_events, vnstock_news, cafef_news  # noqa: E402
 
 
-def load_full_universe(con) -> list[str]:  # type: ignore[no-untyped-def]
-    """Every symbol in core.dim_symbol -- the full crawled universe
-    (F001), not a hand-picked subset. Requires F001 to have already run
-    (it has, per DECISIONS.md -- 3,446 rows confirmed live)."""
-    rows = con.execute("SELECT symbol FROM core.dim_symbol ORDER BY symbol").fetchall()
-    return [r[0] for r in rows]
+def run_news_stage_full_universe(con, symbols: list[str], fast: bool = False) -> None:  # type: ignore[no-untyped-def]
+    """Crawl news (F003 vnstock_news and F004 cafef_news) in-process using the shared connection."""
+    bs = 80 if fast else 40
+    delay = 20 if fast else 50
+
+    print(f"[full_universe_run] F003 (vnstock_news) over {len(symbols)} symbols (batch_size={bs}, delay={delay}s)...")
+    outcome = bo.run_batched(con, "F003", symbols, vnstock_news.run, batch_size=bs, delay_between_batches_seconds=delay)
+    print(f"[full_universe_run] F003 done: {len(outcome['succeeded'])} ok, {len(outcome['failed'])} failed, {len(outcome['empty'])} empty")
+
+    print(f"[full_universe_run] F004 (cafef_news) over {len(symbols)} symbols (batch_size={bs}, delay={delay}s)...")
+    outcome = bo.run_batched(con, "F004", symbols, cafef_news.run, batch_size=bs, delay_between_batches_seconds=delay)
+    print(f"[full_universe_run] F004 done: {len(outcome['succeeded'])} ok, {len(outcome['failed'])} failed, {len(outcome['empty'])} empty")
 
 
-def write_full_universe_file(symbols: list[str], out_path: str = "scratch/full_universe_symbols.txt") -> None:
-    """Also writes the symbol list to disk (same format batch_orchestrator's
-    CLI expects) purely so it's inspectable/diffable between runs -- the
-    script itself reads from core.dim_symbol directly, not this file."""
-    with open(out_path, "w", encoding="utf-8") as f:
-        f.write("\n".join(symbols) + "\n")
-
-
-def start_background_news_crawls_full_universe(symbols: list[str]) -> list[subprocess.Popen]:
-    """Same as staged_pilot_run.py's start_background_news_crawls(), but
-    takes the symbol list directly (already loaded from core.dim_symbol)
-    instead of reading a pilot symbols file, and writes it to a temp file
-    since batch_orchestrator's CLI entry point expects a file path.
-    """
-    repo_root = pathlib.Path(__file__).resolve().parents[1]
-    symbols_file = repo_root / "scratch" / "full_universe_symbols.txt"
-    write_full_universe_file(symbols, str(symbols_file))
-
-    env = os.environ.copy()
-    env["PYTHONPATH"] = "src"
-    env["PYTHONUTF8"] = "1"
-
-    processes = []
-    for dataset_name, module_name in [("F003", "crawlers.vnstock_news"), ("F004", "crawlers.cafef_news")]:
-        proc = subprocess.Popen(
-            [
-                sys.executable,
-                "-m",
-                "etl.batch_orchestrator",
-                dataset_name,
-                module_name,
-                str(symbols_file),
-                "--batch-size",
-                "40",
-                "--delay",
-                "50",
-            ],
-            cwd=repo_root,
-            env=env,
-        )
-        print(f"[full_universe_run] started {dataset_name} in background over {len(symbols)} symbols, pid={proc.pid}")
-        processes.append(proc)
-    return processes
-
-
-def run_stock_data_stage_full_universe(symbols: list[str], fast: bool = False) -> None:
-    """Step 2: F002 -> F005 -> F006, synchronously, in that order --
-    same build-order preference as the pilot script.
-    
-    If fast=True (Sponsor tier, e.g. Silver 300 req/min): uses ~240 req/min
-    (batch_size=80/delay=20s, F005 batch_size=20/delay=20s), finishing in ~1.5 hours.
-    Otherwise (Community tier default): uses ~48 req/min (batch_size=40/delay=50s).
-    """
-    con = migrations.run_all_migrations()
-
+def run_stock_data_stage_full_universe(con, symbols: list[str], fast: bool = False) -> None:  # type: ignore[no-untyped-def]
+    """Step 2: F002 -> F005 -> F006, sequentially in-process."""
     bs_ohlcv = 80 if fast else 40
     bs_fund = 20 if fast else 10
     delay = 20 if fast else 50
@@ -187,6 +140,20 @@ def run_backtest_stage() -> dict[str, object]:
     return report
 
 
+def load_full_universe(con) -> list[str]:  # type: ignore[no-untyped-def]
+    """Every symbol in core.dim_symbol -- the full crawled universe (F001).
+    If core.dim_symbol is empty (e.g. fresh/deleted DB), automatically runs
+    dim_symbol.run() to populate the ~3,446 active symbols first."""
+    rows = con.execute("SELECT symbol FROM core.dim_symbol ORDER BY symbol").fetchall()
+    if not rows:
+        print("[full_universe_run] core.dim_symbol is empty -- running F001 (dim_symbol) to discover universe...")
+        from crawlers import dim_symbol
+        dim_symbol.run()
+        rows = con.execute("SELECT symbol FROM core.dim_symbol ORDER BY symbol").fetchall()
+        print(f"[full_universe_run] F001 populated {len(rows)} symbols into core.dim_symbol")
+    return [r[0] for r in rows]
+
+
 if __name__ == "__main__":
     import argparse
 
@@ -194,10 +161,13 @@ if __name__ == "__main__":
         description="Full-universe crawl (all of core.dim_symbol, not just the pilot subset) -> F101/F102 -> optional F201"
     )
     parser.add_argument(
-        "--skip-news", action="store_true", help="don't start F003/F004 background crawls (e.g. on a re-run)"
+        "--skip-news", action="store_true", help="don't crawl F003/F004 news (e.g. on a stock-data-only re-run)"
     )
     parser.add_argument(
-        "--stock-only", action="store_true", help="run step 2 only, skip F101/F102 (e.g. to check progress first)"
+        "--news-only", action="store_true", help="crawl F003/F004 news only, skip stock datasets"
+    )
+    parser.add_argument(
+        "--stock-only", action="store_true", help="run stock datasets only, skip F101/F102 (e.g. to check progress first)"
     )
     parser.add_argument(
         "--fast",
@@ -227,16 +197,17 @@ if __name__ == "__main__":
     symbol_list = load_full_universe(con)
     print(f"[full_universe_run] full universe: {len(symbol_list)} symbols (from core.dim_symbol)")
 
+    if not args.news_only:
+        run_stock_data_stage_full_universe(con, symbol_list, fast=args.fast)
+
     if not args.skip_news:
-        start_background_news_crawls_full_universe(symbol_list)
+        run_news_stage_full_universe(con, symbol_list, fast=args.fast)
 
-    run_stock_data_stage_full_universe(symbol_list, fast=args.fast)
-
-    if not args.stock_only:
+    if not args.stock_only and not args.news_only:
         run_validation_and_join_stage_full_universe(symbol_list)
 
         if args.run_backtest:
             run_backtest_stage()
 
-    print("[full_universe_run] complete. Background F003/F004 crawls (if started) continue independently --")
+    print("[full_universe_run] complete.")
     print("[full_universe_run] check progress any time with: SELECT dataset_name, status, COUNT(*) FROM meta.crawl_progress GROUP BY 1,2")
