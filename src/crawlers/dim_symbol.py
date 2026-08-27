@@ -83,7 +83,7 @@ def fetch_raw() -> tuple[pd.DataFrame, pd.DataFrame]:
     industry_df = ref.industry.sectors()
     return exchange_df, industry_df
 
-def build_dim_symbol(exchange_df: pd.DataFrame, industry_df:pd.DataFrame) -> pd.DataFrame:
+def build_dim_symbol(exchange_df: pd.DataFrame, industry_df: pd.DataFrame) -> pd.DataFrame:
     """Pure transform: left-join exchange listing with industry sectors on
     `symbol`, append delisted_date (always NULL -- see module docstring)
     and fetched_at. No network access -- fully unit-testable with
@@ -92,15 +92,26 @@ def build_dim_symbol(exchange_df: pd.DataFrame, industry_df:pd.DataFrame) -> pd.
     for required_col, df, name in [
         ("symbol", exchange_df, "exchange_df"),
         ("symbol", industry_df, "industry_df"),
-    ]: 
-        if required_col not in df.columns: 
+    ]:
+        if required_col not in df.columns:
             raise ValueError(f"{name} missing required columns '{required_col}'")
 
-    merged = exchange_df.merge(
-        industry_df[["symbol", "industry_code", "industry_name"]],
-        on="symbol", 
-        how="left",
-    )
+    ind = industry_df.copy()
+    if "icb_code" in ind.columns and "industry_code" not in ind.columns:
+        ind = ind.rename(columns={"icb_code": "industry_code", "icb_name": "industry_name"})
+    if "industry_code" not in ind.columns:
+        ind["industry_code"] = None
+    if "industry_name" not in ind.columns:
+        ind["industry_name"] = None
+
+    # Deduplicate industry_df on symbol (e.g. vnstock_data exposes multi-level ICB)
+    ind_dedup = ind.drop_duplicates(subset=["symbol"])[["symbol", "industry_code", "industry_name"]]
+
+    ex = exchange_df.copy()
+    if "en_organ_name" not in ex.columns:
+        ex["en_organ_name"] = ex.get("organ_short_name", ex.get("organ_name", ex["symbol"]))
+
+    merged = ex.merge(ind_dedup, on="symbol", how="left")
     merged["organ_name"] = merged["organ_name"].fillna(merged["en_organ_name"]).fillna(merged["symbol"])
     merged["delisted_date"] = pd.NaT
     merged["fetched_at"] = dt.datetime.now(dt.timezone.utc).replace(tzinfo=None)
@@ -108,12 +119,12 @@ def build_dim_symbol(exchange_df: pd.DataFrame, industry_df:pd.DataFrame) -> pd.
     out = merged[DIM_SYMBOL_COLUMNS].copy()
 
     dupes = out["symbol"].duplicated().sum()
-    if dupes: 
+    if dupes:
         raise ValueError(
             f"build_dim_symbol produced {dupes} duplicate symbol(s) -- "
             f"dim_symbol must be on row per symbol."
         )
-    
+
     return out
 
 def write_dim_symbol(df: pd.DataFrame, con: "duckdb.DuckDBPyConnection | None" = None) -> int:
