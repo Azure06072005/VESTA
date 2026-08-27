@@ -91,6 +91,7 @@ trash/
 *.tsv
 *.dat
 *.jsonl
+*.duckdb
 # Optional: uncomment if you don't want any json pushed, 
 # but usually config json files are pushed. 
 # *.json 
