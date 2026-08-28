@@ -47,7 +47,7 @@ SOURCE_NAME = "vnstock"
 
 # CONFIRMED live 2026-08-13 (real output for FPT) -- see module docstring.
 HEADLINE_ALIASES = ["news_title", "title", "headline"]
-PUBLISHED_AT_ALIASES = ["public_date", "published_at", "date"]
+PUBLISHED_AT_ALIASES = ["public_date", "published_at", "date", "publish_time"]
 BODY_ALIASES = ["news_full_content", "news_short_content", "content", "body"]
 URL_ALIASES = ["news_source_link", "source_url", "url", "link"]
 
@@ -135,6 +135,14 @@ def normalize_news(raw_df: pd.DataFrame, symbol: str) -> pd.DataFrame:
             "source_url": raw_df[url_col].astype(str),
         }
     )
+    
+    # Generate synthetic URL if source_url is "None"
+    missing_urls = out["source_url"] == "None"
+    if missing_urls.any():
+        out.loc[missing_urls, "source_url"] = out[missing_urls].apply(
+            lambda r: f"vnstock://{symbol}/{r['published_at'].isoformat()}/{abs(hash(r['headline']))}", axis=1
+        )
+    
     out["fetched_at"] = dt.datetime.now(dt.timezone.utc).replace(tzinfo=None)
 
     before = len(out)
@@ -159,18 +167,19 @@ def write_news(df: pd.DataFrame, con: "duckdb.DuckDBPyConnection | None" = None)
     urls = df["source_url"].unique().tolist()
 
     cols_sql = ", ".join(NEWS_COLUMNS)
+    temp_name = f"news_df_{id(df)}"
     con.execute("DELETE FROM staging.news WHERE source_url IN ?", [urls])
-    con.register("news_df", df[NEWS_COLUMNS])
-    con.execute(f"INSERT INTO staging.news ({cols_sql}) SELECT * FROM news_df")
+    con.register(temp_name, df[NEWS_COLUMNS])
+    con.execute(f"INSERT INTO staging.news ({cols_sql}) SELECT * FROM {temp_name}")
 
     con.execute("DELETE FROM core.news WHERE source_url IN ?", [urls])
-    con.execute(f"INSERT INTO core.news ({cols_sql}) SELECT * FROM news_df")
-    con.unregister("news_df")
+    con.execute(f"INSERT INTO core.news ({cols_sql}) SELECT * FROM {temp_name}")
+    con.unregister(temp_name)
 
     return len(df)
 
 
-def run(symbol: str) -> int:
+def run(symbol: str, con: "duckdb.DuckDBPyConnection | None" = None) -> int:
     """Entry point: fetch live, normalize, write. Returns row count written.
 
     Prefer calling this through F008's run_job()/retry_all() rather than
@@ -179,7 +188,7 @@ def run(symbol: str) -> int:
     """
     raw = fetch_raw(symbol)
     normalized = normalize_news(raw, symbol)
-    return write_news(normalized)
+    return write_news(normalized, con=con)
 
 
 if __name__ == "__main__":
