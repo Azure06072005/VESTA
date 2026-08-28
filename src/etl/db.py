@@ -6,6 +6,7 @@ place and schema bootstrap is guaranteed to have run.
 """
 from __future__ import annotations
 
+import os
 import pathlib
 
 import duckdb
@@ -20,7 +21,21 @@ SCHEMA_SQL_PATH = (
 REQUIRED_SCHEMAS = ("staging", "core", "meta")
 
 
-def connect(db_path: pathlib.Path | str = DB_PATH) -> duckdb.DuckDBPyConnection:
+def load_env() -> None:
+    """Load environment variables from .env if not already set."""
+    env_path = pathlib.Path(__file__).resolve().parents[2] / ".env"
+    if env_path.exists():
+        with open(env_path, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith("#") and "=" in line:
+                    k, v = line.split("=", 1)
+                    k_str = k.strip()
+                    if k_str not in os.environ:
+                        os.environ[k_str] = v.strip().strip("'\"")
+
+
+def connect(db_path: pathlib.Path | str = DB_PATH, read_only: bool = False) -> duckdb.DuckDBPyConnection:
     """Open a connection to the VESTA DuckDB database.
 
     Does not bootstrap schema — call `bootstrap_schema()` explicitly (init.sh
@@ -29,7 +44,7 @@ def connect(db_path: pathlib.Path | str = DB_PATH) -> duckdb.DuckDBPyConnection:
     """
     db_path = pathlib.Path(db_path)
     db_path.parent.mkdir(parents=True, exist_ok=True)
-    return duckdb.connect(str(db_path))
+    return duckdb.connect(str(db_path), read_only=read_only)
 
 
 def bootstrap_schema(db_path: pathlib.Path | str = DB_PATH) -> duckdb.DuckDBPyConnection:

@@ -60,6 +60,7 @@ EVENT_COLUMNS = ["symbol", "event_id", "event_type", "event_date", "detail_json"
 
 
 def _authenticate() -> None:
+    db.load_env()
     api_key = os.environ.get(REQUIRED_ENV_VAR)
     if not api_key:
         raise RuntimeError(

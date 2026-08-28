@@ -42,6 +42,7 @@ OHLCV_COLUMNS = ["symbol", "date", "open", "high", "low", "close", "volume", "fe
 
 
 def _authenticate() -> None:
+    db.load_env()
     api_key = os.environ.get(REQUIRED_ENV_VAR)
     if not api_key:
         raise RuntimeError(
