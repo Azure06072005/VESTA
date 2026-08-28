@@ -26,4 +26,9 @@ Separate from `claude-progress.md` / `gemini-progress.md` and `feature_list.json
 - Code changes this session: `src/crawlers/market_ohlcv.py` updated to fetch full historical depth via VCI source with fallback
 - Decision: continue to F003 (vnstock_news)
 
+## F003 — vnstock_news — 2026-08-28
+- Symbols attempted: 1751 (running in background)
+- Status: Crawl initiated in the background via `scratch/run_F003.py` with batch_size=80 and delay=20s.
+- Code changes this session: No feature changes. Created dedicated `scratch/run_F003.py` execution script to run F003 specifically as requested.
+- Note: This is a full universe crawl (every session) as requested.
 
