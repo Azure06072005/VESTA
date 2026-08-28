@@ -227,3 +227,15 @@ Template for future entries:
 - Status in `feature_list.json`: F201 marked `active`, not `passing` -- the pipeline is proven correct on synthetic data, but no independently-reproduced real-database run exists yet. A prior claimed real run (`total_events_loaded=4`, all neutral) could not be verified from this session and should be re-run and reconfirmed now that the module is correctly named and pushed.
 - Blocked: none for the pipeline code itself. F201 -> `passing` requires an actual reproducible run against real `core.pit_events` data with the n/p-value/effect-size reported honestly (including if `insufficient_data`).
 - Next session should: pull the corrected repo fresh, confirm `pytest tests/` passes without modification, then run `python -m pipeline.backtest_meanreversion --report out/meanreversion_report.json` (no `--dry-run`) against the real database, and only mark F201 `passing` once that real result is committed and independently reproducible from a fresh clone -- not from a local-only report.
+
+## Session 6 — 2026-08-28
+- Completed: Full Database audit & live crawl status across F001 -> F002 -> F003 -> F005:
+  - F001 (dim_symbol): 1,751 symbols in `core.dim_symbol`.
+  - F002 (market_ohlcv_daily): 4,807,126 rows across 1,718 symbols (2000-07-28 to 2026-08-27).
+  - F003 (vnstock_news): 73,566 rows across 1,550 symbols.
+  - F005 (fundamentals): Completed 100% (1,738 success, 13 empty); 156,337 total rows across balance_sheet (39,018), income_statement (39,061), cash_flow (38,275), ratio (39,983).
+- Resolved: Silver Sponsor Tier verification (`Kiệt Trần Anh (silver)`) via `vnstock_data==3.2.2`, `load_env()` in `src/etl/db.py`, and robust `melt_pivoted_statement()` supporting both pivoted and melted schemas.
+- Resolved: Historical depth verification for fundamentals: confirmed maximum upstream API depth is 34 quarters (2018-Q1 to 2026-Q2) for quarterly statements and 8 years (2018-2025) for yearly statements.
+- Completed: Cleaned up and consolidated `scratch/` directory: merged 29 ad-hoc temporary test scripts into modular, well-documented session scripts (`session_f001_symbols.py`, `session_f002_ohlcv.py`, `session_f003_news.py`, `session_f005_fundamentals.py`, `session_db_status.py`).
+- Verification: 137 passed, 1 xfailed (full test suite, 138 collected); `ruff` clean; `mypy` clean.
+- Next session should: Proceed to F006 (Corporate events crawl) or F101/F102 validation and point-in-time join.

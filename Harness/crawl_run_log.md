@@ -27,8 +27,33 @@ Separate from `claude-progress.md` / `gemini-progress.md` and `feature_list.json
 - Decision: continue to F003 (vnstock_news)
 
 ## F003 — vnstock_news — 2026-08-28
-- Symbols attempted: 1751 (running in background)
-- Status: Crawl initiated in the background via `scratch/run_F003.py` with batch_size=80 and delay=20s.
-- Code changes this session: No feature changes. Created dedicated `scratch/run_F003.py` execution script to run F003 specifically as requested.
-- Note: This is a full universe crawl (every session) as requested.
+- Symbols attempted: 1751
+- Status: Completed using Sponsor tier (vnstock_news / vnstock_data).
+- SQL result (pasted verbatim):
+  dataset_name   status     n
+0         F003    empty   201
+1         F003  success  1550
+- Core row count: 73,566 news rows across 1,550 symbols.
+- Note: vnstock_news returns the most recent 50 articles per symbol.
+- Decision: continue to F005 (fundamentals)
+
+## F005 — fundamentals (Balance Sheet, Income Statement, Cash Flow, Ratio) — 2026-08-28
+- Symbols attempted: 1751 (Full universe from core.dim_symbol)
+- Status: Completed 100% using vnstock_data (Silver Sponsor package, tier verified live: Kiệt Trần Anh).
+- SQL result (pasted verbatim):
+  dataset_name   status     n
+0         F005    empty    13
+1         F005  success  1738
+- Core row count: 156,337 total records in core.fundamentals:
+  - balance_sheet: 39,018 rows (1,387 symbols)
+  - income_statement: 39,061 rows (1,343 symbols)
+  - cash_flow: 38,275 rows (1,330 symbols)
+  - ratio: 39,983 rows (1,730 symbols)
+- Historical Depth: 34 quarters (2018-Q1 to 2026-Q2) — confirmed maximum structured depth from vnstock_data upstream.
+- Code changes this session:
+  - `src/etl/db.py`: added `load_env()` helper for automatic .env loading.
+  - `src/crawlers/fundamentals.py`: upgraded `melt_pivoted_statement()` to support both pivoted and melted schemas, handled non-equity EmptyResultError.
+  - Updated all crawlers to use `db.load_env()` in `_authenticate()`.
+  - Full test suite: 137 passed, 1 xfailed (138 collected); ruff and mypy clean.
+- Next dataset / session: F006 (corporate_events) or F101/F102 (validation & point-in-time join).
 

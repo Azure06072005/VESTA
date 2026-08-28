@@ -51,6 +51,7 @@ def _authenticate() -> None:
     """Read the vnstock API key from the environment. Never hardcode it,
     never accept it as a function argument from a caller that might log it.
     """
+    db.load_env()
     api_key = os.environ.get(REQUIRED_ENV_VAR)
     if not api_key:
         raise RuntimeError(

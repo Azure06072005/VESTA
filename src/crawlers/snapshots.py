@@ -75,6 +75,7 @@ SNAPSHOT_COLUMNS = ["symbol", "snapshot_at", "data_json", "fetched_at"]
 
 
 def _authenticate() -> None:
+    db.load_env()
     api_key = os.environ.get(REQUIRED_ENV_VAR)
     if not api_key:
         raise RuntimeError(

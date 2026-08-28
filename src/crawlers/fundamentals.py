@@ -8,13 +8,10 @@ Confirmed live against vnstock==4.0.5 (2026-08-12): `Fundamental().equity
     cash_flow(period: str = 'year', orient: str = 'report', **kwargs)
     ratio(orient: str = 'report', **kwargs)                # no `period` arg
 
-CONFIRMED SCHEMA (2026-08-12, live discovery run, replaces the first
-guess): the returned frame is PIVOTED, not one-row-per-period. Each row is
-a financial line item (identified by an id/name column); each column
-after the id column(s) is a period label like '2026-Q1' or a bare year
-like '2025'. There is no `period_end` column at all -- the original
-column-alias-lookup approach in this module's first version was wrong and
-has been replaced with melt_pivoted_statement().
+CONFIRMED SCHEMA (2026-08-28): The new `vnstock_data` Sponsor tier API
+returns a completely melted structure. Each row has `period`, `id`, `name`, 
+`unit`, and `value`. This module groups by `period` and dumps the `id` -> `value`
+mapping into `data_json`.
 
 KNOWN ISSUE: `balance_sheet()` returned a completely empty DataFrame for
 the test symbol against a live call. This is accepted as a real vnstock
@@ -75,15 +72,13 @@ REPORT_TYPES: dict[str, tuple[str, bool]] = {
 # Matches period column labels: '2026-Q1', '2025-Q4', or a bare year '2025'.
 PERIOD_COLUMN_PATTERN = re.compile(r"^\d{4}(-Q[1-4])?$")
 
-# Preferred order for the metric-identifier column among the non-period
-# columns. UNCONFIRMED which of these actually appears -- picks the first
-# match found, or falls back to whatever non-period column exists.
-ID_COLUMN_CANDIDATES = ["item_id", "item", "name", "criteria"]
+# The new vnstock_data melted schema has 'period', 'id', 'value'.
 
 FUNDAMENTAL_COLUMNS = ["symbol", "report_type", "period_end", "available_at", "data_json", "fetched_at"]
 
 
 def _authenticate() -> None:
+    db.load_env()
     api_key = os.environ.get(REQUIRED_ENV_VAR)
     if not api_key:
         raise RuntimeError(
@@ -116,14 +111,28 @@ def fetch_raw(symbol: str, report_type: str, period: str = "quarter") -> pd.Data
         import vnstock as vs  # type: ignore[no-redef]
 
     method_name, takes_period = REPORT_TYPES[report_type]
-    fund = vs.Fundamental().equity(symbol)
-    method = getattr(fund, method_name)
-    result: pd.DataFrame = method(period=period) if takes_period else method()
-    return result
+    try:
+        fund = vs.Fundamental().equity(symbol)
+        method = getattr(fund, method_name)
+        result: pd.DataFrame = method(period=period) if takes_period else method()
+        if result is None or (isinstance(result, pd.DataFrame) and result.empty):
+            raise EmptyResultError(
+                f"fetch_raw returned an empty DataFrame for symbol={symbol!r}, "
+                f"report_type={report_type!r} -- F008-compatible: recorded as "
+                f"genuine emptiness via record_empty(), NOT retried."
+            )
+        return result
+    except ValueError as ve:
+        if "Chỉ cổ phiếu" in str(ve) or "không hợp lệ" in str(ve):
+            raise EmptyResultError(
+                f"Symbol {symbol!r} is not an equity/stock with financial statements: {ve}"
+            ) from ve
+        raise
 
 
 def _period_label_to_date(label: str) -> dt.date:
-    match = re.match(r"^(\d{4})(?:-Q([1-4]))?$", str(label))
+    clean_label = re.sub(r"_\d+$", "", str(label).strip())
+    match = re.match(r"^(\d{4})(?:-Q([1-4]))?$", clean_label)
     if not match:
         raise ValueError(f"Period label {label!r} doesn't match expected 'YYYY' or 'YYYY-Qn' format.")
     year, quarter = match.group(1), match.group(2)
@@ -135,49 +144,63 @@ def _period_label_to_date(label: str) -> dt.date:
 
 
 def melt_pivoted_statement(raw_df: pd.DataFrame, symbol: str, report_type: str) -> pd.DataFrame:
-    """Pure transform for vnstock's confirmed pivoted shape: rows are
-    financial line items, columns after the id column(s) are period
-    labels ('2026-Q1', '2025', ...). Melts to one row per (symbol,
-    report_type, period_end) with all metrics for that period packed into
-    a JSON blob (data_json), since each report type has a very different,
-    wide set of line items. No network access -- fully unit-testable.
+    """Pure transform for fundamental data. Handles:
+    1. Pivoted structure (vnstock community): rows are line items ('item_id' or 'item'),
+       columns are period labels ('2026-Q1', '2025-Q4', '2025').
+    2. Melted structure (vnstock_data sponsor): rows have 'period', 'id'/'item_id', 'value'.
+    
+    Transforms into one row per (symbol, report_type, period_end) with all metrics
+    packed into a JSON blob. No network access -- fully unit-testable.
     """
     if raw_df.empty:
         raise EmptyResultError(
             f"fetch_raw returned an empty DataFrame for symbol={symbol!r}, "
             f"report_type={report_type!r} -- F008-compatible: recorded as "
-            f"genuine emptiness via record_empty(), NOT retried. "
-            f"(Confirmed live 2026-08-12: balance_sheet returned empty for "
-            f"the test symbol -- FORMALLY ACCEPTED as a real vnstock API "
-            f"gap, not a bug, see DECISIONS.md.)"
+            f"genuine emptiness via record_empty(), NOT retried."
         )
 
-    period_cols = [c for c in raw_df.columns if PERIOD_COLUMN_PATTERN.match(str(c))]
+    # Case 1: Melted structure with 'period', ('id' or 'item_id'), 'value'
+    id_col_candidate = "id" if "id" in raw_df.columns else ("item_id" if "item_id" in raw_df.columns else None)
+    if "period" in raw_df.columns and "value" in raw_df.columns and id_col_candidate:
+        df = raw_df.copy()
+        df["period_end"] = df["period"].map(_period_label_to_date)
+        rows: list[dict[str, object]] = []
+        for period_end_raw, group in df.groupby("period_end", observed=False):
+            period_end: dt.date = period_end_raw  # type: ignore[assignment]
+            metrics = dict(zip(group[id_col_candidate].astype(str), group["value"]))
+            rows.append(
+                {
+                    "symbol": symbol,
+                    "report_type": report_type,
+                    "period_end": period_end,
+                    "available_at": period_end + dt.timedelta(days=DISCLOSURE_LAG_DAYS),
+                    "data_json": json.dumps(metrics, default=str, ensure_ascii=False),
+                    "fetched_at": dt.datetime.now(dt.timezone.utc).replace(tzinfo=None),
+                }
+            )
+        out = pd.DataFrame(rows)
+        return out[FUNDAMENTAL_COLUMNS]
+
+    # Case 2: Pivoted structure (period labels as column headers)
+    period_cols = [c for c in raw_df.columns if re.match(r"^\d{4}(-Q[1-4])?(_\d+)?$", str(c).strip())]
     if not period_cols:
         raise ValueError(
-            f"No period-label columns (matching 'YYYY' or 'YYYY-Qn') found "
-            f"in fetched data for {symbol!r}/{report_type!r}. Columns "
-            f"present: {list(raw_df.columns)}. The pivoted-schema assumption "
-            f"in this module may no longer hold -- re-run "
-            f"discover_fundamentals_schema.py before changing this code."
+            f"No period-label columns matching 'YYYY' or 'YYYY-Qn' found in "
+            f"fetched data for {symbol!r}/{report_type!r}. Columns present: {list(raw_df.columns)}."
         )
 
-    id_cols = [c for c in raw_df.columns if c not in period_cols]
-    if not id_cols:
-        raise ValueError(
-            f"No non-period (id/metric-name) columns found for "
-            f"{symbol!r}/{report_type!r}. Columns present: {list(raw_df.columns)}."
-        )
-    metric_key_col = next((c for c in ID_COLUMN_CANDIDATES if c in id_cols), id_cols[0])
+    id_col = "item_id" if "item_id" in raw_df.columns else ("item" if "item" in raw_df.columns else ("id" if "id" in raw_df.columns else raw_df.columns[0]))
 
-    melted = raw_df.melt(id_vars=id_cols, value_vars=period_cols, var_name="period_label", value_name="value")
-    melted["period_end"] = melted["period_label"].map(_period_label_to_date)
+    rows_pivoted: list[dict[str, object]] = []
+    seen_periods: set[dt.date] = set()
+    for pcol in period_cols:
+        period_end = _period_label_to_date(str(pcol))
+        if period_end in seen_periods:
+            continue
+        seen_periods.add(period_end)
 
-    rows: list[dict[str, object]] = []
-    for period_end_raw, group in melted.groupby("period_end"):
-        period_end: dt.date = period_end_raw  # type: ignore[assignment]
-        metrics = dict(zip(group[metric_key_col].astype(str), group["value"]))
-        rows.append(
+        metrics = dict(zip(raw_df[id_col].astype(str), raw_df[pcol]))
+        rows_pivoted.append(
             {
                 "symbol": symbol,
                 "report_type": report_type,
@@ -188,8 +211,7 @@ def melt_pivoted_statement(raw_df: pd.DataFrame, symbol: str, report_type: str) 
             }
         )
 
-    out = pd.DataFrame(rows)
-
+    out = pd.DataFrame(rows_pivoted)
     dupes = out.duplicated(subset=["symbol", "report_type", "period_end"]).sum()
     if dupes:
         raise ValueError(
@@ -199,6 +221,10 @@ def melt_pivoted_statement(raw_df: pd.DataFrame, symbol: str, report_type: str) 
         )
 
     return out[FUNDAMENTAL_COLUMNS]
+
+
+# Alias for backward/forward compatibility
+format_melted_statement = melt_pivoted_statement
 
 
 def write_statements(df: pd.DataFrame, con: "duckdb.DuckDBPyConnection | None" = None) -> int:
@@ -336,7 +362,7 @@ def run(symbol: str, report_type: str = "all", period: str = "quarter") -> int:
     """
     if report_type != "all": 
         raw = fetch_raw(symbol, report_type, period)
-        normalized = melt_pivoted_statement(raw, symbol, report_type)
+        normalized = format_melted_statement(raw, symbol, report_type)
         return write_statements(normalized)
 
     total_written = 0
@@ -345,7 +371,7 @@ def run(symbol: str, report_type: str = "all", period: str = "quarter") -> int:
     for rt in REPORT_TYPES: 
         try: 
             raw = fetch_raw(symbol, rt, period)
-            normalized = melt_pivoted_statement(raw, symbol, rt)
+            normalized = format_melted_statement(raw, symbol, rt)
             total_written += write_statements(normalized)
             any_succeeded = True
         except EmptyResultError as e: 

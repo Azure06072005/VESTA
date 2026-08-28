@@ -55,6 +55,7 @@ NEWS_COLUMNS = ["symbol", "source", "published_at", "available_at", "headline", 
 
 
 def _authenticate() -> None:
+    db.load_env()
     api_key = os.environ.get(REQUIRED_ENV_VAR)
     if not api_key:
         raise RuntimeError(
