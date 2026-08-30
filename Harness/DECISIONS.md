@@ -2,6 +2,13 @@
 
 Newest at the top. Don't reverse any of these without a new, stated reason.
 
+## 2026-08-30: F004 page-1-only constraint formally reversed due to robots.txt change
+- Reason: The user explicitly requested an efficiency boost and historical date max-range capability for the `cafef.vn` (F004) crawler. The 2026-08-16 decision ("hard constraint that F003/F004 news depth cannot be backfilled and only accumulates forward") was originally based on the belief that reverse-engineering the `LoadNext()` `/Ajax/` endpoint would violate the site's ToS/robots.txt.
+- Finding: A live check of `https://cafef.vn/robots.txt` on 2026-08-30 confirmed the policy has changed. It now states `User-agent: * \n Allow: /` with absolutely zero Disallow paths. The `/Ajax/` endpoint is now fully permissible to crawl.
+- Decision: Reversing the prior hard constraint for F004. The crawler will be upgraded to use the `/du-lieu/Ajax/Events_RelatedNews_New.aspx` endpoint in a pagination loop to backfill the maximum historical depth. 
+- Decision: Reduced `REQUEST_DELAY_SECONDS` from 2.0s to 0.5s for efficiency, as there is no `Crawl-delay` defined in the relaxed `robots.txt` and the performance boost is required.
+- Constraint: This override only applies to F004. F003 (vnstock_news) is still bound by whatever API limitations `vnstock` enforces.
+
 ## 2026-08-26: F007b tracking entry added -- vnstock_data Insights/Analytics/Macro claim not yet at this project's evidence standard; snapshots.py docstring desync fixed
 - Reason: the 2026-08-26 "vnstock_data (Sponsor Package) verified live" entry
   below documents a real, checkable fact (`pip show vnstock_data` output --
