@@ -150,6 +150,11 @@ def normalize_snapshot(raw_df: pd.DataFrame) -> pd.DataFrame:
             f"against a live key to confirm the real column name."
         )
 
+    # Drop rows where the symbol is missing (API returned invalid/empty row for a missing symbol)
+    flat_df = flat_df.dropna(subset=[symbol_col])
+    if flat_df.empty:
+        raise EmptyResultError("fetch_raw returned only empty/missing symbols.")
+
     snapshot_at = dt.datetime.now(dt.timezone.utc).replace(tzinfo=None)
     records = flat_df.to_dict(orient="records")
 

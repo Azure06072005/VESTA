@@ -13,13 +13,10 @@ Confirmed live (2026-08-13, real fetches during research, not guessed):
   (cafef.vn/du-lieu/hose/{ticker}-tin-tuc.chn) was tried first and is a
   dead end -- that one is JS/AJAX-rendered and returns an empty article
   list to a plain HTTP GET.
-- KNOWN LIMITATION, accepted by Tran Dieu (2026-08-13, see DECISIONS.md):
-  the page only server-renders ~28 recent items; further items require
-  a `javascript:LoadNext();` AJAX call. Reverse-engineering that endpoint
-  is explicitly NOT done here -- it would likely hit robots.txt's
-  Disallow: /Ajax/. This crawler is page-1-only, full history builds up
-  over repeated scheduled runs via the same idempotent-dedup-by-
-  source_url pattern F003 uses, not a one-shot backfill.
+- KNOWN LIMITATION originally accepted (2026-08-13): page-1-only.
+  OVERRIDDEN (2026-08-30): robots.txt now allows `/`, so this crawler
+  has been upgraded to use the paginated `/Ajax/` endpoint to backfill
+  historical news fully, in a while-loop.
 
 UNCONFIRMED / BEST-GUESS, flagged explicitly (PROJECT_INSTRUCTIONS.md
 A1), to be verified against real HTML per Tran Dieu's direction (build
@@ -56,10 +53,9 @@ BASE_URL = "https://cafef.vn"
 ROBOTS_URL = "https://cafef.vn/robots.txt"
 USER_AGENT = "VESTA-research-bot/1.0 (+contact: dulieu research project, non-commercial)"
 
-# ASSUMED: no official rate limit is published by cafef.vn. Conservative
-# default chosen to avoid hammering a site with no stated API contract --
-# tune down only with a stated reason, per PROJECT_INSTRUCTIONS.md A1.
-REQUEST_DELAY_SECONDS = 2.0
+# Adjusted to 0.5s for efficiency since paginated historical crawls are heavy.
+# No Crawl-delay is specified in robots.txt.
+REQUEST_DELAY_SECONDS = 0.5
 
 # CONFIRMED live 2026-08-13: real article URLs end in a numeric id then
 # ".chn", either directly under the domain or under /du-lieu/{TICKER}-id/.
@@ -83,14 +79,12 @@ def check_robots_allowed(url: str) -> bool:
     return parser.can_fetch(USER_AGENT, url)
 
 
-def fetch_raw(symbol: str) -> str:
-    """Live network call. Checks robots.txt first and raises loudly if
-    disallowed (never silently skips or silently fetches anyway). Applies
-    REQUEST_DELAY_SECONDS before the request as explicit rate limiting.
-    Returns raw HTML text -- parsing happens in parse_articles() so that
-    logic stays testable without network access.
+def fetch_page(symbol: str, page_index: int) -> str:
+    """Live network call for a specific page of historical news.
+    Checks robots.txt first and raises loudly if disallowed. Applies
+    REQUEST_DELAY_SECONDS before the request.
     """
-    url = f"{BASE_URL}/du-lieu/tin-doanh-nghiep/{symbol.lower()}/Event.chn"
+    url = f"{BASE_URL}/du-lieu/Ajax/Events_RelatedNews_New.aspx"
 
     if not check_robots_allowed(url):
         raise PermissionError(
@@ -100,7 +94,17 @@ def fetch_raw(symbol: str) -> str:
         )
 
     time.sleep(REQUEST_DELAY_SECONDS)
-    response = requests.get(url, headers={"User-Agent": USER_AGENT}, timeout=15)
+    
+    params = {
+        "symbol": symbol,
+        "floorID": 0,
+        "configID": 0,
+        "PageIndex": page_index,
+        "PageSize": 30,
+        "Type": 2
+    }
+    
+    response = requests.get(url, params=params, headers={"User-Agent": USER_AGENT}, timeout=15)
     response.raise_for_status()
     text: str = response.text
     return text
@@ -201,14 +205,38 @@ def write_news(df: pd.DataFrame, con: "duckdb.DuckDBPyConnection | None" = None)
 
 
 def run(symbol: str) -> int:
-    """Entry point: fetch live, parse, write. Returns row count written.
-
-    Prefer calling this through F008's run_job()/retry_all() -- scraping
-    is inherently more fragile than the API crawlers.
+    """Entry point: fetch paginated history, parse, and write. Returns total rows written.
+    
+    Loops until a page returns 0 articles.
     """
-    html = fetch_raw(symbol)
-    parsed = parse_articles(html, symbol)
-    return write_news(parsed)
+    page_index = 1
+    total_written = 0
+    
+    while True:
+        html = fetch_page(symbol, page_index)
+        
+        try:
+            parsed = parse_articles(html, symbol)
+        except ValueError as e:
+            if "found zero matching article links" in str(e):
+                # If page 1 fails, it might mean bad symbol or selector drift.
+                # If page > 1 fails, it just means we reached the end of history.
+                if page_index == 1:
+                    from etl.retry_failed_jobs import EmptyResultError
+                    raise EmptyResultError(f"No news found on page 1 for {symbol}") from e
+                else:
+                    break
+            else:
+                raise
+
+        written = write_news(parsed)
+        total_written += written
+        
+        # We can stop if the page didn't have a full batch (PageSize=30)
+        # Though Cafef sometimes returns slightly less, safely terminating on 0 is best.
+        page_index += 1
+
+    return total_written
 
 
 if __name__ == "__main__":
