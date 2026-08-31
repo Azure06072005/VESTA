@@ -2,6 +2,63 @@
 
 Newest at the top. Don't reverse any of these without a new, stated reason.
 
+## 2026-08-31: WIP switched from F004b to F001b; cafef.vn HAR-based endpoint audit
+- Reason: F004b (article body enrichment) is blocked on one missing artifact --
+  no full article detail page has been captured in any of the 15 user-uploaded
+  .har files (all 15 stop at category/data-tab pages), and this session's
+  tools cannot see raw HTML to derive a real body-container selector.
+  Meanwhile a user-uploaded cafef.vn company directory (cafef_company_list.json,
+  3,016 real entries) is immediately usable with zero blockers. Per AGENTS.md
+  WIP=1, switching to a ready, unblocked item rather than idling on a blocked
+  one -- logged explicitly here rather than silently changing focus.
+- Confirmed via HAR inspection (15 files, 3,264 entries, cross-checked against
+  live re-fetches this session):
+  - `cafef.vn/du-lieu/Ajax/PageNew/News.ashx?symbol={t}&NewsType=0-5&pageIndex=N&pageSize=4`
+    is real, paginated, returns Title/SubTitle/LinkDetail/DeployDate as JSON.
+    NOT previously known to this project -- a materially better foundation
+    for a future F004 pagination fix than the LoadNext()-JS-blocked approach
+    documented 2026-08-13, since this needs no /Ajax/ robots.txt concern and
+    no JS execution.
+  - `ListCeo.ashx` and `CoCauSoHuu.ashx` (leadership/ownership, claimed in an
+    earlier unverified .har-analysis report) are REAL and return real data
+    (e.g. VIC board: Phạm Nhật Vượng, Chủ tịch HĐQT) -- this session's direct
+    fetch attempts failed only because `Referer: https://cafef.vn/du-lieu/
+    {exchange}/{ticker}-ban-lanh-dao-so-huu.chn` and `X-Requested-With:
+    XMLHttpRequest` headers were missing, not because the params were wrong.
+  - `GDCoDong.ashx` (insider transactions) similarly REAL, confirmed paginated
+    (TotalCount=120, 6 pages of 20), needs `Referer: https://cafef.vn/du-lieu/
+    lich-su-giao-dich-{ticker}-6.chn`.
+  - `apiweb.cafef.vn/api/v1/BCTC/GetReportSummary` and
+    `apiweb.cafef.vn/api/v2/BCTC/FinancialIndicators` are REAL (cross-subdomain
+    CORS API) -- this session's earlier 400 errors were due to missing
+    `Origin: https://cafef.vn` / `Referer: https://cafef.vn/` headers, not
+    invalid endpoints. Real KQKD/CDKT line-item data confirmed.
+  - robots.txt is genuinely fully permissive today (no Disallow lines at all)
+    -- corrects an earlier same-session false claim (this session mistakenly
+    trusted a stale/mislabeled search-index snippet claiming `/Ajax/` was
+    disallowed; that URL 404s and the real robots.txt, cross-checked against
+    the real sitemap.xml, has no Disallow entries).
+  - cafef_company_list.json (3,016 entries) confirmed real: RedirectUrl slug
+    format byte-identical to a live HAR capture for VIC; CenterId->exchange
+    mapping derived by direct cross-check (1=hose, 2=hastc [not "hnx" --
+    would have been silently wrong if guessed], 8=otc, 9=upcom); IsVn30 flag
+    matches all 30 real VN30 constituents.
+- Rejected: building the leadership/ownership/insider-transaction/BCTC
+  crawlers now, in the same session as F001b -- rejected as scope creep
+  beyond one WIP item (A2/WIP=1). Logged here as a confirmed, ready backlog
+  instead of either being built prematurely or lost.
+- Backlog (confirmed real, NOT started, no feature_list.json entry yet --
+  each needs its own scoping session before becoming active):
+  1. F004 pagination fix via News.ashx (replaces LoadNext()-blocked approach)
+  2. Leadership/ownership crawler via ListCeo.ashx + CoCauSoHuu.ashx
+  3. Insider-transaction crawler via GDCoDong.ashx
+  4. Financial-report-detail crawler via apiweb.cafef.vn/BCTC/* -- needs
+     scoping against F005's existing fundamentals schema first to avoid
+     duplicating vnstock-sourced data under a different shape.
+- Constraint: F004b remains `blocked` (not `not_started`, not `active`) until
+  a full article-detail-page .har capture or pasted raw HTML is provided --
+  do not guess a body-container selector to unblock it artificially.
+
 ## 2026-08-30: F004 page-1-only constraint formally reversed due to robots.txt change
 - Reason: The user explicitly requested an efficiency boost and historical date max-range capability for the `cafef.vn` (F004) crawler. The 2026-08-16 decision ("hard constraint that F003/F004 news depth cannot be backfilled and only accumulates forward") was originally based on the belief that reverse-engineering the `LoadNext()` `/Ajax/` endpoint would violate the site's ToS/robots.txt.
 - Finding: A live check of `https://cafef.vn/robots.txt` on 2026-08-30 confirmed the policy has changed. It now states `User-agent: * \n Allow: /` with absolutely zero Disallow paths. The `/Ajax/` endpoint is now fully permissible to crawl.

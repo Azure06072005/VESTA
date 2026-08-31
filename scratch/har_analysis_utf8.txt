@@ -1,0 +1,568 @@
+--- INTERESTING ENDPOINTS FOUND ---
+
+Endpoint: GET cafef.vn/du-lieu/Ajax/PageNew/RealtimePricesHeader.ashx (Called 36 times)
+Content-Types: text/plain
+Params: symbols
+Examples:
+  - https://cafef.vn/du-lieu/Ajax/PageNew/RealtimePricesHeader.ashx?symbols=VIC
+
+Endpoint: GET cafefcdn.com/zoom/250_157/{ID}/2026/8/30/avatar{ID}-{ID}.webp (Called 26 times)
+Content-Types: image/webp
+Params: 
+Examples:
+  - https://cafefcdn.com/zoom/250_157/203337114487263232/2026/8/30/avatar1788089694350-1788089701422861156952.webp
+  - https://cafefcdn.com/zoom/250_157/203337114487263232/2026/8/30/avatar1788080630491-17880806313781623061398.webp
+
+Endpoint: GET msh-datacenter.cafef.vn/price/api/v1/CompanyCompac/RealTimeChartHeader (Called 24 times)
+Content-Types: application/json
+Params: index
+Examples:
+  - https://msh-datacenter.cafef.vn/price/api/v1/CompanyCompac/RealTimeChartHeader?index=1;2
+
+Endpoint: GET cafefcdn.com/zoom/250_157/{ID}/2026/8/29/avatar{ID}-{ID}.webp (Called 22 times)
+Content-Types: image/webp
+Params: 
+Examples:
+  - https://cafefcdn.com/zoom/250_157/203337114487263232/2026/8/29/avatar1788008971900-1788008972521447240529.webp
+  - https://cafefcdn.com/zoom/250_157/203337114487263232/2026/8/29/avatar1787986892815-17879868933271522368464.webp
+
+Endpoint: GET realtime.cafef.vn/hub/priceshub (Called 22 times)
+Content-Types: x-unknown
+Params: id
+Examples:
+  - wss://realtime.cafef.vn/hub/priceshub?id=_rsMo--B5C6ggyWSEnFOfg
+  - wss://realtime.cafef.vn/hub/priceshub
+
+Endpoint: GET msh-iframe.cafef.vn/chart-for-cafef-web/chart-header (Called 15 times)
+Content-Types: text/html
+Params: timeout
+Examples:
+  - https://msh-iframe.cafef.vn/chart-for-cafef-web/chart-header
+  - https://msh-iframe.cafef.vn/chart-for-cafef-web/chart-header?timeout=15
+
+Endpoint: GET e.cafef.vn/info.ashx (Called 15 times)
+Content-Types: application/json
+Params: type, symbol
+Examples:
+  - https://e.cafef.vn/info.ashx?type=cp&symbol=PDR%26HPX%26MWG%26HAX%26SMC
+  - https://e.cafef.vn/info.ashx?type=cp&symbol=PVS
+
+Endpoint: GET cafef.vn/api/getListNewestTop.chn (Called 14 times)
+Content-Types: text/html
+Params: 
+Examples:
+  - https://cafef.vn/api/getListNewestTop.chn
+
+Endpoint: GET cafef.vn/du-lieu/Ajax/PageNew/News.ashx (Called 13 times)
+Content-Types: text/plain
+Params: PageIndex, PageSize, Symbol, pageSize, symbol, NewsType, pageIndex
+Examples:
+  - https://cafef.vn/du-lieu/Ajax/PageNew/News.ashx?symbol=vic&NewsType=1&pageIndex=1&pageSize=4
+  - https://cafef.vn/du-lieu/Ajax/PageNew/News.ashx?symbol=vic&NewsType=0&pageIndex=1&pageSize=4
+
+Endpoint: GET apiweb.cafef.vn/api/v1/BCTC/GetReportSummary (Called 9 times)
+Content-Types: application/json
+Params: TypeTime, pageSize, symbol, reportType, pageIndex
+Examples:
+  - https://apiweb.cafef.vn/api/v1/BCTC/GetReportSummary?symbol=VIC&pageIndex=3&pageSize=4&reportType=KQKD&TypeTime=QUY
+  - https://apiweb.cafef.vn/api/v1/BCTC/GetReportSummary?symbol=VIC&pageIndex=1&pageSize=4&reportType=ALL&TypeTime=QUY
+
+Endpoint: GET cafef.vn/ajax/tinmoi.chn (Called 8 times)
+Content-Types: text/html
+Params: 
+Examples:
+  - https://cafef.vn/ajax/tinmoi.chn
+
+Endpoint: GET cafef.vn/ajax/top-event.chn (Called 8 times)
+Content-Types: text/html
+Params: 
+Examples:
+  - https://cafef.vn/ajax/top-event.chn
+
+Endpoint: GET cafef.vn/ajax/top-event-menu.chn (Called 8 times)
+Content-Types: text/html
+Params: 
+Examples:
+  - https://cafef.vn/ajax/top-event-menu.chn
+
+Endpoint: GET cafef.vn/ajax/list-box-right/{ID}.chn (Called 8 times)
+Content-Types: text/html
+Params: 
+Examples:
+  - https://cafef.vn/ajax/list-box-right/188127.chn
+  - https://cafef.vn/ajax/list-box-right/18836.chn
+
+Endpoint: GET cafef.vn/timelinelist/{ID}/2.chn (Called 8 times)
+Content-Types: text/html
+Params: 
+Examples:
+  - https://cafef.vn/timelinelist/18835/2.chn
+  - https://cafef.vn/timelinelist/18836/2.chn
+
+Endpoint: GET cafef.vn/timelinelist/{ID}/3.chn (Called 8 times)
+Content-Types: text/html
+Params: 
+Examples:
+  - https://cafef.vn/timelinelist/188127/3.chn
+  - https://cafef.vn/timelinelist/18836/3.chn
+
+Endpoint: GET cafef.vn/timelinelist/{ID}/4.chn (Called 8 times)
+Content-Types: text/html
+Params: 
+Examples:
+  - https://cafef.vn/timelinelist/18836/4.chn
+  - https://cafef.vn/timelinelist/188127/4.chn
+
+Endpoint: GET cafef.vn/du-lieu/Ajax/Mobile/Smart/AjaxTop10TraCuu.ashx (Called 8 times)
+Content-Types: text/plain
+Params: TypeGA
+Examples:
+  - https://cafef.vn/du-lieu/Ajax/Mobile/Smart/AjaxTop10TraCuu.ashx?TypeGA=7
+
+Endpoint: GET cafefcdn.com/zoom/250_157/{ID}/2026/8/31/avatar{ID}-{ID}.webp (Called 7 times)
+Content-Types: image/webp
+Params: 
+Examples:
+  - https://cafefcdn.com/zoom/250_157/203337114487263232/2026/8/31/avatar1788139788116-17881397886672085937943.webp
+  - https://cafefcdn.com/zoom/250_157/203337114487263232/2026/8/31/avatar1788139908251-17881399085911146364233.webp
+
+Endpoint: GET e.cafef.vn/kby.ashx (Called 7 times)
+Content-Types: application/javascript
+Params: 
+Examples:
+  - https://e.cafef.vn/kby.ashx
+
+Endpoint: GET kenh14cdn.com/channel-icon/cafef-manifest.json (Called 7 times)
+Content-Types: application/json
+Params: 
+Examples:
+  - https://kenh14cdn.com/channel-icon/cafef-manifest.json
+
+Endpoint: GET cafef.vn/du-lieu/ajax/mobile/smart/ajaxchisothegioi.ashx (Called 7 times)
+Content-Types: text/plain
+Params: 
+Examples:
+  - https://cafef.vn/du-lieu/ajax/mobile/smart/ajaxchisothegioi.ashx
+
+Endpoint: GET cafefnew.mediacdn.vn/Search/company.json (Called 7 times)
+Content-Types: application/json
+Params: 
+Examples:
+  - https://cafefnew.mediacdn.vn/Search/company.json
+
+Endpoint: GET cafefcdn.com/zoom/250_157/{ID}/2026/8/28/avatar{ID}-{ID}.webp (Called 7 times)
+Content-Types: image/webp
+Params: 
+Examples:
+  - https://cafefcdn.com/zoom/250_157/203337114487263232/2026/8/28/avatar1787907525908-1787907526902722390134.webp
+  - https://cafefcdn.com/zoom/250_157/203337114487263232/2026/8/28/avatar1787883253069-17878832536951839829143.webp
+
+Endpoint: GET cafef.vn/du-lieu/Ajax/PageNew/DataHistory/GDCoDong.ashx (Called 6 times)
+Content-Types: text/plain
+Params: StartDate, PageSize, Symbol, PageIndex, EndDate
+Examples:
+  - https://cafef.vn/du-lieu/Ajax/PageNew/DataHistory/GDCoDong.ashx?Symbol=VIC&StartDate=&EndDate=&PageIndex=2&PageSize=20
+  - https://cafef.vn/du-lieu/Ajax/PageNew/DataHistory/GDCoDong.ashx?Symbol=VIC&StartDate=&EndDate=&PageIndex=1&PageSize=20
+
+Endpoint: GET apiweb.cafef.vn/api/v2/BCTC/FinancialIndicators (Called 6 times)
+Content-Types: application/json
+Params: pageIndex, pageSize, symbol
+Examples:
+  - https://apiweb.cafef.vn/api/v2/BCTC/FinancialIndicators?symbol=VIC&pageIndex=3&pageSize=4
+  - https://apiweb.cafef.vn/api/v2/BCTC/FinancialIndicators?symbol=VIC&pageIndex=2&pageSize=4
+
+Endpoint: GET cafef.vn/du-lieu/Ajax/PageNew/CompanyIntro.ashx (Called 5 times)
+Content-Types: text/plain
+Params: Symbol
+Examples:
+  - https://cafef.vn/du-lieu/Ajax/PageNew/CompanyIntro.ashx?Symbol=vic
+
+Endpoint: GET apiweb.cafef.vn/cafefdata/api/v1/cafeflist/symbol-badges (Called 5 times)
+Content-Types: application/json
+Params: 
+Examples:
+  - https://apiweb.cafef.vn/cafefdata/api/v1/cafeflist/symbol-badges
+
+Endpoint: GET cafef.vn/du-lieu/Ajax/FinancialAjax.aspx (Called 5 times)
+Content-Types: text/html
+Params: tab, isInsurance, symbol, isBank
+Examples:
+  - https://cafef.vn/du-lieu/Ajax/FinancialAjax.aspx?isBank=false&isInsurance=false&tab=candoi&symbol=vic
+  - https://cafef.vn/du-lieu/Ajax/FinancialAjax.aspx?isBank=false&isInsurance=false&tab=luuchuyen&symbol=vic
+
+Endpoint: GET apiweb.cafef.vn/api/v2/BCTC/KeHoachKinhDoanh (Called 4 times)
+Content-Types: application/json
+Params: pageIndex, pageSize, symbol
+Examples:
+  - https://apiweb.cafef.vn/api/v2/BCTC/KeHoachKinhDoanh?symbol=VIC&pageIndex=3&pageSize=4
+  - https://apiweb.cafef.vn/api/v2/BCTC/KeHoachKinhDoanh?symbol=VIC&pageIndex=2&pageSize=4
+
+Endpoint: GET cafef.vn/du-lieu/Ajax/PageNew/CoCauSoHuu.ashx (Called 3 times)
+Content-Types: text/plain
+Params: Type, Symbol
+Examples:
+  - https://cafef.vn/du-lieu/Ajax/PageNew/CoCauSoHuu.ashx?Symbol=vic
+  - https://cafef.vn/du-lieu/Ajax/PageNew/CoCauSoHuu.ashx?Symbol=vic&Type=SoHuu
+
+Endpoint: POST realtime.cafef.vn/hub/priceshub/negotiate (Called 3 times)
+Content-Types: x-unknown, application/json
+Params: negotiateVersion
+Examples:
+  - https://realtime.cafef.vn/hub/priceshub/negotiate
+  - https://realtime.cafef.vn/hub/priceshub/negotiate?negotiateVersion=1
+
+Endpoint: GET cafefcdn.com/{ID}/2026/8/30/avatar{ID}-{ID}.gif.mp4 (Called 3 times)
+Content-Types: video/mp4
+Params: 
+Examples:
+  - https://cafefcdn.com/203337114487263232/2026/8/30/avatar1788082096867-17880820975151314509544.gif.mp4
+
+Endpoint: GET cafef.vn/du-lieu/ajax/mobile/smart/ajaxgiaodichtudoanh.ashx (Called 2 times)
+Content-Types: text/plain
+Params: type
+Examples:
+  - https://cafef.vn/du-lieu/ajax/mobile/smart/ajaxgiaodichtudoanh.ashx?type=BUYVALUE
+  - https://cafef.vn/du-lieu/ajax/mobile/smart/ajaxgiaodichtudoanh.ashx?type=SELLVALUE
+
+Endpoint: GET cafef.vn/du-lieu/Ajax/PageNew/RealtimeChartHeader.ashx (Called 2 times)
+Content-Types: text/plain
+Params: index, type
+Examples:
+  - https://cafef.vn/du-lieu/Ajax/PageNew/RealtimeChartHeader.ashx?index=1&type=chart
+  - https://cafef.vn/du-lieu/Ajax/PageNew/RealtimeChartHeader.ashx?index=1;2;9;11;12&type=market
+
+Endpoint: GET msh-appdata.cafef.vn/rest-api/api/v1/OverviewOrgnizaztion/0/{ID}/15 (Called 2 times)
+Content-Types: application/json
+Params: symbol
+Examples:
+  - https://msh-appdata.cafef.vn/rest-api/api/v1/OverviewOrgnizaztion/0/20260831/15?symbol=VNINDEX
+
+Endpoint: GET apiweb.cafef.vn/api/v1/BCTC/FinancialIndicatorsChart (Called 2 times)
+Content-Types: application/json
+Params: pageIndex, type, pageSize, symbol
+Examples:
+  - https://apiweb.cafef.vn/api/v1/BCTC/FinancialIndicatorsChart?symbol=VIC&pageIndex=1&pageSize=15&type=EPS
+
+Endpoint: GET cafef.vn/bat-dong-san.chn (Called 1 times)
+Content-Types: text/html
+Params: 
+Examples:
+  - https://cafef.vn/bat-dong-san.chn
+
+Endpoint: GET cafef.vn/doanh-nghiep.chn (Called 1 times)
+Content-Types: text/html
+Params: 
+Examples:
+  - https://cafef.vn/doanh-nghiep.chn
+
+Endpoint: GET cafef.vn/du-lieu.chn (Called 1 times)
+Content-Types: text/html
+Params: 
+Examples:
+  - https://cafef.vn/du-lieu.chn
+
+Endpoint: GET cafef.vn/du-lieu/Ajax/CafeFData/NewsAll.ashx (Called 1 times)
+Content-Types: text/plain
+Params: PageIndex, PageSize
+Examples:
+  - https://cafef.vn/du-lieu/Ajax/CafeFData/NewsAll.ashx?PageIndex=1&PageSize=20
+
+Endpoint: GET cafef.vn/du-lieu/ajax/mobile/smart/ajaxtygia.ashx (Called 1 times)
+Content-Types: text/plain
+Params: 
+Examples:
+  - https://cafef.vn/du-lieu/ajax/mobile/smart/ajaxtygia.ashx
+
+Endpoint: GET cafef.vn/du-lieu/Ajax/Mobile/Smart/AjaxTop10CP.ashx (Called 1 times)
+Content-Types: text/plain
+Params: centerID, type
+Examples:
+  - https://cafef.vn/du-lieu/Ajax/Mobile/Smart/AjaxTop10CP.ashx?centerID=HOSE&type=UP
+
+Endpoint: GET cafef.vn/du-lieu/Ajax/PageNew/FinanceData/GetDataChartPE.ashx (Called 1 times)
+Content-Types: text/plain
+Params: 
+Examples:
+  - https://cafef.vn/du-lieu/Ajax/PageNew/FinanceData/GetDataChartPE.ashx
+
+Endpoint: GET cafef.vn/du-lieu/ajax/mobile/smart/ajaxkhoingoai.ashx (Called 1 times)
+Content-Types: text/plain
+Params: type
+Examples:
+  - https://cafef.vn/du-lieu/ajax/mobile/smart/ajaxkhoingoai.ashx?type=buy
+
+Endpoint: GET msh-appdata.cafef.vn/rest-api/api/v1/MarketLeaderGroup (Called 1 times)
+Content-Types: application/json
+Params: take, centerId
+Examples:
+  - https://msh-appdata.cafef.vn/rest-api/api/v1/MarketLeaderGroup?centerId=1&take=5
+
+Endpoint: GET cafef.vn/du-lieu/ajax/mobile/smart/ajaxhanghoa.ashx (Called 1 times)
+Content-Types: text/plain
+Params: type
+Examples:
+  - https://cafef.vn/du-lieu/ajax/mobile/smart/ajaxhanghoa.ashx?type=1
+
+Endpoint: GET cafef.vn/du-lieu/Ajax/PageNew/DataHistory/PriceHistory.ashx (Called 1 times)
+Content-Types: text/plain
+Params: StartDate, PageSize, Symbol, PageIndex, EndDate
+Examples:
+  - https://cafef.vn/du-lieu/Ajax/PageNew/DataHistory/PriceHistory.ashx?Symbol=VNINDEX&StartDate=&EndDate=&PageIndex=1&PageSize=20
+
+Endpoint: GET cafef.vn/du-lieu/ajax/mobile/smart/ajaxdorongthitruong.ashx (Called 1 times)
+Content-Types: text/plain
+Params: centerID
+Examples:
+  - https://cafef.vn/du-lieu/ajax/mobile/smart/ajaxdorongthitruong.ashx?centerID=HOSE
+
+Endpoint: GET cafef.vn/du-lieu/ajax/mobile/smart/ajaxbandothitruong.ashx (Called 1 times)
+Content-Types: text/plain
+Params: type, category, centerId
+Examples:
+  - https://cafef.vn/du-lieu/ajax/mobile/smart/ajaxbandothitruong.ashx?type=1&category=0&centerId=1
+
+Endpoint: GET cafef.vn/du-lieu/Ajax/CafeFData/AnalysisReport.ashx (Called 1 times)
+Content-Types: text/plain
+Params: take
+Examples:
+  - https://cafef.vn/du-lieu/Ajax/CafeFData/AnalysisReport.ashx?take=20
+
+Endpoint: GET msh-iframe.cafef.vn/charts/liquidity (Called 1 times)
+Content-Types: text/html
+Params: symbol
+Examples:
+  - https://msh-iframe.cafef.vn/charts/liquidity?symbol=VNINDEX
+
+Endpoint: GET msh-appdata.cafef.vn/rest-api/api/v1/Liquidity/HOSE (Called 1 times)
+Content-Types: application/json
+Params: 
+Examples:
+  - https://msh-appdata.cafef.vn/rest-api/api/v1/Liquidity/HOSE
+
+Endpoint: GET msh-appdata.cafef.vn/rest-api/api/v1/OverviewOrgnizaztion/1/{ID}/20 (Called 1 times)
+Content-Types: application/json
+Params: symbol
+Examples:
+  - https://msh-appdata.cafef.vn/rest-api/api/v1/OverviewOrgnizaztion/1/20260831/20?symbol=VNINDEX
+
+Endpoint: GET cafef.vn/du-lieu/{ARTICLE-SLUG}.chn (Called 1 times)
+Content-Types: text/html
+Params: 
+Examples:
+  - https://cafef.vn/du-lieu/lich-su-giao-dich-vic-6.chn
+
+Endpoint: GET cafef.vn/du-lieu/hose/vic-ban-lanh-dao-so-huu.chn (Called 1 times)
+Content-Types: text/html
+Params: 
+Examples:
+  - https://cafef.vn/du-lieu/hose/vic-ban-lanh-dao-so-huu.chn
+
+Endpoint: GET cafef.vn/du-lieu/Ajax/PageNew/ListCeo.ashx (Called 1 times)
+Content-Types: text/plain
+Params: Symbol, PositionGroup
+Examples:
+  - https://cafef.vn/du-lieu/Ajax/PageNew/ListCeo.ashx?Symbol=vic&PositionGroup=0
+
+Endpoint: GET cafef.vn/du-lieu/hose/vic-tai-chinh.chn (Called 1 times)
+Content-Types: text/html
+Params: 
+Examples:
+  - https://cafef.vn/du-lieu/hose/vic-tai-chinh.chn
+
+Endpoint: GET apiweb.cafef.vn/api/v2/BCTC/GetReportCDKT (Called 1 times)
+Content-Types: application/json
+Params: TypeTime, pageSize, symbol, reportType, pageIndex
+Examples:
+  - https://apiweb.cafef.vn/api/v2/BCTC/GetReportCDKT?symbol=VIC&pageIndex=1&pageSize=4&reportType=ALL&TypeTime=QUY
+
+Endpoint: GET apiweb.cafef.vn/api/v1/BCTC/GetReportDetail (Called 1 times)
+Content-Types: application/json
+Params: TypeTime, pageSize, symbol, reportType, pageIndex
+Examples:
+  - https://apiweb.cafef.vn/api/v1/BCTC/GetReportDetail?symbol=VIC&pageIndex=1&pageSize=4&reportType=KQKD&TypeTime=QUY
+
+Endpoint: GET apiweb.cafef.vn/api/v1/BCTC/GetReportLCTT (Called 1 times)
+Content-Types: application/json
+Params: TypeTime, pageSize, symbol, reportType, pageIndex
+Examples:
+  - https://apiweb.cafef.vn/api/v1/BCTC/GetReportLCTT?symbol=VIC&pageIndex=1&pageSize=4&reportType=ALL&TypeTime=QUY
+
+Endpoint: GET cafef.vn/du-lieu/hose/vic-tin-tuc.chn (Called 1 times)
+Content-Types: text/html
+Params: 
+Examples:
+  - https://cafef.vn/du-lieu/hose/vic-tin-tuc.chn
+
+Endpoint: GET cafef.vn/du-lieu/hose/vic-tap-doan-vingroup-cong-ty-co-phan.chn (Called 1 times)
+Content-Types: text/html
+Params: 
+Examples:
+  - https://cafef.vn/du-lieu/hose/vic-tap-doan-vingroup-cong-ty-co-phan.chn
+
+Endpoint: GET msh-iframe.cafef.vn/chart-for-cafef-web/stock-chart-vip (Called 1 times)
+Content-Types: text/html
+Params: symbol
+Examples:
+  - https://msh-iframe.cafef.vn/chart-for-cafef-web/stock-chart-vip?symbol=vic
+
+Endpoint: GET cafef.vn/du-lieu/Ajax/PageNew/PriceRealTimeHeader.ashx (Called 1 times)
+Content-Types: text/plain
+Params: Symbol
+Examples:
+  - https://cafef.vn/du-lieu/Ajax/PageNew/PriceRealTimeHeader.ashx?Symbol=vic
+
+Endpoint: GET cafef.vn/du-lieu/Ajax/PageNew/ChiSoTaiChinh.ashx (Called 1 times)
+Content-Types: text/plain
+Params: Symbol
+Examples:
+  - https://cafef.vn/du-lieu/Ajax/PageNew/ChiSoTaiChinh.ashx?Symbol=vic
+
+Endpoint: GET cafef.vn/du-lieu/Ajax/PageNew/RealtimePrice.ashx (Called 1 times)
+Content-Types: application/json
+Params: Symbol
+Examples:
+  - https://cafef.vn/du-lieu/Ajax/PageNew/RealtimePrice.ashx?Symbol=vic
+
+Endpoint: GET cafef.vn/du-lieu/Ajax/PageNew/LichSuKien.ashx (Called 1 times)
+Content-Types: text/plain
+Params: Symbol
+Examples:
+  - https://cafef.vn/du-lieu/Ajax/PageNew/LichSuKien.ashx?Symbol=vic
+
+Endpoint: GET cafef.vn/du-lieu/Ajax/PageNew/TradeHistoryNew.ashx (Called 1 times)
+Content-Types: text/plain
+Params: PageIndex, PageSize, Symbol
+Examples:
+  - https://cafef.vn/du-lieu/Ajax/PageNew/TradeHistoryNew.ashx?Symbol=vic&PageIndex=1&PageSize=30
+
+Endpoint: GET cafef.vn/du-lieu/Ajax/PageNew/SlideRight.ashx (Called 1 times)
+Content-Types: text/plain
+Params: Symbol
+Examples:
+  - https://cafef.vn/du-lieu/Ajax/PageNew/SlideRight.ashx?Symbol=vic
+
+Endpoint: GET cafef.vn/du-lieu/Ajax/PageNew/BaoCaoPhanTich.ashx (Called 1 times)
+Content-Types: text/plain
+Params: PageIndex, PageSize, Symbol
+Examples:
+  - https://cafef.vn/du-lieu/Ajax/PageNew/BaoCaoPhanTich.ashx?Symbol=vic&PageIndex=1&PageSize=5
+
+Endpoint: GET cafef.vn/du-lieu/Ajax/PageNew/KeHoachKinhDoanh.ashx (Called 1 times)
+Content-Types: text/plain
+Params: Symbol
+Examples:
+  - https://cafef.vn/du-lieu/Ajax/PageNew/KeHoachKinhDoanh.ashx?Symbol=vic
+
+Endpoint: GET cafef.vn/du-lieu/Ajax/PageNew/FinanceReport.ashx (Called 1 times)
+Content-Types: text/plain
+Params: TotalRow, Symbol, Sort, EndDate, ReportType, Type
+Examples:
+  - https://cafef.vn/du-lieu/Ajax/PageNew/FinanceReport.ashx?Type=1&Symbol=vic&TotalRow=4&EndDate=3-2028&ReportType=QUY&Sort=DESC
+
+Endpoint: GET cafef.vn/du-lieu/Ajax/CungNganh/AjaxSameCategory.ashx (Called 1 times)
+Content-Types: application/json
+Params: pageIndex, symbol
+Examples:
+  - https://cafef.vn/du-lieu/Ajax/CungNganh/AjaxSameCategory.ashx?symbol=vic&pageIndex=1
+
+Endpoint: GET cafef.vn/du-lieu/Ajax/PageNew/GetDataChart.ashx (Called 1 times)
+Content-Types: text/plain
+Params: TypeIndicator, TotalRow, Symbol, Sort, EndDate, ReportType, Type
+Examples:
+  - https://cafef.vn/du-lieu/Ajax/PageNew/GetDataChart.ashx?Type=1&Symbol=vic&TotalRow=10&EndDate=3-2028&TypeIndicator=DTTBHCCDV&ReportType=QUY&Sort=DESC
+
+Endpoint: GET cafefnew.mediacdn.vn/Images/Uploaded/DuLieuDownload/Liveboard/VIC_PriceHistory.json (Called 1 times)
+Content-Types: application/json
+Params: 
+Examples:
+  - https://cafefnew.mediacdn.vn/Images/Uploaded/DuLieuDownload/Liveboard/VIC_PriceHistory.json
+
+Endpoint: GET msh-appdata.cafef.vn/rest-api/api/v1/Watchlists/{SYMBOL}/price (Called 1 times)
+Content-Types: application/json
+Params: 
+Examples:
+  - https://msh-appdata.cafef.vn/rest-api/api/v1/Watchlists/VIC/price
+
+Endpoint: GET cafef.vn/du-lieu/Ajax/PageNew/GetDataTKDL.ashx (Called 1 times)
+Content-Types: application/json
+Params: PageIndex, PageSize, Symbol
+Examples:
+  - https://cafef.vn/du-lieu/Ajax/PageNew/GetDataTKDL.ashx?Symbol=vic&PageIndex=1&PageSize=30
+
+Endpoint: GET cafef.vn/du-lieu/Ajax/PageNew/GetDataNDTNN.ashx (Called 1 times)
+Content-Types: text/plain
+Params: Symbol
+Examples:
+  - https://cafef.vn/du-lieu/Ajax/PageNew/GetDataNDTNN.ashx?Symbol=vic
+
+Endpoint: GET cafef.vn/du-lieu/hose/vic-thong-tin-co-ban.chn (Called 1 times)
+Content-Types: text/html
+Params: 
+Examples:
+  - https://cafef.vn/du-lieu/hose/vic-thong-tin-co-ban.chn
+
+Endpoint: GET cafef.vn/du-lieu/ajax/pagenew/companyinfor.ashx (Called 1 times)
+Content-Types: text/plain
+Params: symbol
+Examples:
+  - https://cafef.vn/du-lieu/ajax/pagenew/companyinfor.ashx?symbol=vic
+
+Endpoint: GET cafef.vn/du-lieu/Ajax/PageNew/GetVonDL.ashx (Called 1 times)
+Content-Types: text/plain
+Params: Symbol
+Examples:
+  - https://cafef.vn/du-lieu/Ajax/PageNew/GetVonDL.ashx?Symbol=vic
+
+Endpoint: GET cafef.vn/du-lieu/Ajax/PageNew/CongtyKiemToan_TuVan.ashx (Called 1 times)
+Content-Types: text/plain
+Params: Symbol
+Examples:
+  - https://cafef.vn/du-lieu/Ajax/PageNew/CongtyKiemToan_TuVan.ashx?Symbol=vic
+
+Endpoint: GET cafef.vn/du-lieu/Ajax/PageNew/GetCompanyHistory.ashx (Called 1 times)
+Content-Types: text/plain
+Params: Symbol
+Examples:
+  - https://cafef.vn/du-lieu/Ajax/PageNew/GetCompanyHistory.ashx?Symbol=vic
+
+Endpoint: GET cafef.vn/kinh-te-so.chn (Called 1 times)
+Content-Types: text/html
+Params: 
+Examples:
+  - https://cafef.vn/kinh-te-so.chn
+
+Endpoint: GET cafef.vn/vi-mo-dau-tu.chn (Called 1 times)
+Content-Types: text/html
+Params: 
+Examples:
+  - https://cafef.vn/vi-mo-dau-tu.chn
+
+Endpoint: GET cafef.vn/tai-chinh-ngan-hang.chn (Called 1 times)
+Content-Types: text/html
+Params: 
+Examples:
+  - https://cafef.vn/tai-chinh-ngan-hang.chn
+
+Endpoint: GET cafef.vn/tai-chinh-quoc-te.chn (Called 1 times)
+Content-Types: text/html
+Params: 
+Examples:
+  - https://cafef.vn/tai-chinh-quoc-te.chn
+
+Endpoint: GET cafef.vn/thi-truong.chn (Called 1 times)
+Content-Types: text/html
+Params: 
+Examples:
+  - https://cafef.vn/thi-truong.chn
+
+Endpoint: GET cafef.vn/thi-truong-chung-khoan.chn (Called 1 times)
+Content-Types: text/html
+Params: 
+Examples:
+  - https://cafef.vn/thi-truong-chung-khoan.chn
+
+Endpoint: GET cafef.vn/get-top-stock.chn (Called 1 times)
+Content-Types: text/html
+Params: 
+Examples:
+  - https://cafef.vn/get-top-stock.chn
