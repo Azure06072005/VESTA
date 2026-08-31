@@ -54,6 +54,7 @@ cover/
 logs/
 pip-log.txt
 pip-delete-this-directory.txt
+*.har
 
 # ==============================================================================
 # IDEs & OS generated files

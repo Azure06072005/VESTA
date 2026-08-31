@@ -150,6 +150,31 @@ next session reads to avoid starting from zero.
   again or expanding the pilot symbol list to accumulate more real news
   before re-attempting.
 
+## Session 5 — 2026-08-31
+- Completed: nothing merged to `active`/`passing` this session -- this was an
+  audit/discovery session (per-request: review .har analysis, verify claims).
+- In progress: F001b (dim_symbol cafef.vn cross-reference) -- scoped and
+  moved to `active`, real evidence gathered (see feature_list.json/DECISIONS.md),
+  implementation + test suite not yet written.
+- Blocked: F004b (article body enrichment) -- no full article-page .har
+  captured in the 15 files provided; needs one more artifact or pasted raw
+  HTML before a real body-container selector can be written (no guessing,
+  per this project's evidence standard).
+- Corrected within-session: retracted an earlier same-session false claim
+  that cafef.vn robots.txt disallows /Ajax/ (based on a stale/mislabeled
+  search-index snippet whose URL actually 404s) -- real robots.txt is fully
+  permissive, confirmed against the real sitemap.xml.
+- Retracted from an external, unverified .har-analysis report: apiweb.cafef.vn
+  BCTC endpoints and cafef.vn/*.ashx endpoints (ownership/leadership/insider)
+  DID work, but only once real required headers (Referer/Origin/
+  X-Requested-With) were identified from user-provided real .har captures --
+  the external report's param-only description was incomplete, not fabricated.
+- Next session should: write F001b's crawler + test suite (implementation not
+  started yet -- only evidence-gathering happened this session), OR provide
+  one more artifact (a full article-page .har or pasted raw HTML) to unblock
+  F004b -- confirm which with Tran Dieu before picking. Per WIP=1, only one
+  of these two should become the actual next `active` work.
+
 <!--
 Template for future entries:
 
