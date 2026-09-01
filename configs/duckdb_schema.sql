@@ -33,6 +33,7 @@ CREATE TABLE IF NOT EXISTS core.dim_symbol (
     industry_code  VARCHAR,
     industry_name  VARCHAR,
     delisted_date  DATE,              -- always NULL for now, see note above
+    is_delisted    BOOLEAN,           -- derived from exchange == 'DELISTED' (F001 delisted fix 2026-08-31)
     fetched_at     TIMESTAMP NOT NULL,
     PRIMARY KEY (symbol)
 );

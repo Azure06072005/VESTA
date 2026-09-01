@@ -31,15 +31,6 @@
       "evidence": "14 passed (pytest tests/test_cafef_symbol_directory.py -v), 0 failed; ruff check .: All checks passed!; mypy src/crawlers/cafef_symbol_directory.py --strict: Success, no issues found. Real 3016-entry cafef_company_list.json parsed without error. Exchange counts confirmed: {HOSE: 645, HNX: 444, OTC: 777, UPCOM: 1150}. VN30 flag verified against 30 real constituents. OTC gap (777 symbols with zero simulated vnstock overlap) correctly flagged by find_otc_only_symbols(). NOT yet passing: this only proves the parser/cross-reference logic is correct against the real directory file -- it has not yet been wired into an actual DuckDB write against a REAL vnstock-sourced dim_symbol (only a simulated vnstock_symbols set was used in tests, per conventions.md's crawler-test pattern). A live run against the real core.dim_symbol table, and confirmation of the real OTC-overlap count (not the simulated 777), is required before this moves to passing."
     },
     {
-      "id": "F004b",
-      "name": "cafef article body enrichment",
-      "behavior": "Fetch full article body text for existing core.news rows sourced from cafef (currently body=NULL by original F004 design, see DECISIONS.md 2026-08-13). BLOCKED 2026-08-31: two BODY_CONTAINER_SELECTORS candidates exist (div.detail-content, or sapo+newsbody per an unverified .har-analysis report) but neither is confirmed against real raw HTML -- this tool's web_fetch renders markdown, never raw HTML/CSS classes, and none of the 15 user-uploaded .har files captured a full article detail page (all 15 stop at category/data-tab pages). published_at CAN already be sourced reliably via <meta property=\"article:published_time\"> -- confirmed live 2026-08-31 against a real fetched article.",
-      "dependencies": ["F004"],
-      "verification": "pytest tests/test_cafef_body_enrichment.py -x -- requires a real body-container selector confirmed against pasted raw HTML or a .har capture of one full article page before this can be written.",
-      "state": "blocked",
-      "evidence": null
-    },
-    {
       "id": "F002",
       "name": "Market OHLCV daily crawler",
       "behavior": "Daily OHLCV per symbol from dim_symbol, staged then promoted to core.market_ohlcv_daily with validation. Confirmed live 2026-08-13 (real terminal output): Market().equity(symbol).ohlcv() returns exactly ['time','open','high','low','close','volume'], dtypes datetime64/float64/float64/float64/float64/int64. Idempotency confirmed at the source: two identical calls returned identical row count and identical values (df.equals == True).",
@@ -71,6 +62,15 @@
       "verification": "pytest tests/test_cafef_crawler.py -x  (schema matches F003; dedup by source_url; robots.txt-disallowed path raises rather than silently fetching)",
       "state": "passing",
       "evidence": "8 passed (pytest tests/test_cafef_crawler.py -v); 58 passed, 1 xfailed (full suite); ruff/mypy clean. Live execution confirmed 2026-08-14 for FPT and VNM. Re-verified 2026-08-31: F004 upgraded to paginated /Ajax/ endpoint due to robots.txt allowance, successfully completing full market backfill of 587,957 historical rows across 1,818 symbols."
+    },
+    {
+      "id": "F004b",
+      "name": "cafef article body enrichment",
+      "behavior": "Fetch full article body text for existing core.news rows sourced from cafef (currently body=NULL by original F004 design, see DECISIONS.md 2026-08-13). BLOCKED 2026-08-31: two BODY_CONTAINER_SELECTORS candidates exist (div.detail-content, or sapo+newsbody per an unverified .har-analysis report) but neither is confirmed against real raw HTML -- this tool's web_fetch renders markdown, never raw HTML/CSS classes, and none of the 15 user-uploaded .har files captured a full article detail page (all 15 stop at category/data-tab pages). published_at CAN already be sourced reliably via <meta property=\"article:published_time\"> -- confirmed live 2026-08-31 against a real fetched article.",
+      "dependencies": ["F004"],
+      "verification": "pytest tests/test_cafef_body_enrichment.py -x -- requires a real body-container selector confirmed against pasted raw HTML or a .har capture of one full article page before this can be written.",
+      "state": "blocked",
+      "evidence": null
     },
     {
       "id": "F005",

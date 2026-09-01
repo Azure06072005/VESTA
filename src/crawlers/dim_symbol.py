@@ -1,5 +1,41 @@
 """F001: dim_symbol reference crawler.
 
+SCHEMA CORRECTED 2026-08-31 (supersedes the 2026-08-11 note below, which is
+stale): a fresh live call to vnstock_data==3.2.2's
+Reference().equity.list_by_exchange() returns columns
+['symbol', 'exchange', 'organ_name', 'organ_short_name', 'icb_code_lv2']
+-- there is NO 'type' column in the current API version. exchange takes
+exactly 4 confirmed values today: HOSE, HNX, UPCOM, DELISTED -- confirmed
+live 2026-08-31, 1,751 total (818 UPCOM + 405 HOSE + 299 HNX + 229 DELISTED).
+
+DELISTED-STATUS FIX (2026-08-31): exchange=='DELISTED' is a REAL, live
+signal vnstock_data exposes -- confirmed against BBC and BCG, both real
+delisted HOSE equities, both returned with exchange='DELISTED'. The
+2026-08-11 "vnstock does not expose delisted symbols" finding below was
+tested only against free vnstock==4.0.5 and never re-tested against
+vnstock_data, despite fetch_raw() already preferring vnstock_data when
+installed. is_delisted is now derived from exchange=='DELISTED'.
+delisted_date itself remains NULL -- vnstock_data's DELISTED bucket is a
+status flag, not an actual date, and this crawler will not fabricate one.
+This closes the boolean part of the original survivorship-bias gap
+(filtering delisted from active symbols is now possible) even though the
+exact delisted_date remains genuinely unavailable.
+
+CONTAMINATION FOUND & EXPLAINED (2026-08-31): core.dim_symbol previously
+held 3,418 rows (single fetched_at timestamp, confirmed via
+scratch/diagnose_dim_symbol_contamination.py -- no rogue writer, one
+write_dim_symbol() call), including 1,469 NULL-exchange rows (real bonds,
+e.g. MBB12106) and 14 rows with an undocumented exchange='XHNF' value. A
+fresh call today reproduces NEITHER -- a one-time artifact of whatever
+vnstock_data version/behavior existed at that historical crawl (real
+version drift; project notes elsewhere document 3.2.7, but 3.2.2 is what
+was actually installed when this was investigated), not a bug in this
+repo's own code. write_dim_symbol() now validates exchange against
+KNOWN_EXCHANGE_VALUES and fails loudly on anything unrecognized, so a
+future recurrence is caught immediately rather than sitting undetected.
+See DECISIONS.md 2026-08-31 entries for the full investigation trail.
+
+--- Original 2026-08-11 docstring (STALE, kept for history) ---
 Schema confirmed live against vnstock==4.0.5 on 2026-08-11 (see
 DECISIONS.md "Build order..." entry and discover_vnstock_schema.py output):
 
@@ -44,8 +80,15 @@ DIM_SYMBOL_COLUMNS = [
     "industry_code", 
     "industry_name", 
     "delisted_date", 
+    "is_delisted",
     "fetched_at",
 ]
+
+# Confirmed live 2026-08-31. An unrecognized exchange value must fail
+# loudly rather than being silently written -- this is exactly the
+# validation gap that let 1,469 bond rows and 14 'XHNF' rows sit
+# undetected in core.dim_symbol for an unknown period of time.
+KNOWN_EXCHANGE_VALUES = {"HOSE", "HNX", "UPCOM", "DELISTED"}
 
 def _authenticate() -> None:
     """Read the vnstock API key from the environment. Never hardcode it,
@@ -114,8 +157,31 @@ def build_dim_symbol(exchange_df: pd.DataFrame, industry_df: pd.DataFrame) -> pd
 
     merged = ex.merge(ind_dedup, on="symbol", how="left")
     merged["organ_name"] = merged["organ_name"].fillna(merged["en_organ_name"]).fillna(merged["symbol"])
-    merged["delisted_date"] = pd.NaT
+    merged["delisted_date"] = pd.NaT  # genuinely unknown -- see module docstring, not fabricated
+    merged["is_delisted"] = merged["exchange"] == "DELISTED"
     merged["fetched_at"] = dt.datetime.now(dt.timezone.utc).replace(tzinfo=None)
+
+    bad_exchanges = set(merged["exchange"].dropna().unique()) - KNOWN_EXCHANGE_VALUES
+    if bad_exchanges:
+        raise ValueError(
+            f"build_dim_symbol encountered unrecognized exchange value(s) "
+            f"{bad_exchanges}, not in KNOWN_EXCHANGE_VALUES={KNOWN_EXCHANGE_VALUES}. "
+            f"This is exactly the pattern that let 1,469 bond rows and 14 "
+            f"'XHNF' rows into core.dim_symbol undetected (2026-08-31) -- "
+            f"failing loudly rather than silently writing an unrecognized "
+            f"instrument type into the equity reference table. Confirm the "
+            f"new value is a real exchange before extending "
+            f"KNOWN_EXCHANGE_VALUES, per this crawler's evidence discipline."
+        )
+    null_exchange_count = merged["exchange"].isna().sum()
+    if null_exchange_count:
+        raise ValueError(
+            f"build_dim_symbol found {null_exchange_count} row(s) with a "
+            f"NULL exchange value -- the 2026-08-31 contamination incident "
+            f"was exactly this pattern (1,469 NULL-exchange bond rows). "
+            f"Refusing to write until this is understood, not silently "
+            f"dropping or keeping them."
+        )
 
     out = merged[DIM_SYMBOL_COLUMNS].copy()
 
@@ -140,7 +206,8 @@ def write_dim_symbol(df: pd.DataFrame, con: "duckdb.DuckDBPyConnection | None" =
     con = con or db.bootstrap_schema()
     con.execute("DELETE FROM core.dim_symbol")
     con.register("dim_symbol_df", df[DIM_SYMBOL_COLUMNS])
-    con.execute("INSERT INTO core.dim_symbol SELECT * FROM dim_symbol_df")
+    cols = ", ".join(DIM_SYMBOL_COLUMNS)
+    con.execute(f"INSERT INTO core.dim_symbol ({cols}) SELECT {cols} FROM dim_symbol_df")
     con.unregister("dim_symbol_df")
     return len(df)
 
@@ -153,4 +220,4 @@ def run() -> int:
 
 if __name__ == "__main__":
     n = run()
-    print(f"F001 dim_symbol: wrote {n} rows to core.dim_symbol")    
+    print(f"F001 dim_symbol: wrote {n} rows to core.dim_symbol")
