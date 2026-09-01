@@ -28,7 +28,7 @@
       "dependencies": ["F001"],
       "verification": "pytest tests/test_dim_symbol_cafef_xref.py -x -- schema test (exchange mapping matches the 4 confirmed CenterId values, no fifth value silently defaulted); coverage test (OTC-only symbols correctly flagged as cafef-source, not vnstock-source); idempotency test (re-run does not duplicate rows keyed on symbol).",
       "state": "active",
-      "evidence": "CenterId->exchange mapping and RedirectUrl slug format confirmed 2026-08-31 via direct inspection of user-uploaded cafef_company_list.json (3016 entries) cross-checked against live-captured cafef_du-lieu_tongquan.har (VIC slug byte-identical). Implementation and test suite not yet written this session."
+      "evidence": "14 passed (pytest tests/test_cafef_symbol_directory.py -v), 0 failed; ruff check .: All checks passed!; mypy src/crawlers/cafef_symbol_directory.py --strict: Success, no issues found. Real 3016-entry cafef_company_list.json parsed without error. Exchange counts confirmed: {HOSE: 645, HNX: 444, OTC: 777, UPCOM: 1150}. VN30 flag verified against 30 real constituents. OTC gap (777 symbols with zero simulated vnstock overlap) correctly flagged by find_otc_only_symbols(). NOT yet passing: this only proves the parser/cross-reference logic is correct against the real directory file -- it has not yet been wired into an actual DuckDB write against a REAL vnstock-sourced dim_symbol (only a simulated vnstock_symbols set was used in tests, per conventions.md's crawler-test pattern). A live run against the real core.dim_symbol table, and confirmation of the real OTC-overlap count (not the simulated 777), is required before this moves to passing."
     },
     {
       "id": "F004b",

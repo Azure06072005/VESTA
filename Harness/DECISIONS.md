@@ -59,6 +59,39 @@ Newest at the top. Don't reverse any of these without a new, stated reason.
   a full article-detail-page .har capture or pasted raw HTML is provided --
   do not guess a body-container selector to unblock it artificially.
 
+### 2026-08-31 (addendum): covered-warrant contamination found in cafef directory
+- Reason: a smoke test (synthetic DB, not real evidence) surfaced 12 non-OTC
+  "gap" symbols that turned out to be covered warrants (org_name starting
+  "Chứng quyền"), not equities -- vnstock never returns these, so treating
+  them as a missing-symbol gap would have been a false positive baked into
+  F001b before it ever reached real data.
+- Confirmed against the real 3,016-entry file: exactly 142 covered-warrant
+  entries, all CenterId=1 (HOSE), zero on HNX/UPCOM/OTC.
+- Decision: added `instrument_type` ('equity' | 'covered_warrant') to
+  cafef_symbol_directory.parse_directory()'s output. Warrants are flagged,
+  never dropped (raw-payload-preserving convention still applies -- the
+  raw_json blob keeps everything). find_new_non_otc_symbols() now excludes
+  instrument_type == 'covered_warrant' from its gap check.
+- Constraint: this instrument_type heuristic (string-prefix match on
+  "Chứng quyền") is a stated assumption, not exhaustively validated against
+  every possible non-equity instrument type cafef's directory might contain
+  (e.g. bonds, fund certificates) -- revisit if a live run surfaces other
+  categories of false-positive gaps.
+  5. F005 balance_sheet gap fix via apiweb.cafef.vn/BCTC/GetReportSummary --
+     confirmed real, returns CDKT (balance sheet) line items that vnstock's
+     Fundamental().equity(symbol).balance_sheet() returns empty for (accepted
+     gap, DECISIONS.md 2026-08-12). Higher priority than items 1-4 above:
+     this closes a documented data gap rather than adding new coverage.
+     Needs header discipline (Origin/Referer, confirmed 2026-08-31) and
+     schema reconciliation against F005's existing melt_pivoted_statement()
+     shape before scoping as active.
+- Recon needed, not yet backlog items: (a) does cafef expose a real
+  valuation-history/screener endpoint that could restore F007's
+  2026-08-14 scope shrink -- no per-symbol valuation/screener page was
+  captured in any of the 15 .har files; (b) does cafef publish real
+  adjusted OHLCV that could validate F009 item 4's UNVALIDATED
+  corporate-action adjustment factors -- same gap, no capture exists yet.
+
 ## 2026-08-30: F004 page-1-only constraint formally reversed due to robots.txt change
 - Reason: The user explicitly requested an efficiency boost and historical date max-range capability for the `cafef.vn` (F004) crawler. The 2026-08-16 decision ("hard constraint that F003/F004 news depth cannot be backfilled and only accumulates forward") was originally based on the belief that reverse-engineering the `LoadNext()` `/Ajax/` endpoint would violate the site's ToS/robots.txt.
 - Finding: A live check of `https://cafef.vn/robots.txt` on 2026-08-30 confirmed the policy has changed. It now states `User-agent: * \n Allow: /` with absolutely zero Disallow paths. The `/Ajax/` endpoint is now fully permissible to crawl.
