@@ -175,6 +175,32 @@ next session reads to avoid starting from zero.
   F004b -- confirm which with Tran Dieu before picking. Per WIP=1, only one
   of these two should become the actual next `active` work.
 
+## Session 6 — 2026-08-31
+- Completed: F001b crawler + test suite written and verified. src/crawlers/
+  cafef_symbol_directory.py parses the real 3,016-entry cafef directory,
+  fails loudly on any unrecognized CenterId (never guesses an exchange),
+  and provides find_otc_only_symbols()/find_new_non_otc_symbols() for the
+  actual cross-reference against dim_symbol. 14/14 tests pass (pytest -v),
+  ruff clean, mypy --strict clean. A real bug was caught and fixed during
+  this session, not hidden: row["is_vn30"] is True failed because pandas
+  returns numpy bool (np.True_), not Python bool -- test corrected to
+  bool(row["is_vn30"]) is True rather than loosening the assertion's intent.
+  Also fixed a datetime.utcnow() deprecation warning (-> datetime.now(UTC))
+  proactively since it would have failed a future strict lint pass.
+- In progress: F001b is NOT yet `passing`. Tests validate the parser/
+  cross-reference logic against the real directory file and a SIMULATED
+  vnstock_symbols set -- not yet run against the actual live core.dim_symbol
+  table, so the real (not simulated) OTC-overlap count is still unconfirmed.
+- Blocked: none for F001b's remaining step -- just needs a live DB run.
+- Next session should: run cafef_symbol_directory.parse_directory() against
+  the real cafef_company_list.json, load real core.dim_symbol via
+  src/etl/db.py, compute the REAL find_otc_only_symbols() result (expected
+  close to but not necessarily exactly 777, since vnstock's ~1,751 rows may
+  include a small number of overlapping tickers), paste that real count,
+  then decide the target table (new core.dim_symbol_cafef table, additive
+  DDL, vs. extending core.dim_symbol -- no PRIMARY KEY change either way,
+  so per conventions.md a migration is NOT required) before marking passing.
+
 <!--
 Template for future entries:
 
