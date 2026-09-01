@@ -120,6 +120,22 @@ def migrate_news_add_duplicate_of_column(con: duckdb.DuckDBPyConnection) -> bool
     return ran_any
 
 
+def migrate_dim_symbol_add_is_delisted_column(con: duckdb.DuckDBPyConnection) -> bool:
+    """F001 delisted fix: adds a nullable is_delisted column to core.dim_symbol."""
+    exists = con.execute(
+        "SELECT COUNT(*) FROM information_schema.tables "
+        "WHERE table_schema = 'core' AND table_name = 'dim_symbol'"
+    ).fetchone()
+    exists_count = exists[0] if exists is not None else 0
+    if exists_count == 0:
+        return False
+    if _table_has_column(con, "core", "dim_symbol", "is_delisted"):
+        return False
+    con.execute("ALTER TABLE core.dim_symbol ADD COLUMN is_delisted BOOLEAN")
+    print("[migration] core.dim_symbol: added is_delisted column")
+    return True
+
+
 def run_all_migrations(con: "duckdb.DuckDBPyConnection | None" = None) -> duckdb.DuckDBPyConnection:
     """Entry point: run every migration in order. Safe to call every time
     init.sh runs -- each migration is idempotent and a no-op if already
@@ -129,6 +145,7 @@ def run_all_migrations(con: "duckdb.DuckDBPyConnection | None" = None) -> duckdb
     con = con or db.bootstrap_schema()
     migrate_fundamentals_append_only_pk(con)
     migrate_news_add_duplicate_of_column(con)
+    migrate_dim_symbol_add_is_delisted_column(con)
     return con
 
 

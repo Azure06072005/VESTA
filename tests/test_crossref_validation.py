@@ -22,7 +22,7 @@ from pipeline import validate_crossref as vcr  # noqa: E402
 def _seed_dim_symbol(con, symbols: list[str]) -> None:
     for s in symbols:
         con.execute(
-            "INSERT INTO core.dim_symbol VALUES (?, ?, NULL, NULL, NULL, NULL, NULL, ?)",
+            "INSERT INTO core.dim_symbol (symbol, organ_name, fetched_at) VALUES (?, ?, ?)",
             [s, f"{s} Corp", dt.datetime(2026, 1, 1)],
         )
 

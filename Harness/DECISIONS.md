@@ -2,6 +2,58 @@
 
 Newest at the top. Don't reverse any of these without a new, stated reason.
 
+## 2026-08-31: F001 regression fix — is_delisted derived, exchange allowlist validation added
+- Fixes the two issues opened by the "F001 delisted-date gap REOPENED" entry
+  below. build_dim_symbol() now sets is_delisted = (exchange == 'DELISTED'),
+  closing the boolean part of the survivorship-bias gap (delisted_date
+  itself remains NULL -- genuinely unknown, not fabricated). Also raises
+  loudly on any NULL or unrecognized exchange value, specifically to catch
+  a recurrence of the 1,469-bond/14-XHNF contamination immediately instead
+  of it persisting silently.
+- Verified: 6/6 new tests pass (tests/test_dim_symbol_delisted_fix.py),
+  ruff clean, mypy clean on the new code (two PRE-EXISTING lint issues in
+  dim_symbol.py -- import ordering, a quoted type annotation -- were left
+  untouched per A3 surgical-changes discipline, not introduced by this fix).
+- This is a REGRESSION FIX per AGENTS.md's irreversibility rule, not a
+  downgrade of F001's `passing` state -- F001 remains passing, this entry
+  documents the fix.
+- Next: run dim_symbol.run() for real to replace the contaminated 3,418-row
+  table with a clean, validated crawl, then redo F001b's cafef
+  cross-reference against the new trustworthy baseline.
+
+## 2026-08-31: F001 delisted-date gap REOPENED (not a permanent limitation); dim_symbol contamination found
+- Reason: F001b's cross-reference work surfaced two real problems with F001,
+  unrelated to cafef.vn itself:
+  1. The 2026-08-11 "vnstock does not expose delisted symbols" finding was
+     tested against free `vnstock==4.0.5` only. `dim_symbol.py`'s own
+     fetch_raw() already prefers `vnstock_data` (paid) when installed --
+     and vnstock_data IS installed. Confirmed live 2026-08-31: `vnstock_data`
+     (installed version 3.2.2, NOT the 3.2.7 previously documented in
+     project notes -- itself a real version-drift finding, consistent with
+     F007b's already-flagged vnstock_data version-drift research) returns
+     BBC and BCG with `exchange == 'DELISTED'` directly in
+     `Reference().equity.list_by_exchange()`. `build_dim_symbol()`
+     unconditionally sets `delisted_date = pd.NaT`, discarding this signal.
+  2. core.dim_symbol currently holds 3,418 rows, but a fresh
+     `dim_symbol.fetch_raw()` call returns only 1,751. Breakdown of the
+     stored table: HOSE=723, UPCOM=818, HNX=394, XHNF=14 (unexplained,
+     no such exchange code documented anywhere in this project), and
+     1,469 rows with exchange=NULL that inspection shows are bonds/debt
+     instruments (e.g. MBB12106, CII12502), not equities.
+- Status: NOT yet resolved. Root-cause diagnostic in progress
+  (scratch/diagnose_dim_symbol_contamination.py) to determine whether the
+  1,469 NULL-exchange + 14 XHNF rows share a single fetched_at timestamp
+  (pointing to vnstock_data version drift producing a wider response in a
+  single historical crawl) or multiple timestamps (pointing to something
+  bypassing write_dim_symbol()'s DELETE+INSERT pattern).
+- Constraint: F001 must NOT be treated as reliably `passing` until this is
+  resolved. F001b (cafef cross-reference) is paused -- do not write cafef
+  rows against dim_symbol until dim_symbol's own contents are understood
+  and, if needed, re-crawled clean. The delisted_date fix (item 1) should
+  be scoped as its own small fix to build_dim_symbol() once this is
+  unblocked, closing the xfail(strict=True) survivorship-bias test
+  properly instead of carrying it as an accepted permanent gap.
+
 ## 2026-08-31: WIP switched from F004b to F001b; cafef.vn HAR-based endpoint audit
 - Reason: F004b (article body enrichment) is blocked on one missing artifact --
   no full article detail page has been captured in any of the 15 user-uploaded
