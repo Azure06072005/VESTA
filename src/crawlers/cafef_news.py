@@ -95,13 +95,13 @@ def fetch_page(symbol: str, page_index: int) -> str:
 
     time.sleep(REQUEST_DELAY_SECONDS)
     
-    params = {
+    params: dict[str, str | int] = {
         "symbol": symbol,
         "floorID": 0,
         "configID": 0,
         "PageIndex": page_index,
         "PageSize": 30,
-        "Type": 2
+        "Type": 2,
     }
     
     response = requests.get(url, params=params, headers={"User-Agent": USER_AGENT}, timeout=15)

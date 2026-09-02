@@ -201,6 +201,35 @@ next session reads to avoid starting from zero.
   DDL, vs. extending core.dim_symbol -- no PRIMARY KEY change either way,
   so per conventions.md a migration is NOT required) before marking passing.
 
+## Session 7 — 2026-08-31
+- Completed: F001b crawler + tests finalized (27/27 passing, ruff/mypy
+  clean) -- instrument_type now correctly separates equity/covered_warrant/
+  bond/fund (Vietnamese-prefix + verified foreign-fund allowlist), fixing
+  two false-positive gap counts (find_new_non_otc_symbols and, this
+  session, find_otc_only_symbols too -- neither had been filtering by
+  instrument_type before). Real OTC-equity gap: 752 (not 777). Real
+  non-OTC gap: 247, broken down into market indices (9), unlabeled
+  derivatives (2+), and genuine pre-UPCOM/unlisted equities (the rest).
+- Completed: F001 regression fix (is_delisted derived from vnstock_data's
+  real exchange='DELISTED' signal; exchange allowlist validation added to
+  build_dim_symbol()) -- verified against a clean re-crawl (1,751 rows,
+  0 contamination, matches the fresh live count exactly).
+- Completed: F003 evidence retraction. Live re-test (4 symbols, 68 rows)
+  found Company.news() returns 100% empty body/summary/category today --
+  contradicts the 2026-08-13 "confirmed full body" claim. Not a code bug;
+  a stale/overclaimed evidence field. See DECISIONS.md.
+- Security incident: a live VNSTOCK_API_KEY was pasted in plaintext in
+  chat this session -- flagged for rotation, logged in DECISIONS.md.
+- In progress: F004b remains blocked pending one real article-page .har
+  or pasted raw HTML (unchanged from earlier this session) -- now the
+  SOLE viable path to body text anywhere in the repo, re-prioritized
+  above F002/F005/F006/F007 cafef-supplement candidates.
+- Blocked: F004b (as above).
+- Next session should: get the one missing article-page .har to unblock
+  F004b -- this is now the highest-priority item in the whole project
+  for the stated training-data goal, ahead of any new crawler work.
+  Separately, rotate the exposed API key before any further live testing.
+
 <!--
 Template for future entries:
 

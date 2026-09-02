@@ -57,18 +57,59 @@ def _slug_base(redirect_url: str) -> str:
     return redirect_url[: -len(".chn")]
 
 
-def _instrument_type(org_name: str) -> str:
-    """cafef's directory mixes real equities with covered warrants (142
-    confirmed entries, all CenterId=1/HOSE, org_name starting with "Chứng
-    quyền" -- confirmed live 2026-08-31 against the real 3,016-entry file).
-    Warrants are NOT equities and would never appear in vnstock's
-    Reference.equity.list() -- treating them as a "missing equity symbol"
-    gap would be a false positive. Flagged, not dropped, per the
-    raw-payload-preserving convention -- downstream consumers decide
-    whether to filter them out.
+# Confirmed 2026-08-31 by direct inspection: foreign-domiciled investment
+# funds/vehicles, all CenterId=8 (OTC). NOT equities, but no reliable
+# keyword or prefix rule catches them -- "Capital" alone is a false-positive
+# trap (e.g. BCG "Bamboo Capital" and CRC "Create Capital Việt Nam" are
+# real operating-company equities, not funds). An explicit, verified
+# allowlist is used instead of a heuristic for this specific category.
+FOREIGN_FUND_SYMBOLS = {
+    "ASEANSF", "DCVEIL", "DCVGF", "DRAGON", "DWSVF", "FTSEETF",
+    "GICSINGAPORE", "JFVOF", "LIONGVF", "MEKONGCAP", "PXPVEEF", "PYNMFE",
+    "VCVNI", "VCVNL", "VCVOF", "VINACAP", "VNMETF", "WASATCH",
+}
+
+
+def _instrument_type(symbol: str, org_name: str) -> str:
+    """cafef's directory mixes real equities with covered warrants, bonds,
+    Vietnamese-domiciled funds/ETFs, and foreign-domiciled investment
+    funds -- not just OTC/HOSE/HNX/UPCOM equities:
+    - 142 covered warrants (confirmed 2026-08-31, org_name "Chứng quyền",
+      all CenterId=1/HOSE).
+    - 79 bonds (confirmed 2026-08-31, org_name "Trái phiếu"/"Trái Phiếu",
+      CenterId 1 [HOSE, n=1] and 2 [HNX, n=78], never OTC/UPCOM).
+    - 28 Vietnamese funds/ETFs (org_name starting "Quỹ" or "Chứng chỉ quỹ").
+    - 18 foreign-domiciled investment funds/vehicles (confirmed 2026-08-31
+      via FOREIGN_FUND_SYMBOLS, all CenterId=8/OTC) -- e.g. Dragon Capital,
+      VinaCapital, JPMorgan Vietnam Opportunities Fund, GIC/Government of
+      Singapore. These do not share a reliable name pattern with each
+      other or with real equities (many real equities legitimately use
+      "Capital" in their name, e.g. "Bamboo Capital", "Create Capital Việt
+      Nam") -- a keyword heuristic here would misclassify real companies,
+      so an explicit verified symbol list is used instead.
+
+    IMPORTANT, confirmed by direct inspection: a naive substring check for
+    "quỹ" anywhere in the name is WRONG -- 47 real equities (asset-
+    management companies, e.g. "Công ty Cổ phần Quản lý quỹ AIC") legitimately
+    mention "quỹ" in their name without being fund instruments themselves.
+    Only a startswith("Quỹ") or startswith("Chứng chỉ quỹ") match is a real
+    Vietnamese fund instrument; anything else containing "quỹ" is a real
+    equity.
+
+    None of covered_warrant/bond/fund would ever appear in vnstock's
+    Reference.equity.list() -- treating any of them as a "missing equity"
+    gap is a false positive. Flagged, not dropped, per the
+    raw-payload-preserving convention.
     """
-    if org_name.strip().startswith("Chứng quyền"):
+    name = org_name.strip()
+    if symbol.strip().upper() in FOREIGN_FUND_SYMBOLS:
+        return "fund"
+    if name.startswith("Chứng quyền"):
         return "covered_warrant"
+    if name.startswith(("Chứng chỉ quỹ", "Quỹ")):
+        return "fund"
+    if name.lower().startswith("trái phiếu"):
+        return "bond"
     return "equity"
 
 
@@ -101,7 +142,7 @@ def parse_directory(raw_entries: list[dict[str, Any]]) -> pd.DataFrame:
                 "org_name": entry["Title"].strip(),
                 "exchange": CENTER_ID_TO_EXCHANGE[center_id],
                 "center_id": center_id,
-                "instrument_type": _instrument_type(entry["Title"]),
+                "instrument_type": _instrument_type(entry["Symbol"], entry["Title"]),
                 "is_vn30": bool(entry["IsVn30"]),
                 "is_hnx30": bool(entry["IsHnx30"]),
                 "slug_base": _slug_base(entry["RedirectUrl"]),
@@ -123,11 +164,19 @@ def parse_directory(raw_entries: list[dict[str, Any]]) -> pd.DataFrame:
 
 
 def find_otc_only_symbols(cafef_df: pd.DataFrame, vnstock_symbols: set[str]) -> pd.DataFrame:
-    """The actual gap this feature exists to close: cafef OTC-tier companies
-    with zero vnstock coverage. Returns only rows where exchange == 'OTC'
-    AND the symbol is absent from vnstock's dim_symbol.
+    """The actual gap this feature exists to close: cafef OTC-tier
+    EQUITIES with zero vnstock coverage. Returns only rows where
+    exchange == 'OTC' AND instrument_type == 'equity' AND the symbol is
+    absent from vnstock's dim_symbol.
+
+    FIXED 2026-08-31: this previously did not filter by instrument_type at
+    all, so the OTC gap count silently included non-equity OTC entries
+    (18 confirmed foreign investment funds, e.g. Dragon Capital,
+    VinaCapital -- see FOREIGN_FUND_SYMBOLS). A raw "772 OTC symbols
+    missing from dim_symbol" count would have overstated the real
+    OTC-equity gap by including these.
     """
-    otc = cafef_df[cafef_df["exchange"] == "OTC"]
+    otc = cafef_df[(cafef_df["exchange"] == "OTC") & (cafef_df["instrument_type"] == "equity")]
     return otc[~otc["symbol"].isin(vnstock_symbols)].copy()
 
 
@@ -137,10 +186,10 @@ def find_new_non_otc_symbols(cafef_df: pd.DataFrame, vnstock_symbols: set[str]) 
     vnstock gap; a missing HOSE/HNX/UPCOM symbol would be unexpected and
     worth a closer look, not an assumed-safe supplement).
 
-    Excludes instrument_type == 'covered_warrant' -- warrants are never
-    returned by vnstock's equity endpoints, so they would always show up
-    here as a false-positive "gap" otherwise (142 confirmed real cases,
-    2026-08-31).
+    Excludes instrument_type in {'covered_warrant', 'bond', 'fund'} --
+    none of these are ever returned by vnstock's equity endpoints, so all
+    three would show up here as false-positive "gaps" otherwise (142
+    warrants + 79 bonds + 28 funds/ETFs confirmed real, 2026-08-31).
     """
     non_otc = cafef_df[
         (cafef_df["exchange"] != "OTC") & (cafef_df["instrument_type"] == "equity")

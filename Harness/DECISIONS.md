@@ -1,6 +1,105 @@
 # Design Decisions — VESTA
 
 Newest at the top. Don't reverse any of these without a new, stated reason.
+## 2026-09-02: F004's 587,957-row corpus is 99.99% non-enrichable corporate disclosures
+- Reason: live testing of F004b against the real core.news URL space found
+  a structural split confirmed by direct DB query: 587,906 rows (99.99%)
+  are /du-lieu/ corporate filing disclosures (BCTC, Nghị quyết HĐQT,
+  Thông báo ĐKCC) whose real content is a linked PDF attachment, not HTML
+  -- confirmed live: no div.detail-content, no article body, just download
+  links to cafefnew.mediacdn.vn PDFs. Only 51 rows (0.009%) are real
+  editorial articles matching the template F004b was built against.
+- This is not a code defect. parse_article_body() correctly raises
+  ValueError on disclosure pages (no confirmed container -- exactly the
+  designed fail-loud behavior, not a bug to fix).
+- Real implication for the sentiment-training-data goal: F004b enrichment
+  of EXISTING core.news rows caps out at ~51 usable articles. This
+  connects to the 2026-08-31 F003 retraction -- both news sources are
+  dominated by disclosure-type feeds, not editorial journalism.
+- Decision: do NOT special-case disclosure pages into fabricated
+  placeholder body text (e.g. "[Tài liệu đính kèm]") -- violates the
+  never-fabricate-data rule. body stays NULL for these rows, documented
+  as a structural gap, not silently patched.
+- Constraint: real training-data volume requires a NEW crawl target --
+  cafef's editorial category pages (thi-truong-chung-khoan.chn,
+  doanh-nghiep.chn, tai-chinh-ngan-hang.chn, etc.), which were never
+  previously scoped, have no .har capture, and use different pagination
+  than the symbol-level News.ashx endpoint. This is a new feature, not an
+  F004/F004b fix -- do not start it under the existing WIP item.
+
+## 2026-09-02: F004b unblocked -- real article-page .har provided, selector confirmed
+- Resolves the single blocker that persisted across this entire session:
+  no full article-detail-page .har had been captured. cafef_du-lieu_tintuc_sample.har
+  contains one (khoi-ngoai-ban-rong-hon-90000-ty...188260901220700323.chn,
+  109,744 bytes real HTML).
+- Confirmed by direct inspection (not guessed): body container is
+  div.detail-content (nested inside div.contentdetail -- for this article,
+  both produce IDENTICAL extracted text; the inner class is used as a
+  defensive choice, not because a concrete difference was found).
+  published_at sourced from <meta property="article:published_time">.
+- This also retroactively validates that the EARLIER unverified
+  ".har-analysis report" (treated with appropriate skepticism at the time)
+  was correct on this specific point, even though several of its other
+  claims required header fixes to actually work (see 2026-08-31 entries).
+- Constraint: verified against exactly ONE real article. Before this moves
+  to `passing`, run parse_article_body() against a broader sample of real
+  core.news source_urls (both vnstock's synthetic vnstock:// URIs, which
+  this does NOT apply to, and real cafef URLs) to confirm the selector
+  generalizes across article types/dates, not just this one sample.
+
+## 2026-08-31: SECURITY -- API key pasted in plaintext in chat, flagged for rotation
+- A live VNSTOCK_API_KEY was pasted directly in a chat message during this
+  session. Per this project's standing rule (credentials sourced exclusively
+  from .env, never in plaintext), this key must be treated as compromised
+  and rotated before further use. This is at least the third such incident
+  recorded for this project (see claude-progress.md Session 3, 2026-08-11,
+  where two earlier keys were accidentally pasted and flagged for rotation).
+- Constraint: rotate the key, confirm the old one is revoked on vnstock's
+  side if their platform supports revocation, and re-export the new key
+  via .env only -- never re-paste a key in any chat/session transcript
+  going forward, including this one.
+
+## 2026-08-31: F003 "confirmed full article body" claim retracted
+- Reason: F003's original 2026-08-13 evidence (feature_list.json, and
+  vnstock_news.py's module docstring) claims news_full_content returns
+  "full article body" for Company(source='VCI', symbol=symbol).news().
+  This was re-tested live 2026-08-31 across 4 symbols (FPT, VIC, VNM,
+  HPG; 68 total rows) via scratch/diagnose_f003_body_gap.py and
+  scratch/diagnose_f003_category_breakdown.py: 100% of rows returned
+  content=None, summary=None, category=None. There is no article/
+  disclosure category split in the live response -- Company.news()
+  currently functions purely as a corporate disclosure/announcement
+  headline feed, not a source of article body text, for every symbol
+  tested.
+- The original 2026-08-13 claim was evidently verified against an
+  unrepresentative sample (a real news article that happened to have
+  body content, not the disclosure-notice type that appears to dominate
+  the endpoint's current output) -- this is not a fabrication, but it
+  was not re-tested broadly enough before being written into
+  feature_list.json as confirmed fact.
+- Decision: F003's evidence field and vnstock_news.py's docstring should
+  be corrected to reflect that body text is NOT reliably available from
+  this endpoint as currently observed, rather than presenting
+  news_full_content as a confirmed working field. The existing
+  normalize_news() code is NOT a bug -- it correctly passes through
+  whatever the API returns (real None -> literal "None" string) and
+  correctly falls back to a synthetic URI when the real URL is also
+  missing. No code fix is needed; this is a documentation/evidence
+  correction plus a priority re-ranking.
+- Constraint: F004b (cafef.vn article body enrichment) is now the SOLE
+  confirmed viable path to article body text anywhere in this repository
+  for the sentiment-training-data goal. This elevates F004b above the
+  previously-discussed F002/F005/F006/F007 cafef-supplement candidates
+  in priority -- none of those address the actual current blocker
+  (zero body text in core.news across both sources), while F004b
+  directly does.
+- Open question, NOT resolved: whether Company.news() ever returns a
+  real news-article row type with body content for ANY symbol, or
+  whether this endpoint is disclosure-only across the whole universe.
+  Only 4 symbols were checked. If this matters later (e.g. F004b proves
+  harder than expected), a broader sample across the full 1,751-symbol
+  universe would be needed before concluding the endpoint is disclosure-
+  only in general, not just for these 4.
 
 ## 2026-08-31: F001 regression fix — is_delisted derived, exchange allowlist validation added
 - Fixes the two issues opened by the "F001 delisted-date gap REOPENED" entry
