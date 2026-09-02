@@ -23,7 +23,7 @@ def run_concurrently(
     con: duckdb.DuckDBPyConnection,
     dataset_name: str,
     symbols: list[str],
-    crawl_fn: Callable[[str], T],
+    crawl_fn: Callable[..., T],
     max_concurrency: int = 5,
     max_retry: int = 3,
     delay_between_requests_seconds: float = 0.0,

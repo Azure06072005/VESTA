@@ -54,6 +54,14 @@ def parse_article_body(html: str, url: str) -> dict:
     nav/footer/ads and silently corrupt training data.
     """
     soup = BeautifulSoup(html, "html.parser")
+    title = None
+    og_title = soup.find("meta", attrs={"property": "og:title"})
+    if og_title and og_title.get("content"):
+        title = str(og_title["content"]).strip()
+    if not title:
+        h1 = soup.find("h1")
+        if h1:
+            title = h1.get_text(strip=True)
 
     published_at = None
     meta_tag = soup.find("meta", attrs={"property": "article:published_time"})
@@ -75,4 +83,4 @@ def parse_article_body(html: str, url: str) -> dict:
     if not body_text:
         raise ValueError(f"Body container found but contained no paragraph text for {url!r}.")
 
-    return {"published_at": published_at, "body": body_text}
+    return {"title": title, "published_at": published_at, "body": body_text}

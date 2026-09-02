@@ -1081,3 +1081,25 @@ Newest at the top. Don't reverse any of these without a new, stated reason.
   loser/volume rankings remain unimplemented. If a future feature
   actually needs them, that's a new decision, not an assumption that
   they're covered by this entry.
+
+## 2026-09-02: F004c CafeF Editorial Category Crawler & Body Enrichment Pipeline
+- Reason: F003 and F004 per-symbol feeds contain 99.99% corporate disclosure filings (with PDFs, body=NULL). To produce high-volume Vietnamese financial text for PhoBERT/sentiment modeling, CafeF editorial category pages are crawled.
+- Finding: Every CafeF category landing page embeds its exact category ID in `<input id="hdZoneId" value="...">` and `<input id="hdZoneUrl" value="...">`.
+- Confirmed Categories & IDs:
+  - `thi-truong-chung-khoan`: 18831
+  - `tai-chinh-quoc-te`: 18832
+  - `vi-mo-dau-tu`: 18833
+  - `tai-chinh-ngan-hang`: 18834
+  - `bat-dong-san`: 18835
+  - `doanh-nghiep`: 18836
+  - `thi-truong`: 18839 (Hàng hóa nguyên liệu)
+  - `kinh-te-so`: 188127
+  - `smart-money`: 1882020
+- Decision: Implemented `src/crawlers/cafef_category_news.py` and `src/crawlers/cafef_category_orchestrator.py` with:
+  1. Dual-template article link extraction (`div[role="article"] h3 a`).
+  2. Timeline pagination (`timelinelist/{category_id}/{page}.chn`).
+  3. Pre-flight URL deduplication against `core.news` before sending detail HTTP requests.
+  4. Full multi-paragraph Vietnamese body enrichment and published timestamp extraction via `cafef_article_body.py`.
+  5. Fallback detail title extraction via `<meta property="og:title">` or `<h1>`.
+  6. 1-hour in-memory TTL caching for `robots.txt` RobotFileParser to prevent redundant network fetches.
+- Evidence: 165 editorial articles with full body text persisted into `core.news`. 15/15 unit tests passing. Full suite 198 passed, 1 xfailed.

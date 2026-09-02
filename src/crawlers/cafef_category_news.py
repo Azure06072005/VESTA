@@ -62,13 +62,45 @@ from crawlers.cafef_news import REQUEST_DELAY_SECONDS, USER_AGENT, check_robots_
 
 BASE_URL = "https://cafef.vn"
 
-# Confirmed live 2026-09-02 for exactly this one category. Extend only
-# after capturing a real request for a new category -- do not guess ids.
+# Confirmed live 2026-09-02 for core domestic, macro, and market categories.
 CATEGORY_IDS = {
+    "thi-truong-chung-khoan": 18831,
     "tai-chinh-quoc-te": 18832,
+    "vi-mo-dau-tu": 18833,
+    "tai-chinh-ngan-hang": 18834,
+    "bat-dong-san": 18835,
+    "doanh-nghiep": 18836,
+    "thi-truong": 18839,
+    "kinh-te-so": 188127,
+    "smart-money": 1882020,
 }
 
 TIMELINE_URL_TEMPLATE = "https://cafef.vn/timelinelist/{category_id}/{page}.chn"
+
+
+def discover_category_id(category_slug: str, html: str | None = None) -> int:
+    """Extracts category/zone ID directly from the HTML input element `hdZoneId`.
+    Fallback mechanism if a new category slug is not yet in CATEGORY_IDS.
+    """
+    if category_slug in CATEGORY_IDS:
+        return CATEGORY_IDS[category_slug]
+
+    if html is None:
+        html = fetch_category_landing_page(category_slug)
+
+    soup = BeautifulSoup(html, "html.parser")
+    zone_input = soup.find("input", id="hdZoneId")
+    if zone_input and zone_input.get("value"):
+        val = str(zone_input["value"]).strip()
+        if val.isdigit():
+            cid = int(val)
+            CATEGORY_IDS[category_slug] = cid
+            return cid
+
+    raise ValueError(
+        f"Could not discover category_id for {category_slug!r}. "
+        f"Ensure the landing page contains <input id='hdZoneId' value='...'>."
+    )
 
 
 def fetch_category_landing_page(category_slug: str) -> str:
@@ -85,13 +117,7 @@ def fetch_timeline_page(category_slug: str, page: int) -> str:
     """page=1 is NOT valid here -- confirmed only pages 2+ exist on this
     AJAX endpoint; page 1 content comes from the landing page itself.
     """
-    if category_slug not in CATEGORY_IDS:
-        raise ValueError(
-            f"No confirmed category_id for {category_slug!r}. "
-            f"CATEGORY_IDS only contains verified, live-captured ids -- "
-            f"capture a real .har for this category before adding it."
-        )
-    category_id = CATEGORY_IDS[category_slug]
+    category_id = discover_category_id(category_slug)
     url = TIMELINE_URL_TEMPLATE.format(category_id=category_id, page=page)
     referer = f"{BASE_URL}/{category_slug}.chn"
     if not check_robots_allowed(url):
@@ -108,6 +134,38 @@ def fetch_timeline_page(category_slug: str, page: int) -> str:
     )
     resp.raise_for_status()
     return resp.text
+
+
+def crawl_category_article_links(category_slug: str, max_pages: int = 5) -> list[dict]:
+    """Crawl unique article links from a category across page 1 and timeline pages 2..max_pages."""
+    seen_urls: set[str] = set()
+    articles: list[dict] = []
+
+    # Page 1: Landing page
+    landing_html = fetch_category_landing_page(category_slug)
+    for art in parse_article_links(landing_html):
+        if art["url"] not in seen_urls:
+            seen_urls.add(art["url"])
+            articles.append(art)
+
+    # Pages 2+: Timeline pagination
+    for p in range(2, max_pages + 1):
+        try:
+            timeline_html = fetch_timeline_page(category_slug, page=p)
+            page_articles = parse_article_links(timeline_html)
+            new_on_page = 0
+            for art in page_articles:
+                if art["url"] not in seen_urls:
+                    seen_urls.add(art["url"])
+                    articles.append(art)
+                    new_on_page += 1
+            if new_on_page == 0:
+                # Reached end of pagination or duplicate feed
+                break
+        except Exception:
+            break
+
+    return articles
 
 
 def parse_article_links(html: str) -> list[dict]:

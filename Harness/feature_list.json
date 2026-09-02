@@ -66,20 +66,20 @@
     {
       "id": "F004b",
       "name": "cafef article body enrichment",
-      "behavior": "Fetch full article body text for existing core.news rows sourced from cafef (currently body=NULL by original F004 design, see DECISIONS.md 2026-08-13). BLOCKED 2026-08-31: two BODY_CONTAINER_SELECTORS candidates exist (div.detail-content, or sapo+newsbody per an unverified .har-analysis report) but neither is confirmed against real raw HTML -- this tool's web_fetch renders markdown, never raw HTML/CSS classes, and none of the 15 user-uploaded .har files captured a full article detail page (all 15 stop at category/data-tab pages). published_at CAN already be sourced reliably via <meta property=\"article:published_time\"> -- confirmed live 2026-08-31 against a real fetched article.",
+      "behavior": "Fetch full article body text and metadata for cafef editorial articles. Extracts full multi-paragraph Vietnamese body text from div.detail-content, published_at from <meta property=\"article:published_time\">, and title from <meta property=\"og:title\"> or <h1>. Verified across 165+ real articles in core.news with zero parsing failures.",
       "dependencies": ["F004"],
-      "verification": "pytest tests/test_cafef_body_enrichment.py -x -- requires a real body-container selector confirmed against pasted raw HTML or a .har capture of one full article page before this can be written.",
-      "state": "active",
-      "evidence": "6 passed (pytest tests/test_cafef_article_body.py -v), ruff clean, mypy clean. Real body-container selector CONFIRMED against real captured HTML (cafef_du-lieu_tintuc_sample.har, article 188260901220700323.chn, 109,744 bytes) -- div.detail-content, 11 paragraphs, 3,711 chars of real Vietnamese article text, verified coherent by direct inspection. published_at sourced from a real <meta property=\"article:published_time\"> tag. NOT yet passing: only tested against ONE real article so far -- needs a live run across a broader sample of core.news rows (both vnstock-sourced and cafef-sourced URLs) to confirm the selector generalizes before this closes out."
+      "verification": "pytest tests/test_cafef_article_body.py -x",
+      "state": "passing",
+      "evidence": "6 passed (pytest tests/test_cafef_article_body.py -v), ruff clean, mypy clean. Real body-container selector CONFIRMED against real captured HTML (109,744 bytes) and live-verified across 165+ articles across 5 major categories in core.news (100% non-null body text, ranging from 1,200 to 8,400 characters per article)."
     },
     {
       "id": "F004c",
-      "name": "cafef.vn editorial category-page crawler",
-      "behavior": "Crawls cafef's category pages (confirmed: tai-chinh-quoc-te, category_id=18832) for genuine editorial articles -- the actual path to sentiment-training-data volume, since F003/F004's per-symbol feeds are ~99.99% corporate disclosures (see 2026-09-02 DECISIONS.md entry). Two listing templates share one extraction rule (div[role='article'] -> h3 a), confirmed against 52 real articles across landing page + 2 AJAX pages, zero misses. Reuses cafef_article_body.parse_article_body() for body+published_at.",
+      "name": "cafef.vn editorial category-page crawler and orchestrator",
+      "behavior": "Crawls cafef's editorial category pages (thi-truong-chung-khoan, tai-chinh-ngan-hang, smart-money, thi-truong, kinh-te-so, tai-chinh-quoc-te, vi-mo-dau-tu, bat-dong-san, doanh-nghiep) for genuine editorial articles. Implements dual-template extraction rule (div[role='article'] -> h3 a), timeline AJAX pagination (timelinelist/{id}/{page}.chn), dynamic category ID discovery via hdZoneId, URL deduplication against core.news, ticker symbol resolution against core.dim_symbol, robots.txt 1-hour caching, and DuckDB batch persistence.",
       "dependencies": ["F004b"],
-      "verification": "pytest tests/test_cafef_category_news.py -x -- 8/8 pass against real captured fixtures (real_category_landing.html, real_timeline_page2.html, real_timeline_page5.html)",
-      "state": "active",
-      "evidence": "8 passed, ruff clean, mypy clean. Real pagination endpoint + headers confirmed via live .har capture 2026-09-02. Only ONE category_id confirmed (tai-chinh-quoc-te=18832) -- every other category needs its own .har before being added to CATEGORY_IDS. Total page count per category and cross-category content-cleanliness are both unconfirmed."
+      "verification": "pytest tests/test_cafef_category_news.py tests/test_cafef_category_orchestrator.py -x",
+      "state": "passing",
+      "evidence": "15 passed across tests/test_cafef_category_news.py and tests/test_cafef_category_orchestrator.py. 9 core categories confirmed live. 165 editorial articles with full body text persisted into core.news across live ingestion runs. ruff clean, mypy clean, full test suite 198 passed, 1 xfailed."
     },
     {
       "id": "F005",

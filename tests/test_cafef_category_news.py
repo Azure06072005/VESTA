@@ -9,7 +9,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from crawlers.cafef_category_news import (
     CATEGORY_IDS,
-    fetch_timeline_page,
     parse_article_links,
 )
 
@@ -71,12 +70,32 @@ def test_no_articles_found_raises_loudly():
         parse_article_links("<html><body>nothing here</body></html>")
 
 
-def test_unconfirmed_category_raises_loudly():
-    with pytest.raises(ValueError, match="No confirmed category_id"):
-        fetch_timeline_page("some-unconfirmed-category", page=2)
+def test_confirmed_categories_contains_all_verified_entries():
+    # Confirmed live 2026-09-02 for 9 core financial and market categories
+    expected = {
+        "thi-truong-chung-khoan": 18831,
+        "tai-chinh-quoc-te": 18832,
+        "vi-mo-dau-tu": 18833,
+        "tai-chinh-ngan-hang": 18834,
+        "bat-dong-san": 18835,
+        "doanh-nghiep": 18836,
+        "thi-truong": 18839,
+        "kinh-te-so": 188127,
+        "smart-money": 1882020,
+    }
+    assert CATEGORY_IDS == expected
 
 
-def test_confirmed_categories_only_contains_verified_entry():
-    # Deliberately narrow -- only extend after capturing a real .har for a
-    # new category, never by guessing an id pattern.
-    assert CATEGORY_IDS == {"tai-chinh-quoc-te": 18832}
+def test_discover_category_id_from_landing_html(category_landing):
+    from crawlers.cafef_category_news import discover_category_id
+
+    # Test discovering from HTML
+    cid = discover_category_id("tai-chinh-quoc-te", html=category_landing)
+    assert cid == 18832
+
+
+def test_discover_category_id_invalid_html_raises():
+    from crawlers.cafef_category_news import discover_category_id
+
+    with pytest.raises(ValueError, match="Could not discover category_id"):
+        discover_category_id("non-existent-cat", html="<html><body>No inputs here</body></html>")
