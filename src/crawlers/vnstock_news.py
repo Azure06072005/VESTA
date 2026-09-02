@@ -1,5 +1,34 @@
 """F003: vnstock News crawler.
 
+BODY-AVAILABILITY CLAIM RETRACTED (2026-09-02): the "full article body"
+claim below is WRONG as currently observed. Re-tested live across 4
+symbols (FPT, VIC, VNM, HPG; 68 rows total, scratch/diagnose_f003_body_gap.py
++ diagnose_f003_category_breakdown.py): content/summary/category are None
+for 100% of rows. Company.news() currently functions as a corporate
+disclosure/announcement headline feed (e.g. "FPT: Thông báo về việc giao
+dịch chứng khoán thay đổi đăng ký niêm yết"), not an article-body source,
+for every symbol tested. This is not a code bug -- normalize_news()
+correctly passes through whatever the API returns. The original
+2026-08-13 claim was evidently verified against an unrepresentative
+sample (a real article that happened to have body content), not
+re-tested broadly before being written up as confirmed fact. See
+DECISIONS.md 2026-08-31 and 2026-09-02 entries.
+
+SCHEMA ALSO DRIFTED (2026-09-02): a fresh live fetch_raw() call today
+returns columns ['id', 'symbol', 'title', 'summary', 'content',
+'publish_time', 'source', 'url', 'category', 'image_url'] -- NOT the
+news_title/news_full_content/news_source_link/public_date names confirmed
+2026-08-13 below. This is the same vnstock_data version-drift pattern
+already found and documented for F001/dim_symbol.py (3.2.7 documented vs
+3.2.2 actually installed) -- not a bug here either, since BODY_ALIASES/
+URL_ALIASES already resolve both the old and new column names correctly
+(confirmed: _find_column resolved body_col='content', url_col='url'
+against today's live response without any code change needed). Kept as a
+documented fact for the next person who sees a column-name mismatch and
+wonders if something broke.
+
+--- Original 2026-08-13 docstring (STALE on both counts above, kept for
+history) ---
 Confirmed live against vnstock==4.0.5 (2026-08-13, real discovery output
 pasted by Tran Dieu): `Company(source='VCI', symbol=symbol).news()`
 returns 21 columns for FPT, 50 rows. CONFIRMED SCHEMA (replaces the

@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import datetime as dt
 import json
+import re
 from typing import Any
 
 import pandas as pd
@@ -69,40 +70,65 @@ FOREIGN_FUND_SYMBOLS = {
     "VCVNI", "VCVNL", "VCVOF", "VINACAP", "VNMETF", "WASATCH",
 }
 
+# Confirmed 2026-09-02: exactly 9 real market-index "symbols" (VNINDEX,
+# VN30INDEX, etc.) exist in the directory, verifiable by a distinctive
+# RedirectUrl pattern unique to index history pages -- not equities.
+INDEX_URL_MARKER = "lich-su-giao-dich-symbol-"
 
-def _instrument_type(symbol: str, org_name: str) -> str:
+# Confirmed 2026-09-02: covered warrants normally have a "Chứng quyền..."
+# title, but 2 real entries (CMSN2101, CVPB2314) have a blank or
+# self-referential title instead, missing that marker. Their symbol shape
+# (C + 2-4 letters + 4 digits) matches 131 OTHER already-confirmed
+# "Chứng quyền"-titled warrants out of 133 total matches -- a reliable
+# secondary signal for exactly this fallback case, not a broad heuristic
+# (it is only applied when the title itself gives no other signal).
+WARRANT_CODE_PATTERN = re.compile(r"^C[A-Z]{2,4}\d{4}$")
+
+
+def _is_blank_title(name: str) -> bool:
+    """Confirmed 2026-09-02: 5 directory entries have a title that is
+    literally the two-character string "''" (a placeholder artifact in
+    cafef's own data), not a truly empty string -- a plain `not name`
+    check misses these. Checked explicitly rather than assumed.
+    """
+    return name == "" or name in ("''", '""')
+
+
+def _instrument_type(symbol: str, org_name: str, redirect_url: str) -> str:
     """cafef's directory mixes real equities with covered warrants, bonds,
-    Vietnamese-domiciled funds/ETFs, and foreign-domiciled investment
-    funds -- not just OTC/HOSE/HNX/UPCOM equities:
-    - 142 covered warrants (confirmed 2026-08-31, org_name "Chứng quyền",
-      all CenterId=1/HOSE).
-    - 79 bonds (confirmed 2026-08-31, org_name "Trái phiếu"/"Trái Phiếu",
-      CenterId 1 [HOSE, n=1] and 2 [HNX, n=78], never OTC/UPCOM).
-    - 28 Vietnamese funds/ETFs (org_name starting "Quỹ" or "Chứng chỉ quỹ").
-    - 18 foreign-domiciled investment funds/vehicles (confirmed 2026-08-31
-      via FOREIGN_FUND_SYMBOLS, all CenterId=8/OTC) -- e.g. Dragon Capital,
-      VinaCapital, JPMorgan Vietnam Opportunities Fund, GIC/Government of
-      Singapore. These do not share a reliable name pattern with each
-      other or with real equities (many real equities legitimately use
-      "Capital" in their name, e.g. "Bamboo Capital", "Create Capital Việt
-      Nam") -- a keyword heuristic here would misclassify real companies,
-      so an explicit verified symbol list is used instead.
+    Vietnamese-domiciled funds/ETFs, foreign-domiciled investment funds,
+    market indices, and a small number of blank/uninformative-title
+    entries -- not just OTC/HOSE/HNX/UPCOM equities:
+    - 142 covered warrants (org_name "Chứng quyền", all CenterId=1/HOSE)
+      PLUS 2 more caught by WARRANT_CODE_PATTERN with a blank/
+      self-referential title instead of the normal prefix (CMSN2101,
+      CVPB2314) -- confirmed 2026-09-02.
+    - 79 bonds (org_name "Trái phiếu"/"Trái Phiếu").
+    - 46 funds/ETFs (28 Vietnamese-prefixed + 18 confirmed foreign via
+      FOREIGN_FUND_SYMBOLS).
+    - 9 market indices (confirmed 2026-09-02 via INDEX_URL_MARKER, a
+      RedirectUrl pattern unique to index history pages -- NOT
+      self-referential title alone, since JACCAR is a REAL OTC equity
+      [Jaccar Holdings] whose real company name happens to equal its
+      ticker; title==symbol alone is not a reliable non-equity signal).
+    - A handful of entries (confirmed 2026-09-02: CDICThanhBinh, DATC,
+      HIEU, HUD3) have a blank/placeholder title and match none of the
+      above rules -- classified 'unknown' rather than guessed as equity,
+      per the "encode gaps honestly" convention. Do NOT assume these are
+      safe equities; a human should look them up individually if they
+      matter for a specific downstream use.
 
-    IMPORTANT, confirmed by direct inspection: a naive substring check for
-    "quỹ" anywhere in the name is WRONG -- 47 real equities (asset-
-    management companies, e.g. "Công ty Cổ phần Quản lý quỹ AIC") legitimately
-    mention "quỹ" in their name without being fund instruments themselves.
-    Only a startswith("Quỹ") or startswith("Chứng chỉ quỹ") match is a real
-    Vietnamese fund instrument; anything else containing "quỹ" is a real
-    equity.
-
-    None of covered_warrant/bond/fund would ever appear in vnstock's
-    Reference.equity.list() -- treating any of them as a "missing equity"
-    gap is a false positive. Flagged, not dropped, per the
-    raw-payload-preserving convention.
+    None of covered_warrant/bond/fund/index would ever appear in
+    vnstock's Reference.equity.list() -- treating any of them as a
+    "missing equity" gap is a false positive. Flagged, not dropped, per
+    the raw-payload-preserving convention.
     """
     name = org_name.strip()
-    if symbol.strip().upper() in FOREIGN_FUND_SYMBOLS:
+    sym = symbol.strip().upper()
+
+    if INDEX_URL_MARKER in redirect_url:
+        return "index"
+    if sym in FOREIGN_FUND_SYMBOLS:
         return "fund"
     if name.startswith("Chứng quyền"):
         return "covered_warrant"
@@ -110,6 +136,13 @@ def _instrument_type(symbol: str, org_name: str) -> str:
         return "fund"
     if name.lower().startswith("trái phiếu"):
         return "bond"
+    if WARRANT_CODE_PATTERN.match(sym) and (_is_blank_title(name) or name.upper() == sym):
+        # Only reached when the title gave no positive signal at all --
+        # a blank/placeholder or self-referential title on a
+        # warrant-shaped symbol.
+        return "covered_warrant"
+    if _is_blank_title(name):
+        return "unknown"
     return "equity"
 
 
@@ -142,7 +175,9 @@ def parse_directory(raw_entries: list[dict[str, Any]]) -> pd.DataFrame:
                 "org_name": entry["Title"].strip(),
                 "exchange": CENTER_ID_TO_EXCHANGE[center_id],
                 "center_id": center_id,
-                "instrument_type": _instrument_type(entry["Symbol"], entry["Title"]),
+                "instrument_type": _instrument_type(
+                    entry["Symbol"], entry["Title"], entry["RedirectUrl"]
+                ),
                 "is_vn30": bool(entry["IsVn30"]),
                 "is_hnx30": bool(entry["IsHnx30"]),
                 "slug_base": _slug_base(entry["RedirectUrl"]),

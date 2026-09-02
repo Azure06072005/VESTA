@@ -148,14 +148,13 @@ def test_real_directory_otc_gap_is_the_documented_777(real_directory):
     df = parse_directory(real_directory)
     otc_symbols = set(df[df["exchange"] == "OTC"]["symbol"])
     assert len(otc_symbols) == 777
-    # FIXED 2026-08-31: find_otc_only_symbols() now filters to
-    # instrument_type=='equity'. Of the 777 raw OTC entries, 20 are funds
-    # (18 confirmed foreign funds + 2 Vietnamese "Quỹ..."-prefixed funds
-    # that also happen to be OTC-listed) -- confirmed by direct
-    # inspection, not assumed. The real OTC-equity gap is 757, not 777.
+    # FIXED 2026-09-02: find_otc_only_symbols() also excludes 'index' and
+    # 'unknown' instrument types now. Of the 777 raw OTC entries: 20 are
+    # funds, 2 are 'unknown' (CDICTHANHBINH, HUD3 -- blank titles, not
+    # safely assumed to be equities). Real OTC-equity gap: 755.
     fake_vnstock_symbols = set(df[df["exchange"] != "OTC"]["symbol"])
     gap = find_otc_only_symbols(df, fake_vnstock_symbols)
-    assert len(gap) == 757
+    assert len(gap) == 755
 
 
 def test_covered_warrants_flagged_not_equity():
@@ -171,7 +170,9 @@ def test_covered_warrants_flagged_not_equity():
 def test_real_directory_warrant_count_confirmed(real_directory):
     df = parse_directory(real_directory)
     warrants = df[df["instrument_type"] == "covered_warrant"]
-    assert len(warrants) == 142
+    # 142 with a "Chứng quyền" title + 2 with blank/self-referential title
+    # but a matching warrant-code symbol shape (CMSN2101, CVPB2314) = 144
+    assert len(warrants) == 144
     assert set(warrants["exchange"].unique()) == {"HOSE"}
 
 
@@ -241,8 +242,80 @@ def test_etf_prefix_classified_correctly():
 def test_real_directory_equity_count_after_exclusions(real_directory):
     df = parse_directory(real_directory)
     equities = df[df["instrument_type"] == "equity"]
-    # 3016 total - 142 warrants - 79 bonds - 46 funds = 2749
-    assert len(equities) == 2749
+    # 3016 total - 144 warrants - 79 bonds - 46 funds - 9 indices - 4 unknown
+    assert len(equities) == 2734
+
+
+def test_real_directory_index_count_confirmed(real_directory):
+    df = parse_directory(real_directory)
+    indices = df[df["instrument_type"] == "index"]
+    assert len(indices) == 9
+    assert set(indices["symbol"]) == {
+        "VNINDEX", "VN30INDEX", "VN100-INDEX", "VNSML-INDEX", "VNALL-INDEX",
+        "VNMID-INDEX", "HNX-INDEX", "HNX30-INDEX", "UPCOM-INDEX",
+    }
+
+
+def test_self_referential_title_is_not_automatically_non_equity():
+    """The specific false-positive this guards against: JACCAR (Jaccar
+    Holdings, a real OTC company) has a title equal to its own symbol --
+    this must NOT be treated as junk just because title==symbol.
+    """
+    entry = dict(SAMPLE_VIC_ENTRY, Symbol="JACCAR", Title="Jaccar", CenterId=8)
+    df = parse_directory([entry])
+    assert df.iloc[0]["instrument_type"] == "equity"
+
+
+def test_index_detected_by_url_not_by_title():
+    entry = dict(
+        SAMPLE_VIC_ENTRY,
+        Symbol="VNINDEX",
+        Title="VNINDEX",
+        RedirectUrl="/du-lieu/lich-su-giao-dich-symbol-vnindex/trang-1-0-tab-1.chn",
+    )
+    df = parse_directory([entry])
+    assert df.iloc[0]["instrument_type"] == "index"
+
+
+def test_warrant_code_pattern_catches_blank_title_warrant():
+    """CMSN2101's title is the literal string "''" (a placeholder
+    artifact), not a real title -- confirmed real case, not synthetic.
+    """
+    entry = dict(
+        SAMPLE_VIC_ENTRY,
+        Symbol="CMSN2101",
+        Title="''",
+        RedirectUrl="/du-lieu/hose/cmsn2101-.chn",
+    )
+    df = parse_directory([entry])
+    assert df.iloc[0]["instrument_type"] == "covered_warrant"
+
+
+def test_warrant_code_pattern_catches_self_referential_title_warrant():
+    entry = dict(
+        SAMPLE_VIC_ENTRY,
+        Symbol="CVPB2314",
+        Title="CVPB2314",
+        RedirectUrl="/du-lieu/hose/cvpb2314-cvpb2314.chn",
+    )
+    df = parse_directory([entry])
+    assert df.iloc[0]["instrument_type"] == "covered_warrant"
+
+
+def test_blank_title_not_matching_any_pattern_is_unknown_not_equity():
+    """The specific honesty check: a blank title that doesn't match the
+    warrant-code pattern must be 'unknown', never silently assumed to be
+    a safe equity.
+    """
+    entry = dict(SAMPLE_VIC_ENTRY, Symbol="HUD3", Title="''", CenterId=8)
+    df = parse_directory([entry])
+    assert df.iloc[0]["instrument_type"] == "unknown"
+
+
+def test_real_directory_unknown_count_confirmed(real_directory):
+    df = parse_directory(real_directory)
+    unknown = df[df["instrument_type"] == "unknown"]
+    assert set(unknown["symbol"]) == {"CDICTHANHBINH", "DATC", "HIEU", "HUD3"}
 
 
 def test_find_otc_only_symbols_excludes_foreign_funds():
