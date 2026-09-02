@@ -67,15 +67,27 @@ PARSE_DATE_PATTERN = re.compile(r"(\d{2}/\d{2}/\d{4})\s+(\d{1,2}:\d{2})")
 NEWS_COLUMNS = ["symbol", "source", "published_at", "available_at", "headline", "body", "source_url", "fetched_at"]
 
 
+_ROBOTS_PARSER: urllib.robotparser.RobotFileParser | None = None
+_ROBOTS_FETCHED_AT: dt.datetime | None = None
+
+
+def get_robots_parser() -> urllib.robotparser.RobotFileParser:
+    global _ROBOTS_PARSER, _ROBOTS_FETCHED_AT
+    now = dt.datetime.now(dt.timezone.utc)
+    if _ROBOTS_PARSER is None or _ROBOTS_FETCHED_AT is None or (now - _ROBOTS_FETCHED_AT).total_seconds() > 3600:
+        parser = urllib.robotparser.RobotFileParser()
+        parser.set_url(ROBOTS_URL)
+        parser.read()
+        _ROBOTS_PARSER = parser
+        _ROBOTS_FETCHED_AT = now
+    return _ROBOTS_PARSER
+
+
 def check_robots_allowed(url: str) -> bool:
     """Explicit robots.txt check, per F004's spec ('robots.txt-disallowed
-    path raises rather than silently fetching') -- checked at runtime,
-    not hardcoded from the 2026-08-13 research finding, since robots.txt
-    can change.
+    path raises rather than silently fetching') -- cached with 1-hour TTL.
     """
-    parser = urllib.robotparser.RobotFileParser()
-    parser.set_url(ROBOTS_URL)
-    parser.read()
+    parser = get_robots_parser()
     return parser.can_fetch(USER_AGENT, url)
 
 
