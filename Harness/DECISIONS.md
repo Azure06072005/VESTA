@@ -32,15 +32,16 @@ Newest at the top. Don't reverse any of these without a new, stated reason.
   passing tests are not sufficient evidence when the test suite has a
   blind spot at exactly the failure mode that matters.
 - Decision: ALL 38,982 rows from this crawl (source='cafef', body IS NOT
-  NULL, fetched_at >= 2026-09-02 12:00:00) are targeted for deletion --
-  full purge, no partial salvage, given the negligible and still-contaminated
-  salvage set. This retracts the 2026-09-03 "F004c 100% complete and passing"
-  entry in full -- that claim was wrong and should not be treated as
-  historical fact.
-- Status: PENDING DELETION. Purge command (`--purge-all`) is blocked by an
-  IDE read lock (PID 8564). The 38,982 rows remain physically in core.news
-  until the IDE releases the file handle, at which point the deletion must
-  be executed and the resulting row count pasted and verified.
+  NULL, fetched_at >= 2026-09-02 12:00:00) were purged -- full purge, no
+  partial salvage, given the negligible and still-contaminated salvage set.
+  This retracts the 2026-09-03 "F004c 100% complete and passing" entry in full
+  -- that claim was wrong and should not be treated as historical fact.
+- Status: CONFIRMED DELETED (2026-09-03). Purge executed via
+  scratch/audit_and_salvage_category_symbols.py --purge-all after IDE file
+  lock released. Verified stdout:
+  `[PURGE COMPLETE] Rows before: 700,502 | Rows after: 661,520 | Deleted: 38,982`
+  Database baseline cleanly restored to 661,520 rows (587,957 cafef corporate
+  filings + 73,563 vnstock rows; 0 contaminated category rows remaining).
 - Constraint: extract_symbol() must be redesigned before any re-crawl:
   (a) no bare-word tier against the full symbol universe, (b) no silent
   VNINDEX/placeholder fallback -- an article with no confidently-matched
