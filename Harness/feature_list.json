@@ -75,11 +75,11 @@
     {
       "id": "F004c",
       "name": "cafef.vn editorial category-page crawler and orchestrator",
-      "behavior": "Crawls cafef's editorial category pages (thi-truong-chung-khoan, tai-chinh-ngan-hang, smart-money, thi-truong, kinh-te-so, tai-chinh-quoc-te, vi-mo-dau-tu, bat-dong-san, doanh-nghiep) for genuine editorial articles. Implements dual-template extraction rule (div[role='article'] -> h3 a), timeline AJAX pagination (timelinelist/{id}/{page}.chn), dynamic category ID discovery via hdZoneId, URL deduplication against core.news, ticker symbol resolution against core.dim_symbol, robots.txt 1-hour caching, and DuckDB batch persistence.",
+      "behavior": "Crawls cafef's editorial category pages (thi-truong-chung-khoan, tai-chinh-ngan-hang, smart-money, thi-truong, kinh-te-so, tai-chinh-quoc-te, vi-mo-dau-tu, bat-dong-san, doanh-nghiep) for genuine editorial articles. Implements dual-template extraction rule (div[role='article'] -> h3 a), timeline AJAX pagination (timelinelist/{id}/{page}.chn), URL deduplication against core.news, and DuckDB batch persistence. RE-DESIGN REQUIRED: extract_symbol() bare-word matching caused severe false-positive attribution (e.g. TP.HCM -> HCM, CEO -> CEO); 38,982 contaminated rows purged on 2026-09-03. Category IDs for 8 categories were discovered via hdZoneId, not .har captures.",
       "dependencies": ["F004b"],
       "verification": "pytest tests/test_cafef_category_news.py tests/test_cafef_category_orchestrator.py -x",
-      "state": "passing",
-      "evidence": "15 passed across tests/test_cafef_category_news.py and tests/test_cafef_category_orchestrator.py. 9 core categories confirmed live. 165 editorial articles with full body text persisted into core.news across live ingestion runs. ruff clean, mypy clean, full test suite 198 passed, 1 xfailed."
+      "state": "active",
+      "evidence": "STATE REVERTED TO ACTIVE (2026-09-03). A 38,982-row crawl was purged from core.news following an audit finding ~97% false-positive symbol attribution (bare-word regex matching common acronyms like HCM, CEO, USD, TST, and defaulting 88% of articles to VNINDEX). 15 unit tests pass, but test suite had a blind spot lacking negative cases. Blocked on extract_symbol() redesign (negative test cases, no bare-word tier, no silent VNINDEX fallback) and independent verification of category IDs."
     },
     {
       "id": "F005",

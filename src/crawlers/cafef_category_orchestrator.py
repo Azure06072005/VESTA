@@ -135,7 +135,8 @@ def write_category_news(con: duckdb.DuckDBPyConnection, df: pd.DataFrame) -> int
     if df.empty:
         return 0
 
-    con.register("df_incoming", df)
+    df_clean = df.drop_duplicates(subset=["source_url"]).copy()
+    con.register("df_incoming", df_clean)
     row = con.execute("""
         SELECT COUNT(*) FROM df_incoming 
         WHERE source_url NOT IN (SELECT source_url FROM core.news)
@@ -146,7 +147,7 @@ def write_category_news(con: duckdb.DuckDBPyConnection, df: pd.DataFrame) -> int
         return 0
 
     insert_sql = """
-    INSERT INTO core.news (symbol, source, published_at, available_at, headline, body, source_url, fetched_at)
+    INSERT OR IGNORE INTO core.news (symbol, source, published_at, available_at, headline, body, source_url, fetched_at)
     SELECT symbol, source, published_at, available_at, headline, body, source_url, fetched_at
     FROM df_incoming
     WHERE source_url NOT IN (SELECT source_url FROM core.news)
@@ -164,19 +165,33 @@ def crawl_category_streaming(
     max_concurrency: int = 4,
 ) -> dict[str, int]:
     """Streams pages for a category, fetches bodies concurrently, and commits per page."""
+    import time
     total_discovered = 0
     total_written = 0
     consecutive_empty = 0
 
     for p in range(1, max_pages + 1):
+        html = None
+        for attempt in range(3):
+            try:
+                if p == 1:
+                    html = fetch_category_landing_page(cat)
+                else:
+                    html = fetch_timeline_page(cat, page=p)
+                break
+            except Exception as e:
+                if attempt == 2:
+                    logger.info(f"Category {cat}: page {p} failed after 3 attempts ({e}). Ending category.")
+                    break
+                time.sleep(1.0 * (attempt + 1))
+
+        if html is None:
+            break
+
         try:
-            if p == 1:
-                html = fetch_category_landing_page(cat)
-            else:
-                html = fetch_timeline_page(cat, page=p)
             articles = parse_article_links(html)
         except Exception as e:
-            logger.info(f"Category {cat}: page {p} hit terminal / error ({e}). Ending category.")
+            logger.info(f"Category {cat}: page {p} returned no parsable articles ({e}). Ending category.")
             break
 
         total_discovered += len(articles)
@@ -259,8 +274,8 @@ def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
     parser = argparse.ArgumentParser(description="CafeF Category News Crawler Orchestrator")
     parser.add_argument("--categories", nargs="+", default=list(CATEGORY_IDS.keys()), help="Categories to crawl")
-    parser.add_argument("--max-pages", type=int, default=100, help="Max pages per category")
-    parser.add_argument("--concurrency", type=int, default=4, help="Concurrent workers for body parsing")
+    parser.add_argument("--max-pages", type=int, default=500, help="Max pages per category")
+    parser.add_argument("--concurrency", type=int, default=2, help="Concurrent workers for body parsing")
     parser.add_argument("--db", default="db/vesta.duckdb", help="DuckDB path")
     args = parser.parse_args()
 

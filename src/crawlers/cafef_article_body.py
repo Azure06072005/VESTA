@@ -42,8 +42,19 @@ BODY_CONTAINER_CLASS = "detail-content"
 def fetch_article_html(url: str) -> str:
     if not check_robots_allowed(url):
         raise PermissionError(f"robots.txt disallows fetching {url}")
-    time.sleep(REQUEST_DELAY_SECONDS)
-    resp = requests.get(url, headers={"User-Agent": USER_AGENT}, timeout=15)
+    for attempt in range(2):
+        time.sleep(REQUEST_DELAY_SECONDS)
+        try:
+            resp = requests.get(url, headers={"User-Agent": USER_AGENT}, timeout=15)
+            if resp.status_code == 503 or "sorry?continue" in resp.url:
+                time.sleep(3.0 * (attempt + 1))
+                continue
+            resp.raise_for_status()
+            return resp.text
+        except Exception:
+            if attempt == 1:
+                raise
+            time.sleep(2.0)
     resp.raise_for_status()
     return resp.text
 
