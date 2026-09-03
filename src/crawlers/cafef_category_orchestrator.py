@@ -273,7 +273,7 @@ def run_category_orchestrator(
     categories: list[str] | None = None,
     max_pages: int = 50,
     db_path: str = "db/vesta.duckdb",
-    max_concurrency: int = 4,
+    max_concurrency: int = 1,
 ) -> dict[str, Any]:
     """Runs the streaming crawl & enrichment loop across requested categories."""
     if categories is None:
@@ -315,8 +315,8 @@ def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
     parser = argparse.ArgumentParser(description="CafeF Category News Crawler Orchestrator")
     parser.add_argument("--categories", nargs="+", default=list(CATEGORY_IDS.keys()), help="Categories to crawl")
-    parser.add_argument("--max-pages", type=int, default=500, help="Max pages per category")
-    parser.add_argument("--concurrency", type=int, default=2, help="Concurrent workers for body parsing")
+    parser.add_argument("--max-pages", type=int, default=50, help="Max pages per category")
+    parser.add_argument("--concurrency", type=int, default=1, help="Concurrent workers for body parsing")
     parser.add_argument("--db", default="db/vesta.duckdb", help="DuckDB path")
     args = parser.parse_args()
 
