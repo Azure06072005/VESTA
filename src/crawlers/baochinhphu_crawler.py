@@ -48,6 +48,15 @@ CATEGORY_SLUGS: dict[str, str] = {
     "kinh-te/kinh-doanh": "Kinh doanh & Doanh nghiệp",
 }
 
+# Confirmed zone IDs for high-speed, deep historical pagination (/timelinelist/{zoneId}/{page}.htm)
+CATEGORY_ZONE_IDS: dict[str, int] = {
+    "chi-dao-dieu-hanh": 102263,
+    "kinh-te": 1027,
+    "kinh-te/ngan-hang": 102445,
+    "kinh-te/chung-khoan": 1021064,
+    "kinh-te/kinh-doanh": 1021126,
+}
+
 # Regex to detect official doc numbers like 33/NQ-CP, 15/CT-TTg, 60/2024/NĐ-CP
 DOC_NUMBER_PATTERN = re.compile(
     r"\b(\d+(?:/[0-9]{4})?/(?:NQ|NĐ|QĐ|CT|TT|TB|CV)-(?:CP|TTg|NHNN|BCT|BTC|BXD|BKHĐT|HĐND|UBND))\b",
@@ -264,10 +273,14 @@ def crawl_category(
     """Crawls a single baochinhphu category up to max_pages."""
     total_discovered = 0
     total_written = 0
+    consecutive_empty = 0
+    zone_id = CATEGORY_ZONE_IDS.get(cat_slug)
 
     for page in range(1, max_pages + 1):
         if page == 1:
             cat_url = f"{BASE_URL}/{cat_slug}.htm"
+        elif zone_id:
+            cat_url = f"{BASE_URL}/timelinelist/{zone_id}/{page}.htm"
         else:
             cat_url = f"{BASE_URL}/{cat_slug}/trang-{page}.htm"
 
@@ -286,12 +299,21 @@ def crawl_category(
             break
 
         articles = parse_article_links(html)
+        if not articles:
+            logger.info(f"[{cat_slug}] Page {page} returned 0 articles. Reached end of category.")
+            break
+
         total_discovered += len(articles)
 
         new_articles = [a for a in articles if a["url"] not in existing_urls]
         if not new_articles:
-            logger.info(f"[{cat_slug}] Page {page}: 0 new articles. Continuing.")
+            consecutive_empty += 1
+            if consecutive_empty >= 5 and page >= 10:
+                logger.info(f"[{cat_slug}] 5 consecutive pages with 0 new articles at page {page}. Stopping.")
+                break
             continue
+        else:
+            consecutive_empty = 0
 
         records = []
         for art in new_articles:
