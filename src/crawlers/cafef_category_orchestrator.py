@@ -29,51 +29,77 @@ from etl import db
 
 logger = logging.getLogger(__name__)
 
-PREFIX_TICKER_PATTERN = re.compile(r"^([A-Z0-9]{3,4}):\s*")
-SLUG_TICKER_PATTERN = re.compile(r"/([A-Z0-9]{3,4})-\d+(?:/|\.chn|$)")
-WORD_TICKER_PATTERN = re.compile(r"\b([A-Z0-9]{3,4})\b")
+# Scoped (?i:...) applies case-insensitivity ONLY to the Vietnamese keywords.
+# ([A-Z0-9]{3,4}) is strictly uppercase ASCII.
+CO_PHIEU_PATTERN = re.compile(r"\b(?i:cổ\s+phiếu)\s+([A-Z0-9]{3,4})\b")
+MA_CHUNG_KHOAN_PATTERN = re.compile(r"\b(?i:mã\s+(?:chứng\s+khoán|CK))\s+([A-Z0-9]{3,4})\b")
+PARENTHESIS_MA_PATTERN = re.compile(r"\((?i:mã(?:\s+CK)?|CK):\s*([A-Z0-9]{3,4})\)")
+SLUG_TICKER_PATTERN = re.compile(r"^https?://cafef\.vn/([A-Z0-9]{3,4})-\d+/")
+
+# Known collisions with major foreign tickers/entities
+FOREIGN_TICKER_COLLISIONS = {"AMD", "CAT", "FOX", "AMP"}
+
+# Context words proving domestic equity context for colliding tickers
+DOMESTIC_CORROBORATING_KEYWORDS = (
+    "flc", "cà mau", "thủy sản", "fpt telecom", "viễn thông", "armephaco", "dược",
+    "hose", "hnx", "upcom", "niêm yết", "ctcp", "hđqt", "công ty cp", "chứng khoán",
+)
 
 
-def extract_symbol(title: str, url: str, valid_symbols: set[str]) -> str:
-    """Extracts stock symbol from title or URL slug if present in valid_symbols universe.
-    Falls back to 'VNINDEX' for broad market/macroeconomic editorial articles.
+def extract_symbol(
+    title: str,
+    url: str,
+    valid_symbols: set[str],
+    category_slug: str | None = None,
+) -> str | None:
+    """Extracts a Vietnamese stock symbol from title or URL slug with strict syntactic matching.
+    Returns None if no unambiguous match is found (fail-closed, no silent fallbacks).
     """
-    m_prefix = PREFIX_TICKER_PATTERN.match(title.strip())
-    if m_prefix:
-        sym = m_prefix.group(1).upper()
-        if sym in valid_symbols:
-            return sym
+    # Safeguard A: tai-chinh-quoc-te never contains domestic equity sentiment
+    if category_slug == "tai-chinh-quoc-te":
+        return None
 
+    candidate: str | None = None
+
+    # 1. Per-symbol URL landing slug check
     m_slug = SLUG_TICKER_PATTERN.search(url)
     if m_slug:
-        sym = m_slug.group(1).upper()
-        if sym in valid_symbols:
-            return sym
+        candidate = m_slug.group(1)
 
-    for word in WORD_TICKER_PATTERN.findall(title):
-        w = word.upper()
-        if w in valid_symbols and len(w) >= 3:
-            return w
+    # 2. Syntactic headline patterns
+    if not candidate:
+        for pat in (CO_PHIEU_PATTERN, MA_CHUNG_KHOAN_PATTERN, PARENTHESIS_MA_PATTERN):
+            m = pat.search(title)
+            if m:
+                candidate = m.group(1)
+                break
 
-    return "VNINDEX"
+    if not candidate:
+        return None
+
+    # Enforce uppercase ASCII and valid listed universe (core.dim_symbol)
+    if not (candidate.isupper() and candidate in valid_symbols):
+        return None
+
+    # Safeguard B: Disambiguate foreign ticker collisions
+    if candidate in FOREIGN_TICKER_COLLISIONS:
+        title_lower = title.lower()
+        if not any(kw in title_lower for kw in DOMESTIC_CORROBORATING_KEYWORDS):
+            return None  # Fail closed: treat as foreign or ambiguous
+
+    return candidate
 
 
 def load_valid_symbols(con: duckdb.DuckDBPyConnection) -> set[str]:
-    """Loads active symbols from core.dim_symbol and core.dim_symbol_cafef."""
-    symbols: set[str] = set()
+    """Loads listed stock symbols exclusively from core.dim_symbol (HOSE, HNX, UPCOM).
+    Excludes OTC/fund/unclassified entities from dim_symbol_cafef.
+    """
     try:
         rows = con.execute("SELECT DISTINCT symbol FROM core.dim_symbol").fetchall()
-        symbols.update(r[0] for r in rows if r[0])
+        return {r[0] for r in rows if r[0]}
     except Exception as e:
         logger.warning(f"Could not read core.dim_symbol: {e}")
-
-    try:
-        rows = con.execute("SELECT DISTINCT symbol FROM core.dim_symbol_cafef").fetchall()
-        symbols.update(r[0] for r in rows if r[0])
-    except Exception:
-        pass
-
-    return symbols
+        return set()
 
 
 def load_existing_source_urls(con: duckdb.DuckDBPyConnection) -> set[str]:
@@ -88,9 +114,18 @@ def load_existing_source_urls(con: duckdb.DuckDBPyConnection) -> set[str]:
 def enrich_article_record(
     article_link: dict[str, Any],
     valid_symbols: set[str],
+    category_slug: str | None = None,
 ) -> dict[str, Any] | None:
-    """Fetches HTML and parses article body & timestamp for a single article link."""
+    """Fetches HTML and parses article body & timestamp for a single article link.
+    Returns None if fetch fails or if no confident equity symbol is matched.
+    """
     url = article_link["url"]
+
+    headline = (article_link.get("title") or "").strip()
+
+    # Pre-check symbol extraction before expensive network HTML fetch
+    # (If headline has no matching symbol, we can also check parsed title after fetch if headline was empty)
+    symbol = extract_symbol(headline, url, valid_symbols, category_slug=category_slug)
 
     try:
         html = fetch_article_html(url)
@@ -99,9 +134,13 @@ def enrich_article_record(
         logger.warning(f"Failed to fetch/parse body for {url}: {e}")
         return None
 
-    headline = (article_link.get("title") or "").strip()
     if not headline and parsed.get("title"):
         headline = str(parsed["title"]).strip()
+        symbol = extract_symbol(headline, url, valid_symbols, category_slug=category_slug)
+
+    # Fail closed: never write a row without confident equity symbol match
+    if not symbol:
+        return None
 
     published_at_str = parsed.get("published_at")
     if published_at_str:
@@ -115,7 +154,6 @@ def enrich_article_record(
         pub_dt = dt.datetime.now(dt.timezone.utc)
 
     body_text = parsed.get("body")
-    symbol = extract_symbol(headline, url, valid_symbols)
     fetched_at = dt.datetime.now(dt.timezone.utc)
 
     return {
@@ -209,7 +247,7 @@ def crawl_category_streaming(
         # Concurrently fetch full article bodies for new articles
         enriched_records = []
         with concurrent.futures.ThreadPoolExecutor(max_workers=max_concurrency) as executor:
-            futures = [executor.submit(enrich_article_record, art, valid_symbols) for art in new_articles]
+            futures = [executor.submit(enrich_article_record, art, valid_symbols, cat) for art in new_articles]
             for fut in concurrent.futures.as_completed(futures):
                 res = fut.result()
                 if res:
