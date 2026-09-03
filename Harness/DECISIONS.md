@@ -2,7 +2,7 @@
 
 Newest at the top. Don't reverse any of these without a new, stated reason.
 
-## 2026-09-03: F004c evidence retracted -- extract_symbol() false-positive attribution, full crawl purged
+## 2026-09-03: F004c evidence retracted -- extract_symbol() false-positive attribution; full purge pending file unlock
 - Reason: F004c's 2026-09-02 category-page orchestrator ran across 8
   categories using unconfirmed category_id values (discovered via a new,
   unreviewed `discover_category_id()` helper reading the page's hdZoneId
@@ -32,11 +32,15 @@ Newest at the top. Don't reverse any of these without a new, stated reason.
   passing tests are not sufficient evidence when the test suite has a
   blind spot at exactly the failure mode that matters.
 - Decision: ALL 38,982 rows from this crawl (source='cafef', body IS NOT
-  NULL, fetched_at >= 2026-09-02 12:00:00) were targeted for deletion --
+  NULL, fetched_at >= 2026-09-02 12:00:00) are targeted for deletion --
   full purge, no partial salvage, given the negligible and still-contaminated
   salvage set. This retracts the 2026-09-03 "F004c 100% complete and passing"
   entry in full -- that claim was wrong and should not be treated as
   historical fact.
+- Status: PENDING DELETION. Purge command (`--purge-all`) is blocked by an
+  IDE read lock (PID 8564). The 38,982 rows remain physically in core.news
+  until the IDE releases the file handle, at which point the deletion must
+  be executed and the resulting row count pasted and verified.
 - Constraint: extract_symbol() must be redesigned before any re-crawl:
   (a) no bare-word tier against the full symbol universe, (b) no silent
   VNINDEX/placeholder fallback -- an article with no confidently-matched
