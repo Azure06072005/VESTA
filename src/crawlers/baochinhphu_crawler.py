@@ -40,21 +40,22 @@ ROBOTS_URL = "https://baochinhphu.vn/robots.txt"
 REQUEST_DELAY_SECONDS = 0.5
 
 # Primary macro and regulatory categories on baochinhphu.vn
+# Ordered so high-signal focused categories complete 100% first before deep parent archive
 CATEGORY_SLUGS: dict[str, str] = {
-    "chi-dao-dieu-hanh": "Chỉ đạo điều hành Chính phủ",
-    "kinh-te": "Kinh tế vĩ mô",
-    "kinh-te/ngan-hang": "Ngân hàng & Tài chính",
     "kinh-te/chung-khoan": "Thị trường Chứng khoán",
     "kinh-te/kinh-doanh": "Kinh doanh & Doanh nghiệp",
+    "chi-dao-dieu-hanh": "Chỉ đạo điều hành Chính phủ",
+    "kinh-te/ngan-hang": "Ngân hàng & Tài chính",
+    "kinh-te": "Kinh tế vĩ mô",
 }
 
 # Confirmed zone IDs for high-speed, deep historical pagination (/timelinelist/{zoneId}/{page}.htm)
 CATEGORY_ZONE_IDS: dict[str, int] = {
-    "chi-dao-dieu-hanh": 102263,
-    "kinh-te": 1027,
-    "kinh-te/ngan-hang": 102445,
     "kinh-te/chung-khoan": 1021064,
     "kinh-te/kinh-doanh": 1021126,
+    "chi-dao-dieu-hanh": 102263,
+    "kinh-te/ngan-hang": 102445,
+    "kinh-te": 1027,
 }
 
 # Regex to detect official doc numbers like 33/NQ-CP, 15/CT-TTg, 60/2024/NĐ-CP
@@ -273,7 +274,6 @@ def crawl_category(
     """Crawls a single baochinhphu category up to max_pages."""
     total_discovered = 0
     total_written = 0
-    consecutive_empty = 0
     zone_id = CATEGORY_ZONE_IDS.get(cat_slug)
 
     for page in range(1, max_pages + 1):
@@ -307,13 +307,8 @@ def crawl_category(
 
         new_articles = [a for a in articles if a["url"] not in existing_urls]
         if not new_articles:
-            consecutive_empty += 1
-            if consecutive_empty >= 5 and page >= 10:
-                logger.info(f"[{cat_slug}] 5 consecutive pages with 0 new articles at page {page}. Stopping.")
-                break
+            logger.info(f"[{cat_slug}] Page {page}: All {len(articles)} articles already crawled. Continuing.")
             continue
-        else:
-            consecutive_empty = 0
 
         records = []
         for art in new_articles:
