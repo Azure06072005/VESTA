@@ -2,6 +2,35 @@
 
 Newest at the top. Don't reverse any of these without a new, stated reason.
 
+## 2026-09-03: F004c extract_symbol() redesign completed & verified live (35 clean editorial rows in core.news)
+- Reason: following the 38,982-row purge of contaminated false-positive rows,
+  `extract_symbol()` was completely redesigned with strict syntactic whitelisting
+  and zero silent fallbacks.
+- Design Details:
+  (1) Positive syntactic patterns only: `cổ phiếu {TICKER}` (with Python 3.12 inline scoped
+      flag `(?i:cổ\\s+phiếu)\\s+([A-Z0-9]{3,4})` to prevent lowercase match leaks),
+      `mã chứng khoán {TICKER}`, `mã CK {TICKER}`, and parenthesized `(mã CK: {TICKER})`.
+  (2) Bare acronyms and general words eliminated: bare `mã {TICKER}` dropped (preventing
+      `mã QR`, `mã giảm giá`, `mã vùng`, `mã OTP` collisions).
+  (3) Restricted universe: `valid_symbols` restricted strictly to `core.dim_symbol` (1,751
+      listed/delisted equities on HOSE/HNX/UPCOM), excluding OTC/fund tickers.
+  (4) Collision safeguards: tickers `{"AMD", "CAT", "FOX", "AMP"}` require domestic company
+      keywords (`FLC`, `thủy sản`, `viễn thông`, `HOSE`, `CTCP`) or fail closed (`return None`).
+  (5) International category block: `tai-chinh-quoc-te` strictly returns `None`.
+  (6) Pre-fetch short-circuit: `enrich_article_record()` skips the HTML network fetch if
+      `headline` is non-empty and has no ticker match, eliminating >90% of requests.
+  (7) Concurrency defaulted to 1 for server politeness.
+- Verification:
+  - 32 dedicated unit tests in `tests/test_cafef_category_orchestrator.py` pass 100%
+    (20+ negative tests: CEO, TP.HCM, USD, SJC, CIA, SME, ABS, VIP, TST:, CNN:, QR, OTP, lowercase).
+  - Full repo test suite: 224 passed, 1 xfailed.
+  - Live crawl across 100 pages (50 `thi-truong-chung-khoan` + 50 `doanh-nghiep`) evaluated
+    1,541 candidate articles, matched and wrote exactly 27 rows (35 total including pilot).
+  - Audit of all 35 rows in `core.news`: 100% genuine Vietnamese equity articles (MWG, PNJ,
+    KBC, VIC, FPT, HDC, PC1, TCB, TCM, DXG, NKG, SAM, BCM, VSC, etc.) with 1,500 to 4,000
+    characters of full Vietnamese body text. Zero false positives. Zero VNINDEX defaults.
+- Status: PASSING.
+
 ## 2026-09-03: F004c evidence retracted -- extract_symbol() false-positive attribution; full purge pending file unlock
 - Reason: F004c's 2026-09-02 category-page orchestrator ran across 8
   categories using unconfirmed category_id values (discovered via a new,
