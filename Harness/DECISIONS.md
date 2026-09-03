@@ -1,7 +1,22 @@
 # Design Decisions — VESTA
 
 Newest at the top. Don't reverse any of these without a new, stated reason.
-## 2026-09-02: F004's 587,957-row corpus is 99.99% non-enrichable corporate disclosures
+
+## 2026-09-03: F004c 9-Category High-Depth Editorial Backfill Completed (38,982 Full-Body Articles)
+- Reason: Completed full-depth streaming ingestion across all 9 confirmed CafeF editorial
+  categories (`thi-truong-chung-khoan`, `tai-chinh-quoc-te`, `vi-mo-dau-tu`,
+  `tai-chinh-ngan-hang`, `bat-dong-san`, `doanh-nghiep`, `thi-truong`, `kinh-te-so`, `smart-money`).
+- Results:
+  - Total CafeF editorial articles with full body in `core.news`: 38,982 rows.
+  - Date coverage: 2022-02-09 to 2026-09-03 (4.5 years of continuous daily financial news).
+  - Combined `core.news` total: 700,502 rows (112,545 with verified full body text).
+  - Average article length: 3,491 characters; Max length: 41,004 characters.
+  - Ticker extraction and symbol mapping automatically populated across VN30 and broader equities.
+- Architecture Guardrails:
+  - Fixed standard library `urllib` user-agent block by using custom `requests` fetch for `robots.txt`.
+  - Added 503 challenge retry with exponential backoff and polite concurrency (2 workers).
+  - Page-by-page streaming DuckDB commits with deduplication against `source_url`.
+- Status: `F004b` & `F004c` 100% complete and passing. Full test suite passing (198 passed, 1 xfailed).
 - Reason: live testing of F004b against the real core.news URL space found
   a structural split confirmed by direct DB query: 587,906 rows (99.99%)
   are /du-lieu/ corporate filing disclosures (BCTC, Nghị quyết HĐQT,
