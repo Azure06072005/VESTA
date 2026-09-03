@@ -76,8 +76,14 @@ def get_robots_parser() -> urllib.robotparser.RobotFileParser:
     now = dt.datetime.now(dt.timezone.utc)
     if _ROBOTS_PARSER is None or _ROBOTS_FETCHED_AT is None or (now - _ROBOTS_FETCHED_AT).total_seconds() > 3600:
         parser = urllib.robotparser.RobotFileParser()
-        parser.set_url(ROBOTS_URL)
-        parser.read()
+        try:
+            resp = requests.get(ROBOTS_URL, headers={"User-Agent": USER_AGENT}, timeout=10)
+            if resp.status_code == 200:
+                parser.parse(resp.text.splitlines())
+            else:
+                parser.parse(["User-agent: *", "Allow: /"])
+        except Exception:
+            parser.parse(["User-agent: *", "Allow: /"])
         _ROBOTS_PARSER = parser
         _ROBOTS_FETCHED_AT = now
     return _ROBOTS_PARSER
