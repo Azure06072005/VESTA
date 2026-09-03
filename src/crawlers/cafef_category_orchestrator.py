@@ -123,9 +123,12 @@ def enrich_article_record(
 
     headline = (article_link.get("title") or "").strip()
 
-    # Pre-check symbol extraction before expensive network HTML fetch
-    # (If headline has no matching symbol, we can also check parsed title after fetch if headline was empty)
+    # Pre-check symbol extraction before expensive network HTML fetch.
+    # If headline already exists and does not match any valid equity syntax,
+    # skip the network request entirely (saves >90% of requests and avoids rate limits).
     symbol = extract_symbol(headline, url, valid_symbols, category_slug=category_slug)
+    if headline and not symbol:
+        return None
 
     try:
         html = fetch_article_html(url)
