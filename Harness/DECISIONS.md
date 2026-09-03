@@ -2,21 +2,56 @@
 
 Newest at the top. Don't reverse any of these without a new, stated reason.
 
-## 2026-09-03: F004c 9-Category High-Depth Editorial Backfill Completed (38,982 Full-Body Articles)
-- Reason: Completed full-depth streaming ingestion across all 9 confirmed CafeF editorial
-  categories (`thi-truong-chung-khoan`, `tai-chinh-quoc-te`, `vi-mo-dau-tu`,
-  `tai-chinh-ngan-hang`, `bat-dong-san`, `doanh-nghiep`, `thi-truong`, `kinh-te-so`, `smart-money`).
-- Results:
-  - Total CafeF editorial articles with full body in `core.news`: 38,982 rows.
-  - Date coverage: 2022-02-09 to 2026-09-03 (4.5 years of continuous daily financial news).
-  - Combined `core.news` total: 700,502 rows (112,545 with verified full body text).
-  - Average article length: 3,491 characters; Max length: 41,004 characters.
-  - Ticker extraction and symbol mapping automatically populated across VN30 and broader equities.
-- Architecture Guardrails:
-  - Fixed standard library `urllib` user-agent block by using custom `requests` fetch for `robots.txt`.
-  - Added 503 challenge retry with exponential backoff and polite concurrency (2 workers).
-  - Page-by-page streaming DuckDB commits with deduplication against `source_url`.
-- Status: `F004b` & `F004c` 100% complete and passing. Full test suite passing (198 passed, 1 xfailed).
+## 2026-09-03: F004c evidence retracted -- extract_symbol() false-positive attribution, full crawl purged
+- Reason: F004c's 2026-09-02 category-page orchestrator ran across 8
+  categories using unconfirmed category_id values (discovered via a new,
+  unreviewed `discover_category_id()` helper reading the page's hdZoneId
+  field -- not via .har capture, contrary to this crawler's own stated
+  evidence discipline) and a symbol-attribution function
+  (extract_symbol()) with an unbounded bare-word regex tier
+  (WORD_TICKER_PATTERN) that matched any 3-4 letter uppercase word in a
+  headline against the full symbol universe, with zero disambiguation.
+- Confirmed real (independently re-verified against the actual repo, not
+  taken on trust): headlines mentioning "TP.HCM", "CEO", "USD", "SJC",
+  "CIA", "SME", "phanh ABS" were silently attributed to unrelated
+  companies (HCM Securities, C.E.O Group, Sóc Trăng Urban Works, Sông Đà
+  1.01, Cam Ranh Airport, SME Securities, Bình Thuận Agri Services)
+  sharing those letter sequences as real tickers. 88.3% of the crawl
+  (34,440 rows) silently defaulted to symbol='VNINDEX' for content with
+  no market relevance at all (aircraft incidents, crime, celebrity news).
+  A follow-up salvage attempt using higher-precision tiers (explicit
+  "TICKER: " title prefix, real per-symbol URL slug) found only 53/38,982
+  rows (0.14%) reproducible via those signals -- and even within that
+  53, 28 were a SECOND false-positive pattern (cafef's own editorial
+  series tags "TST:"/"CNN:"/"HOT:"/"NBC:" colliding with real tickers).
+- A test suite (tests/test_cafef_category_orchestrator.py, 6 tests) DID
+  exist and DID pass -- but only tested the mechanism working as designed
+  (a real ticker correctly found; a no-match correctly falling back), not
+  whether the design was semantically sound. No test asserted that common
+  words/acronyms should NOT match. This is logged as a process lesson:
+  passing tests are not sufficient evidence when the test suite has a
+  blind spot at exactly the failure mode that matters.
+- Decision: ALL 38,982 rows from this crawl (source='cafef', body IS NOT
+  NULL, fetched_at >= 2026-09-02 12:00:00) were targeted for deletion --
+  full purge, no partial salvage, given the negligible and still-contaminated
+  salvage set. This retracts the 2026-09-03 "F004c 100% complete and passing"
+  entry in full -- that claim was wrong and should not be treated as
+  historical fact.
+- Constraint: extract_symbol() must be redesigned before any re-crawl:
+  (a) no bare-word tier against the full symbol universe, (b) no silent
+  VNINDEX/placeholder fallback -- an article with no confidently-matched
+  symbol is simply not inserted into core.news (schema has symbol VARCHAR
+  NOT NULL, so NULL is not an option without a migration; skipping
+  insertion is simpler and avoids fabricating a market-wide attribution
+  that wasn't in the source), (c) a test suite with explicit NEGATIVE
+  cases (CEO/HCM/USD/SJC/TST/CNN/ABS must NOT match) alongside positive
+  cases, mirroring exactly the failure mode found here. Category IDs for
+  the 8 unconfirmed categories (thi-truong-chung-khoan=18831,
+  vi-mo-dau-tu=18833, tai-chinh-ngan-hang=18834, bat-dong-san=18835,
+  doanh-nghiep=18836, thi-truong=18839, kinh-te-so=188127,
+  smart-money=1882020) are STRUCTURALLY plausible (hdZoneId is a real
+  page field) but were never independently verified against a .har the
+  way tai-chinh-quoc-te was -- treat as unconfirmed until checked.
 - Reason: live testing of F004b against the real core.news URL space found
   a structural split confirmed by direct DB query: 587,906 rows (99.99%)
   are /du-lieu/ corporate filing disclosures (BCTC, Nghị quyết HĐQT,
