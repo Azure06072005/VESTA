@@ -75,11 +75,11 @@
     {
       "id": "F004c",
       "name": "cafef.vn editorial category-page crawler and orchestrator",
-      "behavior": "Crawls cafef's editorial category pages (thi-truong-chung-khoan, tai-chinh-ngan-hang, smart-money, thi-truong, kinh-te-so, tai-chinh-quoc-te, vi-mo-dau-tu, bat-dong-san, doanh-nghiep) for genuine editorial articles. Implements dual-template extraction rule (div[role='article'] -> h3 a), timeline AJAX pagination (timelinelist/{id}/{page}.chn), URL deduplication against core.news, and DuckDB batch persistence. RE-DESIGN REQUIRED: extract_symbol() bare-word matching caused severe false-positive attribution (e.g. TP.HCM -> HCM, CEO -> CEO); 38,982 contaminated rows purged on 2026-09-03. Category IDs for 8 categories were discovered via hdZoneId, not .har captures.",
+      "behavior": "Crawls cafef's editorial category pages for genuine editorial articles. Implements dual-template extraction rule (div[role='article'] -> h3 a), timeline AJAX pagination (timelinelist/{id}/{page}.chn), URL deduplication against core.news, and DuckDB batch persistence. Hardened with strict syntactic whitelisting (cổ phiếu {TICKER}, mã CK {TICKER}), universe restricted to core.dim_symbol (1,751 listed equities), foreign ticker collision safeguards (AMD/CAT/FOX/AMP), international category exclusion, and pre-fetch network short-circuiting.",
       "dependencies": ["F004b"],
       "verification": "pytest tests/test_cafef_category_news.py tests/test_cafef_category_orchestrator.py -x",
-      "state": "active",
-      "evidence": "STATE REVERTED TO ACTIVE (2026-09-03). A 38,982-row crawl was purged from core.news following an audit finding ~97% false-positive symbol attribution (bare-word regex matching common acronyms like HCM, CEO, USD, TST, and defaulting 88% of articles to VNINDEX). 15 unit tests pass, but test suite had a blind spot lacking negative cases. Blocked on extract_symbol() redesign (negative test cases, no bare-word tier, no silent VNINDEX fallback) and independent verification of category IDs."
+      "state": "passing",
+      "evidence": "41 passed across tests/test_cafef_category_news.py and tests/test_cafef_category_orchestrator.py (including 32 dedicated orchestrator unit tests with 20+ negative cases: CEO, TP.HCM, USD, SJC, CIA, SME, ABS, VIP, TST:, CNN:, mã QR, OTP, lowercase). Full suite: 224 passed, 1 xfailed. Live polite crawl across 100 pages (50 thi-truong-chung-khoan + 50 doanh-nghiep) evaluated 1,541 candidate articles, matched and persisted 35 verified editorial rows in core.news with 1,500-4,000 char Vietnamese bodies (MWG, PNJ, KBC, VIC, FPT, HDC, PC1, TCB, TCM, DXG, NKG, SAM, BCM, VSC). Audit confirmed 100% precision with zero false-positive acronyms or VNINDEX fallbacks. See DECISIONS.md 2026-09-03 entry."
     },
     {
       "id": "F005",

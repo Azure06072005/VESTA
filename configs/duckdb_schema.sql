@@ -257,3 +257,36 @@ CREATE TABLE IF NOT EXISTS core.pit_events (
     built_at           TIMESTAMP NOT NULL,
     PRIMARY KEY (symbol, source_url)
 );
+
+-- staging/core.macro_policy: Official regulatory, government decrees,
+-- and industry association dispatches (Báo Chính phủ, SBV, HoREA, etc.).
+-- Preserves full policy text, circular/decree numbers, and issuing bodies
+-- without forcing an equity ticker constraint.
+CREATE TABLE IF NOT EXISTS staging.macro_policy (
+    source        VARCHAR NOT NULL,
+    issuing_body  VARCHAR NOT NULL,
+    doc_type      VARCHAR,
+    doc_number    VARCHAR,
+    published_at  TIMESTAMP NOT NULL,
+    available_at  TIMESTAMP NOT NULL,
+    headline      VARCHAR NOT NULL,
+    summary       VARCHAR,
+    body          VARCHAR,
+    source_url    VARCHAR NOT NULL,
+    fetched_at    TIMESTAMP NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS core.macro_policy (
+    source        VARCHAR NOT NULL,
+    issuing_body  VARCHAR NOT NULL,
+    doc_type      VARCHAR,
+    doc_number    VARCHAR,
+    published_at  TIMESTAMP NOT NULL,
+    available_at  TIMESTAMP NOT NULL,
+    headline      VARCHAR NOT NULL,
+    summary       VARCHAR,
+    body          VARCHAR,
+    source_url    VARCHAR NOT NULL,
+    fetched_at    TIMESTAMP NOT NULL,
+    PRIMARY KEY (source_url)
+);
