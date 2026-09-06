@@ -60,6 +60,8 @@ EVENT_COLUMNS = ["symbol", "event_id", "event_type", "event_date", "detail_json"
 
 
 def _authenticate() -> None:
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8")
     db.load_env()
     api_key = os.environ.get(REQUIRED_ENV_VAR)
     if not api_key:
@@ -146,7 +148,7 @@ def normalize_events(raw_df: pd.DataFrame, symbol: str) -> pd.DataFrame:
             "symbol": symbol,
             "event_id": raw_df[id_col].astype(str),
             "event_type": raw_df[type_col].astype(str),
-            "event_date": pd.to_datetime(raw_df[date_col]).dt.date if date_col else pd.NaT,
+            "event_date": pd.to_datetime(raw_df[date_col], format="mixed", errors="coerce").dt.date if date_col else pd.NaT,
             "detail_json": [_row_to_json(r) for r in records],
         }
     )

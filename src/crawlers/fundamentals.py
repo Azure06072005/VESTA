@@ -78,6 +78,8 @@ FUNDAMENTAL_COLUMNS = ["symbol", "report_type", "period_end", "available_at", "d
 
 
 def _authenticate() -> None:
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8")
     db.load_env()
     api_key = os.environ.get(REQUIRED_ENV_VAR)
     if not api_key:

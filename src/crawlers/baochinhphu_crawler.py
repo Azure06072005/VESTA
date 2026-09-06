@@ -270,13 +270,14 @@ def crawl_category(
     max_pages: int,
     con: duckdb.DuckDBPyConnection,
     existing_urls: set[str],
+    start_page: int = 1,
 ) -> dict[str, int]:
-    """Crawls a single baochinhphu category up to max_pages."""
+    """Crawls a single baochinhphu category up to max_pages starting from start_page."""
     total_discovered = 0
     total_written = 0
     zone_id = CATEGORY_ZONE_IDS.get(cat_slug)
 
-    for page in range(1, max_pages + 1):
+    for page in range(start_page, max_pages + 1):
         if page == 1:
             cat_url = f"{BASE_URL}/{cat_slug}.htm"
         elif zone_id:
@@ -336,6 +337,7 @@ def crawl_category(
 def run_baochinhphu_crawler(
     categories: list[str] | None = None,
     max_pages: int = 5,
+    start_page: int = 1,
     db_path: str = "db/vesta.duckdb",
 ) -> dict[str, Any]:
     """Main entry point to crawl official Government macro & regulatory dispatches."""
@@ -349,8 +351,8 @@ def run_baochinhphu_crawler(
     total_written = 0
 
     for cat in categories:
-        logger.info(f"=== Starting Government Policy Crawl: {cat} (max_pages={max_pages}) ===")
-        stats = crawl_category(cat, max_pages, con, existing_urls)
+        logger.info(f"=== Starting Government Policy Crawl: {cat} (pages {start_page}..{max_pages}) ===")
+        stats = crawl_category(cat, max_pages, con, existing_urls, start_page=start_page)
         total_discovered += stats["discovered"]
         total_written += stats["written"]
         logger.info(f"=== Category {cat} complete: {stats['written']} written ===")
@@ -368,6 +370,7 @@ def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
     parser = argparse.ArgumentParser(description="Báo Chính phủ Macro & Regulatory Policy Crawler")
     parser.add_argument("--categories", nargs="+", default=list(CATEGORY_SLUGS.keys()), help="Category slugs")
+    parser.add_argument("--start-page", type=int, default=1, help="Trang bắt đầu crawl (mặc định: 1)")
     parser.add_argument("--max-pages", type=int, default=5, help="Max pages per category")
     parser.add_argument("--db", default="db/vesta.duckdb", help="DuckDB path")
     args = parser.parse_args()
@@ -375,6 +378,7 @@ def main() -> None:
     summary = run_baochinhphu_crawler(
         categories=args.categories,
         max_pages=args.max_pages,
+        start_page=args.start_page,
         db_path=args.db,
     )
     print("\n=== Government Policy Crawl Complete ===")
