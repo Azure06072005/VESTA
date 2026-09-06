@@ -403,6 +403,7 @@ def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 
     parser = argparse.ArgumentParser(description="Vietstock Finance Enhancer (Research Reports & Target Prices)")
+    parser.add_argument("--db-path", type=str, default="d:/VESTA/db/vesta_staging.duckdb", help="Đường dẫn file DuckDB (Mặc định: d:/VESTA/db/vesta_staging.duckdb)")
     parser.add_argument("--start-page", type=int, default=1, help="Trang bắt đầu cào (Mặc định: 1)")
     parser.add_argument("--max-pages", type=int, default=None, help="Số trang tối đa cần cào (Mặc định: Toàn bộ)")
     parser.add_argument("--symbol", type=str, default=None, help="Lọc theo mã cổ phiếu (ví dụ: VCB, HPG)")
@@ -410,7 +411,7 @@ def main() -> None:
     parser.add_argument("--dry-run", action="store_true", help="Chạy thử không ghi vào DB")
 
     args = parser.parse_args()
-    enhancer = VietstockFinanceEnhancer(delay=args.delay)
+    enhancer = VietstockFinanceEnhancer(duckdb_path=args.db_path, delay=args.delay)
     count = enhancer.crawl(start_page=args.start_page, max_pages=args.max_pages, symbol_filter=args.symbol, dry_run=args.dry_run)
     print(f"Tổng số báo cáo phân tích thu thập được: {count}")
 
