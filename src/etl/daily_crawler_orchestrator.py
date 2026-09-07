@@ -313,7 +313,71 @@ class DailyCrawlerOrchestrator:
                     logger.error(f"   [ERROR] vasep lỗi: {e}")
                     results["vasep"] = {"status": "failed", "error": str(e)}
 
-        # 5. World Bank Macro API
+        # 5. Hiệp hội Ngân hàng VNBA (vnba.org.vn)
+        if not categories or "industry_associations" in categories or "vnba" in categories:
+            logger.info("-> [Tier 3] Quét chính sách ngân hàng: VNBA (vnba.org.vn)")
+            if dry_run:
+                results["vnba"] = {"status": "dry_run", "records": 0}
+            else:
+                try:
+                    from src.crawlers.vnba_crawler import run_vnba_crawler
+                    res = run_vnba_crawler(db_path=self.db_path, max_articles_per_cat=3)
+                    records = res.get("total_written", 0) if isinstance(res, dict) else 0
+                    results["vnba"] = {"status": "success", "records": records}
+                    logger.info(f"   [OK] vnba: +{records} bài viết chính sách ngân hàng mới.")
+                except Exception as e:
+                    logger.error(f"   [ERROR] vnba lỗi: {e}")
+                    results["vnba"] = {"status": "failed", "error": str(e)}
+
+        # 6. Hiệp hội Thép VSA (vsa.com.vn)
+        if not categories or "industry_associations" in categories or "vsa" in categories:
+            logger.info("-> [Tier 3] Quét số liệu ngành thép & phòng vệ thương mại: VSA (vsa.com.vn)")
+            if dry_run:
+                results["vsa"] = {"status": "dry_run", "records": 0}
+            else:
+                try:
+                    from src.crawlers.vsa_crawler import run_vsa_crawler
+                    res = run_vsa_crawler(db_path=self.db_path, max_articles_per_cat=3)
+                    records = res.get("total_written", 0) if isinstance(res, dict) else 0
+                    results["vsa"] = {"status": "success", "records": records}
+                    logger.info(f"   [OK] vsa: +{records} tin tức/báo cáo thép mới.")
+                except Exception as e:
+                    logger.error(f"   [ERROR] vsa lỗi: {e}")
+                    results["vsa"] = {"status": "failed", "error": str(e)}
+
+        # 7. Hiệp hội Logistics VLA (vla.com.vn)
+        if not categories or "industry_associations" in categories or "vla" in categories:
+            logger.info("-> [Tier 3] Quét cước vận tải biển & logistics: VLA (vla.com.vn)")
+            if dry_run:
+                results["vla"] = {"status": "dry_run", "records": 0}
+            else:
+                try:
+                    from src.crawlers.vla_crawler import run_vla_crawler
+                    res = run_vla_crawler(db_path=self.db_path, max_articles_per_cat=3)
+                    records = res.get("total_written", 0) if isinstance(res, dict) else 0
+                    results["vla"] = {"status": "success", "records": records}
+                    logger.info(f"   [OK] vla: +{records} tin tức logistics mới.")
+                except Exception as e:
+                    logger.error(f"   [ERROR] vla lỗi: {e}")
+                    results["vla"] = {"status": "failed", "error": str(e)}
+
+        # 8. Hội Dầu khí Việt Nam (hoidaukhi.vn)
+        if not categories or "industry_associations" in categories or "hoidaukhi" in categories:
+            logger.info("-> [Tier 3] Quét chính sách năng lượng & dầu khí: Hội Dầu khí (hoidaukhi.vn)")
+            if dry_run:
+                results["hoidaukhi"] = {"status": "dry_run", "records": 0}
+            else:
+                try:
+                    from src.crawlers.hoidaukhi_crawler import run_hoidaukhi_crawler
+                    res = run_hoidaukhi_crawler(db_path=self.db_path, max_articles_per_cat=3)
+                    records = res.get("total_written", 0) if isinstance(res, dict) else 0
+                    results["hoidaukhi"] = {"status": "success", "records": records}
+                    logger.info(f"   [OK] hoidaukhi: +{records} tin tức dầu khí mới.")
+                except Exception as e:
+                    logger.error(f"   [ERROR] hoidaukhi lỗi: {e}")
+                    results["hoidaukhi"] = {"status": "failed", "error": str(e)}
+
+        # 9. World Bank Macro API
         if not categories or "world_macro_institutions" in categories or "worldbank" in categories:
             logger.info("-> [Tier 3] Quét dữ liệu vĩ mô: World Bank Open Data REST API")
             if dry_run:
