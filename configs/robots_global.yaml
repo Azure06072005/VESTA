@@ -303,8 +303,9 @@ tier3_sources:
       - Luật Các tổ chức tín dụng
       - Luật Kinh doanh BĐS
       - Luật Chứng khoán
-      status: PENDING
-      ingested_records_count: 0
+      status: DONE
+      ingested_records_count: 2
+      crawler_module: src/crawlers/thuvienphapluat_crawler.py
     luatvn:
       name: Luật Việt Nam
       domain: luatvietnam.vn
@@ -314,8 +315,9 @@ tier3_sources:
       crawl_delay_seconds: 1.5
       priority: HIGH
       category: LAW_SYSTEM
-      status: PENDING
-      ingested_records_count: 0
+      status: DONE
+      ingested_records_count: 3
+      crawler_module: src/crawlers/luatvietnam_crawler.py
     fta_moit:
       name: Cổng Thông tin Hiệp định Thương mại Tự do
       domain: fta.moit.gov.vn
@@ -407,8 +409,9 @@ tier3_sources:
       crawl_delay_seconds: 0.8
       priority: HIGH
       category: FINANCIAL_MEDIA
-      status: PENDING
-      ingested_records_count: 0
+      status: DONE
+      ingested_records_count: 6
+      crawler_module: src/crawlers/thoibaotaichinh_crawler.py
     vietnamfinance:
       name: VietnamFinance (DNDT)
       domain: vietnamfinance.vn
@@ -418,8 +421,9 @@ tier3_sources:
       crawl_delay_seconds: 0.8
       priority: MEDIUM
       category: FINANCIAL_MEDIA
-      status: PENDING
-      ingested_records_count: 0
+      status: DONE
+      ingested_records_count: 3
+      crawler_module: src/crawlers/vietnamfinance_crawler.py
     nguoiquansat:
       name: Người Quan Sát
       domain: nguoiquansat.vn
@@ -608,8 +612,9 @@ tier3_sources:
       - DCM
       - BFC
       - LAS
-      status: PENDING
-      ingested_records_count: 0
+      status: DONE
+      ingested_records_count: 3
+      crawler_module: src/crawlers/vfaea_crawler.py
     vra:
       name: Hiệp hội Cao su Việt Nam (VRA)
       domain: vra.com.vn
@@ -623,8 +628,9 @@ tier3_sources:
       - PHR
       - DPR
       - DRI
-      status: PENDING
-      ingested_records_count: 0
+      status: DONE
+      ingested_records_count: 6
+      crawler_module: src/crawlers/vra_crawler.py
     vpsaspice:
       name: Hiệp hội Hồ tiêu và Cây gia vị Việt Nam (VPSA)
       domain: vpsaspice.org
@@ -722,21 +728,23 @@ tier3_sources:
       ingested_records_count: 12
       crawler_module: src/crawlers/vsa_crawler.py
     vnpca:
-      name: Hiệp hội Nhựa Việt Nam (VPA)
+      name: Hiệp hội Doanh nghiệp Dược Việt Nam (VNPCA)
       domain: vnpca.org.vn
       base_url: https://vnpca.org.vn
       sitemap_url: https://vnpca.org.vn/wp-sitemap.xml
       target_table: core.macro_policy
       crawl_delay_seconds: 1.0
-      priority: MEDIUM
-      sector: PLASTICS
+      priority: HIGH
+      sector: PHARMACEUTICALS
       symbols_affected:
-      - BMP
-      - NTP
-      - AAA
-      - PLP
-      status: PENDING
-      ingested_records_count: 0
+      - DHG
+      - IMP
+      - TRA
+      - DBD
+      - DMC
+      status: DONE
+      ingested_records_count: 3
+      crawler_module: src/crawlers/vnpca_crawler.py
     vama:
       name: Hiệp hội các Nhà sản xuất Ô tô Việt Nam (VAMA)
       domain: vama.org.vn
@@ -771,8 +779,9 @@ tier3_sources:
       - VGT
       tracked_data:
       - Đơn hàng may mặc xuất khẩu sang Mỹ/EU, tiêu chuẩn xanh ESG
-      status: PENDING
-      ingested_records_count: 0
+      status: DONE
+      ingested_records_count: 3
+      crawler_module: src/crawlers/vntextile_crawler.py
     vla:
       name: Hiệp hội Doanh nghiệp Dịch vụ Logistics Việt Nam (VLA)
       domain: vla.com.vn

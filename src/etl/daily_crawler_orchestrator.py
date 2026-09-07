@@ -377,7 +377,135 @@ class DailyCrawlerOrchestrator:
                     logger.error(f"   [ERROR] hoidaukhi lỗi: {e}")
                     results["hoidaukhi"] = {"status": "failed", "error": str(e)}
 
-        # 9. World Bank Macro API
+        # 9. Thư Viện Pháp Luật (thuvienphapluat.vn)
+        if not categories or "economical_laws_policies" in categories or "thuvienphapluat" in categories:
+            logger.info("-> [Tier 3] Quét văn bản pháp luật mới: Thư Viện Pháp Luật")
+            if dry_run:
+                results["thuvienphapluat"] = {"status": "dry_run", "records": 0}
+            else:
+                try:
+                    from src.crawlers.thuvienphapluat_crawler import run_thuvienphapluat_crawler
+                    res = run_thuvienphapluat_crawler(db_path=self.db_path, max_articles=3)
+                    records = res.get("total_written", 0) if isinstance(res, dict) else 0
+                    results["thuvienphapluat"] = {"status": res.get("status", "success"), "records": records}
+                    logger.info(f"   [OK] thuvienphapluat: +{records} văn bản mới.")
+                except Exception as e:
+                    logger.error(f"   [ERROR] thuvienphapluat lỗi: {e}")
+                    results["thuvienphapluat"] = {"status": "failed", "error": str(e)}
+
+        # 10. Luật Việt Nam (luatvietnam.vn)
+        if not categories or "economical_laws_policies" in categories or "luatvietnam" in categories:
+            logger.info("-> [Tier 3] Quét chính sách pháp lý: LuatVietnam")
+            if dry_run:
+                results["luatvietnam"] = {"status": "dry_run", "records": 0}
+            else:
+                try:
+                    from src.crawlers.luatvietnam_crawler import run_luatvietnam_crawler
+                    res = run_luatvietnam_crawler(db_path=self.db_path, max_articles=3)
+                    records = res.get("total_written", 0) if isinstance(res, dict) else 0
+                    results["luatvietnam"] = {"status": res.get("status", "success"), "records": records}
+                    logger.info(f"   [OK] luatvietnam: +{records} bài viết pháp lý mới.")
+                except Exception as e:
+                    logger.error(f"   [ERROR] luatvietnam lỗi: {e}")
+                    results["luatvietnam"] = {"status": "failed", "error": str(e)}
+
+        # 11. Thời báo Tài chính Việt Nam (thoibaotaichinhvietnam.vn)
+        if not categories or "financial_media_portals" in categories or "thoibaotaichinh" in categories:
+            logger.info("-> [Tier 3] Quét tin tức tài chính & chứng khoán: Thời báo Tài chính")
+            if dry_run:
+                results["thoibaotaichinh"] = {"status": "dry_run", "records": 0}
+            else:
+                try:
+                    from src.crawlers.thoibaotaichinh_crawler import run_thoibaotaichinh_crawler
+                    res = run_thoibaotaichinh_crawler(db_path=self.db_path, max_articles=3)
+                    records = res.get("total_written", 0) if isinstance(res, dict) else 0
+                    results["thoibaotaichinh"] = {"status": res.get("status", "success"), "records": records}
+                    logger.info(f"   [OK] thoibaotaichinh: +{records} tin tài chính mới.")
+                except Exception as e:
+                    logger.error(f"   [ERROR] thoibaotaichinh lỗi: {e}")
+                    results["thoibaotaichinh"] = {"status": "failed", "error": str(e)}
+
+        # 12. VietnamFinance (vietnamfinance.vn)
+        if not categories or "financial_media_portals" in categories or "vietnamfinance" in categories:
+            logger.info("-> [Tier 3] Quét thị trường & FDI: VietnamFinance")
+            if dry_run:
+                results["vietnamfinance"] = {"status": "dry_run", "records": 0}
+            else:
+                try:
+                    from src.crawlers.vietnamfinance_crawler import run_vietnamfinance_crawler
+                    res = run_vietnamfinance_crawler(db_path=self.db_path, max_articles=3)
+                    records = res.get("total_written", 0) if isinstance(res, dict) else 0
+                    results["vietnamfinance"] = {"status": res.get("status", "success"), "records": records}
+                    logger.info(f"   [OK] vietnamfinance: +{records} bài viết thị trường mới.")
+                except Exception as e:
+                    logger.error(f"   [ERROR] vietnamfinance lỗi: {e}")
+                    results["vietnamfinance"] = {"status": "failed", "error": str(e)}
+
+        # 13. Hiệp hội Dệt May VITAS (vitas.org.vn)
+        if not categories or "industry_associations" in categories or "vntextile" in categories:
+            logger.info("-> [Tier 3] Quét xuất khẩu dệt may: VITAS (vitas.org.vn)")
+            if dry_run:
+                results["vntextile"] = {"status": "dry_run", "records": 0}
+            else:
+                try:
+                    from src.crawlers.vntextile_crawler import run_vntextile_crawler
+                    res = run_vntextile_crawler(db_path=self.db_path, max_articles=3)
+                    records = res.get("total_written", 0) if isinstance(res, dict) else 0
+                    results["vntextile"] = {"status": res.get("status", "success"), "records": records}
+                    logger.info(f"   [OK] vntextile: +{records} tin ngành dệt may mới.")
+                except Exception as e:
+                    logger.error(f"   [ERROR] vntextile lỗi: {e}")
+                    results["vntextile"] = {"status": "failed", "error": str(e)}
+
+        # 14. Hiệp hội Doanh nghiệp Dược VNPCA (vnpca.org.vn)
+        if not categories or "industry_associations" in categories or "vnpca" in categories:
+            logger.info("-> [Tier 3] Quét ngành dược phẩm: VNPCA (vnpca.org.vn)")
+            if dry_run:
+                results["vnpca"] = {"status": "dry_run", "records": 0}
+            else:
+                try:
+                    from src.crawlers.vnpca_crawler import run_vnpca_crawler
+                    res = run_vnpca_crawler(db_path=self.db_path, max_articles=3)
+                    records = res.get("total_written", 0) if isinstance(res, dict) else 0
+                    results["vnpca"] = {"status": res.get("status", "success"), "records": records}
+                    logger.info(f"   [OK] vnpca: +{records} tin ngành dược mới.")
+                except Exception as e:
+                    logger.error(f"   [ERROR] vnpca lỗi: {e}")
+                    results["vnpca"] = {"status": "failed", "error": str(e)}
+
+        # 15. Hiệp hội Phân bón VFAEA (vfaea.vn)
+        if not categories or "industry_associations" in categories or "vfaea" in categories:
+            logger.info("-> [Tier 3] Quét ngành phân bón: VFAEA (vfaea.vn)")
+            if dry_run:
+                results["vfaea"] = {"status": "dry_run", "records": 0}
+            else:
+                try:
+                    from src.crawlers.vfaea_crawler import run_vfaea_crawler
+                    res = run_vfaea_crawler(db_path=self.db_path, max_articles=3)
+                    records = res.get("total_written", 0) if isinstance(res, dict) else 0
+                    results["vfaea"] = {"status": res.get("status", "success"), "records": records}
+                    logger.info(f"   [OK] vfaea: +{records} tin ngành phân bón mới.")
+                except Exception as e:
+                    logger.error(f"   [ERROR] vfaea lỗi: {e}")
+                    results["vfaea"] = {"status": "failed", "error": str(e)}
+
+        # 16. Hiệp hội Cao su VRA (vra.com.vn)
+        if not categories or "industry_associations" in categories or "vra" in categories:
+            logger.info("-> [Tier 3] Quét ngành cao su: VRA (vra.com.vn)")
+            if dry_run:
+                results["vra"] = {"status": "dry_run", "records": 0}
+            else:
+                try:
+                    from src.crawlers.vra_crawler import run_vra_crawler
+                    res = run_vra_crawler(db_path=self.db_path, max_articles=3)
+                    records = res.get("total_written", 0) if isinstance(res, dict) else 0
+                    results["vra"] = {"status": res.get("status", "success"), "records": records}
+                    logger.info(f"   [OK] vra: +{records} tin ngành cao su mới.")
+                except Exception as e:
+                    logger.error(f"   [ERROR] vra lỗi: {e}")
+                    results["vra"] = {"status": "failed", "error": str(e)}
+
+        # 17. World Bank Macro API
         if not categories or "world_macro_institutions" in categories or "worldbank" in categories:
             logger.info("-> [Tier 3] Quét dữ liệu vĩ mô: World Bank Open Data REST API")
             if dry_run:
