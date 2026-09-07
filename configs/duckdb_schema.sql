@@ -94,7 +94,8 @@ CREATE TABLE IF NOT EXISTS staging.fundamentals (
     period_end     DATE NOT NULL,
     available_at   DATE NOT NULL, 
     data_json      VARCHAR NOT NULL,
-    fetched_at     TIMESTAMP NOT NULL
+    fetched_at     TIMESTAMP NOT NULL,
+    source         VARCHAR NOT NULL DEFAULT 'vnstock_data'
 );
 
 CREATE TABLE IF NOT EXISTS core.fundamentals (
@@ -104,6 +105,14 @@ CREATE TABLE IF NOT EXISTS core.fundamentals (
     available_at DATE NOT NULL,
     data_json    VARCHAR NOT NULL,
     fetched_at   TIMESTAMP NOT NULL,
+    source       VARCHAR NOT NULL DEFAULT 'vnstock_data',
+    -- Added 2026-09-06: distinguishes vnstock_data's English BS_*/IS_*/CF_*/RT_*
+    -- key schema from cafef's raw Vietnamese line-item schema. get_as_reported()
+    -- deliberately ignores this for ordering (chronological only, to avoid
+    -- reintroducing look-ahead bias); get_as_of() uses it via preferred_source.
+    -- DEFAULT 'vnstock_data' matches the real historical backfill (all rows
+    -- before 2026-09-06 are vnstock_data) -- new callers must pass their own
+    -- source explicitly rather than relying on the default going forward.
     PRIMARY KEY (symbol, report_type, period_end, fetched_at)
 );
 

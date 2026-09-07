@@ -15,7 +15,7 @@ from src.crawlers.cafef_foreign_flow import CafeFForeignFlowIngester
 
 @pytest.fixture
 def temp_duckdb(tmp_path):
-    """Tạo database DuckDB test với schema core.market_foreign_flow_daily."""
+    """Tạo database DuckDB test với schema core.market_foreign_flow_daily (volume-only)."""
     db_path = str(tmp_path / "test_foreign.duckdb")
     con = duckdb.connect(db_path)
     con.execute("CREATE SCHEMA IF NOT EXISTS core;")
@@ -25,10 +25,7 @@ def temp_duckdb(tmp_path):
             date DATE NOT NULL,
             buy_volume DOUBLE,
             sell_volume DOUBLE,
-            buy_value DOUBLE,
-            sell_value DOUBLE,
             net_volume DOUBLE,
-            net_value DOUBLE,
             foreign_room DOUBLE,
             fetched_at TIMESTAMP NOT NULL,
             PRIMARY KEY (symbol, date)
@@ -39,7 +36,7 @@ def temp_duckdb(tmp_path):
 
 
 def test_parse_nn_csv_standard():
-    """Kiểm tra parse đúng cấu trúc CSV khối ngoại CafeF."""
+    """Kiểm tra parse đúng cấu trúc CSV khối ngoại CafeF (volume-only)."""
     csv_data = (
         "<Ticker>,<DTYYYYMMDD>,<Open>,<High>,<Low>,<Close>,<Volume>,<OI>\n"
         "VCB,20260904,500000,200000,30000000,12000000,1000000,15000000\n"
@@ -51,7 +48,9 @@ def test_parse_nn_csv_standard():
     assert df.loc[0, "buy_volume"] == 500000.0
     assert df.loc[0, "sell_volume"] == 200000.0
     assert df.loc[0, "net_volume"] == 300000.0
-    assert df.loc[0, "net_value"] == 18000000.0
+    assert "net_value" not in df.columns
+    assert "buy_value" not in df.columns
+    assert "sell_value" not in df.columns
     assert df.loc[0, "foreign_room"] == 15000000.0
 
 

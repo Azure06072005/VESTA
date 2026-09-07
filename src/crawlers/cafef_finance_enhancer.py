@@ -205,6 +205,7 @@ class CafeFFinanceEnhancer:
                 "available_at": avail_at,
                 "data_json": json.dumps(metrics, ensure_ascii=False),
                 "fetched_at": now,
+                "source": "cafef",
             })
 
         return rows

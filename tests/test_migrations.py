@@ -134,3 +134,41 @@ def test_run_all_migrations_is_safe_on_a_completely_fresh_database(tmp_path):
     # Should not raise, and the DB should be fully usable afterward.
     con.execute("SELECT * FROM core.fundamentals").fetchall()
     con.execute("SELECT * FROM core.news").fetchall()
+
+
+def test_migrate_fundamentals_add_source_column_is_additive_and_idempotent(tmp_path):
+    db_path = tmp_path / "test.duckdb"
+    con = duckdb.connect(str(db_path))
+    con.execute("CREATE SCHEMA IF NOT EXISTS core")
+    con.execute("CREATE SCHEMA IF NOT EXISTS staging")
+    con.execute(
+        """CREATE TABLE core.fundamentals (
+            symbol VARCHAR, report_type VARCHAR, period_end DATE,
+            available_at DATE, data_json VARCHAR, fetched_at TIMESTAMP,
+            PRIMARY KEY (symbol, report_type, period_end, fetched_at)
+        )"""
+    )
+    con.execute(
+        "INSERT INTO core.fundamentals VALUES "
+        "('FPT','income_statement','2026-01-01','2026-01-31','{\"IS_NET_REVENUE\":100}','2026-01-01 00:00:00'), "
+        "('VNM','ratio','2026-01-01','2026-01-31','{\"pe_raw\":15}','2026-09-06 12:00:00')"
+    )
+
+    ran1 = migrations.migrate_fundamentals_add_source_column(con)
+    assert ran1 is True
+    cols = {
+        r[0]
+        for r in con.execute(
+            "SELECT column_name FROM information_schema.columns WHERE table_schema='core' AND table_name='fundamentals'"
+        ).fetchall()
+    }
+    assert "source" in cols
+
+    # Verify backfill attribution:
+    fpt_source = con.execute("SELECT source FROM core.fundamentals WHERE symbol='FPT'").fetchone()[0]
+    vnm_source = con.execute("SELECT source FROM core.fundamentals WHERE symbol='VNM'").fetchone()[0]
+    assert fpt_source == "vnstock_data"
+    assert vnm_source == "cafef"
+
+    ran2 = migrations.migrate_fundamentals_add_source_column(con)
+    assert ran2 is False  # already added, no-op

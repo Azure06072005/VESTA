@@ -45,7 +45,7 @@ class CafeFForeignFlowIngester:
         self._init_table()
 
     def _init_table(self) -> None:
-        """Khởi tạo bảng core.market_foreign_flow_daily trong DuckDB."""
+        """Khởi tạo bảng core.market_foreign_flow_daily trong DuckDB (Volume-only per B3/B4)."""
         try:
             con = duckdb.connect(self.duckdb_path, read_only=False)
             con.execute("CREATE SCHEMA IF NOT EXISTS core;")
@@ -55,10 +55,7 @@ class CafeFForeignFlowIngester:
                     date DATE NOT NULL,
                     buy_volume DOUBLE,
                     sell_volume DOUBLE,
-                    buy_value DOUBLE,
-                    sell_value DOUBLE,
                     net_volume DOUBLE,
-                    net_value DOUBLE,
                     foreign_room DOUBLE,
                     fetched_at TIMESTAMP NOT NULL,
                     PRIMARY KEY (symbol, date)
@@ -70,7 +67,15 @@ class CafeFForeignFlowIngester:
 
     @staticmethod
     def parse_nn_csv(content: io.BytesIO | str) -> pd.DataFrame:
-        """Phân tích file CSV giao dịch khối ngoại CafeF (NN_HSX, NN_HNX, NN_UPCOM)."""
+        """Phân tích file CSV giao dịch khối ngoại CafeF (NN_HSX, NN_HNX, NN_UPCOM).
+        
+        Lưu ý (Guardrail B3/B4): File CafeF.NN_*.csv xuất từ AmiBroker chỉ chứa
+        khối lượng giao dịch (<Open> = Buy Vol, <High> = Sell Vol, <OI> = Room).
+        Các cột <Low> và <Close> hầu như toàn bộ là 0.0, KHÔNG mang giá trị VND.
+        Để tuân thủ B3/B4 (không bịa đặt số liệu), bảng này chỉ lưu trữ volume-only.
+        Các giá trị ước tính (value estimates) sẽ do tầng F2xx tính toán tường minh
+        bằng cách nhân volume với giá OHLCV cùng ngày nếu cần.
+        """
         df = pd.read_csv(content, encoding="utf-8-sig")
         df.columns = [c.replace("<", "").replace(">", "").strip().lower() for c in df.columns]
 
@@ -82,20 +87,15 @@ class CafeFForeignFlowIngester:
         df["symbol"] = df["ticker"].astype(str).str.strip().str.upper()
         df["date"] = pd.to_datetime(df["dtyyyymmdd"].astype(str), format="%Y%m%d").dt.date
 
-        # Cột open/high/low/close trong file NN đại diện cho các trường giao dịch ngoại
         df["buy_volume"] = pd.to_numeric(df["open"], errors="coerce").fillna(0)
         df["sell_volume"] = pd.to_numeric(df["high"], errors="coerce").fillna(0)
-        df["buy_value"] = pd.to_numeric(df["low"], errors="coerce").fillna(0)
-        df["sell_value"] = pd.to_numeric(df["close"], errors="coerce").fillna(0)
         df["net_volume"] = df["buy_volume"] - df["sell_volume"]
-        df["net_value"] = df["buy_value"] - df["sell_value"]
         df["foreign_room"] = pd.to_numeric(df.get("oi", 0), errors="coerce").fillna(0)
         df["fetched_at"] = dt.datetime.now(dt.timezone.utc)
 
         clean_df = df[[
             "symbol", "date", "buy_volume", "sell_volume",
-            "buy_value", "sell_value", "net_volume", "net_value",
-            "foreign_room", "fetched_at"
+            "net_volume", "foreign_room", "fetched_at"
         ]].dropna(subset=["symbol", "date"]).drop_duplicates(subset=["symbol", "date"], keep="last").reset_index(drop=True)
         return clean_df
 
@@ -137,21 +137,16 @@ class CafeFForeignFlowIngester:
                             con.execute("""
                                 INSERT INTO core.market_foreign_flow_daily (
                                     symbol, date, buy_volume, sell_volume,
-                                    buy_value, sell_value, net_volume, net_value,
-                                    foreign_room, fetched_at
+                                    net_volume, foreign_room, fetched_at
                                 )
                                 SELECT
                                     symbol, date, buy_volume, sell_volume,
-                                    buy_value, sell_value, net_volume, net_value,
-                                    foreign_room, fetched_at
+                                    net_volume, foreign_room, fetched_at
                                 FROM df_nn_batch
                                 ON CONFLICT (symbol, date) DO UPDATE SET
                                     buy_volume = EXCLUDED.buy_volume,
                                     sell_volume = EXCLUDED.sell_volume,
-                                    buy_value = EXCLUDED.buy_value,
-                                    sell_value = EXCLUDED.sell_value,
                                     net_volume = EXCLUDED.net_volume,
-                                    net_value = EXCLUDED.net_value,
                                     foreign_room = EXCLUDED.foreign_room,
                                     fetched_at = EXCLUDED.fetched_at
                             """)

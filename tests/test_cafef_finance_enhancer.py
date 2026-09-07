@@ -27,6 +27,7 @@ def temp_duckdb(tmp_path):
             available_at TIMESTAMP NOT NULL,
             data_json JSON NOT NULL,
             fetched_at TIMESTAMP NOT NULL,
+            source VARCHAR NOT NULL DEFAULT 'cafef',
             PRIMARY KEY (symbol, report_type, period_end, fetched_at)
         );
     """)
@@ -37,7 +38,8 @@ def temp_duckdb(tmp_path):
             period_end DATE NOT NULL,
             available_at TIMESTAMP NOT NULL,
             data_json JSON NOT NULL,
-            fetched_at TIMESTAMP NOT NULL
+            fetched_at TIMESTAMP NOT NULL,
+            source VARCHAR NOT NULL DEFAULT 'cafef'
         );
     """)
     con.close()
@@ -109,6 +111,7 @@ def test_save_batch(temp_duckdb):
             "available_at": dt.datetime(2026, 7, 30, 0, 0, tzinfo=dt.timezone.utc),
             "data_json": json.dumps({"Doanh thu thuần": 5000000.0}),
             "fetched_at": now,
+            "source": "cafef",
         }
     ]
     saved = enhancer.save_batch(records)

@@ -74,7 +74,7 @@ PERIOD_COLUMN_PATTERN = re.compile(r"^\d{4}(-Q[1-4])?$")
 
 # The new vnstock_data melted schema has 'period', 'id', 'value'.
 
-FUNDAMENTAL_COLUMNS = ["symbol", "report_type", "period_end", "available_at", "data_json", "fetched_at"]
+FUNDAMENTAL_COLUMNS = ["symbol", "report_type", "period_end", "available_at", "data_json", "fetched_at", "source"]
 
 
 def _authenticate() -> None:
@@ -210,6 +210,7 @@ def melt_pivoted_statement(raw_df: pd.DataFrame, symbol: str, report_type: str) 
                 "available_at": period_end + dt.timedelta(days=DISCLOSURE_LAG_DAYS),
                 "data_json": json.dumps(metrics, default=str, ensure_ascii=False),
                 "fetched_at": dt.datetime.now(dt.timezone.utc).replace(tzinfo=None),
+                "source": "vnstock_data",
             }
         )
 
@@ -294,10 +295,23 @@ def get_as_reported(con: "duckdb.DuckDBPyConnection", symbol: str, report_type: 
     as-reported vs. as-revised distinction) -- F102 should call this, not
     a raw SELECT against core.fundamentals, unless it has a specific
     reason to want a different vintage.
+
+    SCHEMA WARNING (2026-09-06, source column added): core.fundamentals
+    now has TWO independently-schemed JSON payloads depending on `source`
+    -- vnstock_data uses English codes (BS_*/IS_*/CF_*/RT_*), cafef uses
+    raw Vietnamese line-item strings. This function deliberately does NOT
+    let source preference override chronological order -- doing so would
+    silently reintroduce look-ahead bias if a future crawl ever has cafef
+    observe a quarter before vnstock_data does (today's data happens to
+    have all vnstock_data rows predate all cafef rows, but that is a
+    coincidence of crawl timing, not a structural guarantee). The
+    `source` column is returned so callers can branch on schema shape
+    themselves -- this function will not silently normalize or pick a
+    preferred schema for you.
     """
     result: pd.DataFrame = con.execute(
         """
-        SELECT symbol, report_type, period_end, available_at, data_json, fetched_at
+        SELECT symbol, report_type, period_end, available_at, data_json, fetched_at, source
         FROM (
             SELECT *, ROW_NUMBER() OVER (
                 PARTITION BY symbol, report_type, period_end
@@ -315,7 +329,11 @@ def get_as_reported(con: "duckdb.DuckDBPyConnection", symbol: str, report_type: 
 
 
 def get_as_of(
-    con: "duckdb.DuckDBPyConnection", symbol: str, report_type: str, as_of_date: dt.date
+    con: "duckdb.DuckDBPyConnection",
+    symbol: str,
+    report_type: str,
+    as_of_date: dt.date,
+    preferred_source: str = "vnstock_data",
 ) -> pd.DataFrame:
     """Returns the most recent vintage of each period_end that our system
     had actually observed (fetched_at <= as_of_date) AND that vintage's
@@ -326,14 +344,27 @@ def get_as_of(
     of a date' query is actually what's needed, since it will surface
     later restatements once both conditions are met, which is correct for
     'what do we believe today' but wrong for scoring a past decision.
+
+    preferred_source (added 2026-09-06): when both vnstock_data and cafef
+    have a row satisfying the as-of conditions for the same period_end,
+    prefer this source -- SAFE here (unlike get_as_reported) because both
+    candidate rows are already equally "knowable" as of as_of_date;
+    picking between them by source doesn't leak information a live
+    system wouldn't have had. Defaults to 'vnstock_data' (BS_*/IS_*/CF_*/
+    RT_* schema) since that's what existing callers (pit_join.py) were
+    built against. Falls back to whichever source actually has data when
+    preferred_source has none for that period -- never returns empty
+    just because the preferred source is absent.
     """
     result: pd.DataFrame = con.execute(
         """
-        SELECT symbol, report_type, period_end, available_at, data_json, fetched_at
+        SELECT symbol, report_type, period_end, available_at, data_json, fetched_at, source
         FROM (
             SELECT *, ROW_NUMBER() OVER (
                 PARTITION BY symbol, report_type, period_end
-                ORDER BY fetched_at DESC
+                ORDER BY
+                    CASE WHEN source = ? THEN 0 ELSE 1 END ASC,
+                    fetched_at DESC
             ) AS rn
             FROM core.fundamentals
             WHERE symbol = ? AND report_type = ?
@@ -343,7 +374,7 @@ def get_as_of(
         WHERE rn = 1
         ORDER BY period_end
         """,
-        [symbol, report_type, as_of_date, as_of_date],
+        [preferred_source, symbol, report_type, as_of_date, as_of_date],
     ).df()
     return result
 
