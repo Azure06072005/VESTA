@@ -505,7 +505,71 @@ class DailyCrawlerOrchestrator:
                     logger.error(f"   [ERROR] vra lỗi: {e}")
                     results["vra"] = {"status": "failed", "error": str(e)}
 
-        # 17. World Bank Macro API
+        # 17. Người Quan Sát (nguoiquansat.vn)
+        if not categories or "financial_media_portals" in categories or "nguoiquansat" in categories:
+            logger.info("-> [Tier 3] Quét phân tích thị trường: Người Quan Sát")
+            if dry_run:
+                results["nguoiquansat"] = {"status": "dry_run", "records": 0}
+            else:
+                try:
+                    from src.crawlers.nguoiquansat_crawler import run_nguoiquansat_crawler
+                    res = run_nguoiquansat_crawler(db_path=self.db_path, max_articles=5)
+                    records = res.get("total_written", 0) if isinstance(res, dict) else 0
+                    results["nguoiquansat"] = {"status": res.get("status", "success"), "records": records}
+                    logger.info(f"   [OK] nguoiquansat: +{records} bài phân tích mới.")
+                except Exception as e:
+                    logger.error(f"   [ERROR] nguoiquansat lỗi: {e}")
+                    results["nguoiquansat"] = {"status": "failed", "error": str(e)}
+
+        # 18. Tạp chí Công Thương (tapchicongthuong.vn)
+        if not categories or "financial_media_portals" in categories or "tapchicongthuong" in categories or "tcct" in categories:
+            logger.info("-> [Tier 3] Quét chính sách thương mại & ngành: Tạp chí Công Thương")
+            if dry_run:
+                results["tcct"] = {"status": "dry_run", "records": 0}
+            else:
+                try:
+                    from src.crawlers.tapchicongthuong_crawler import run_tapchicongthuong_crawler
+                    res = run_tapchicongthuong_crawler(db_path=self.db_path, max_articles=5)
+                    records = res.get("total_written", 0) if isinstance(res, dict) else 0
+                    results["tcct"] = {"status": res.get("status", "success"), "records": records}
+                    logger.info(f"   [OK] tcct: +{records} bài viết ngành thương mại mới.")
+                except Exception as e:
+                    logger.error(f"   [ERROR] tcct lỗi: {e}")
+                    results["tcct"] = {"status": "failed", "error": str(e)}
+
+        # 19. Báo Nhân Dân (nhandan.vn)
+        if not categories or "financial_media_portals" in categories or "nhandan" in categories:
+            logger.info("-> [Tier 3] Quét chính sách vĩ mô: Báo Nhân Dân")
+            if dry_run:
+                results["nhandan"] = {"status": "dry_run", "records": 0}
+            else:
+                try:
+                    from src.crawlers.nhandan_crawler import run_nhandan_crawler
+                    res = run_nhandan_crawler(db_path=self.db_path, max_articles=5)
+                    records = res.get("total_written", 0) if isinstance(res, dict) else 0
+                    results["nhandan"] = {"status": res.get("status", "success"), "records": records}
+                    logger.info(f"   [OK] nhandan: +{records} bài viết chính sách mới.")
+                except Exception as e:
+                    logger.error(f"   [ERROR] nhandan lỗi: {e}")
+                    results["nhandan"] = {"status": "failed", "error": str(e)}
+
+        # 20. Báo Tiền Phong (tienphong.vn)
+        if not categories or "financial_media_portals" in categories or "tienphong" in categories:
+            logger.info("-> [Tier 3] Quét kinh tế & doanh nghiệp: Báo Tiền Phong")
+            if dry_run:
+                results["tienphong"] = {"status": "dry_run", "records": 0}
+            else:
+                try:
+                    from src.crawlers.tienphong_crawler import run_tienphong_crawler
+                    res = run_tienphong_crawler(db_path=self.db_path, max_articles=5)
+                    records = res.get("total_written", 0) if isinstance(res, dict) else 0
+                    results["tienphong"] = {"status": res.get("status", "success"), "records": records}
+                    logger.info(f"   [OK] tienphong: +{records} bài viết kinh tế mới.")
+                except Exception as e:
+                    logger.error(f"   [ERROR] tienphong lỗi: {e}")
+                    results["tienphong"] = {"status": "failed", "error": str(e)}
+
+        # 21. World Bank Macro API
         if not categories or "world_macro_institutions" in categories or "worldbank" in categories:
             logger.info("-> [Tier 3] Quét dữ liệu vĩ mô: World Bank Open Data REST API")
             if dry_run:

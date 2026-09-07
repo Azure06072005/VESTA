@@ -281,3 +281,94 @@ def test_vra_crawler_parsing() -> None:
     assert rec["issuing_body"] == "Hiệp hội Cao su Việt Nam (VRA)"
     assert rec["doc_type"] == "RUBBER_INDUSTRY"
     assert "GVR" in rec["body"]
+
+
+def test_nguoiquansat_crawler_parsing() -> None:
+    """Kiểm tra bóc tách bài phân tích Người Quan Sát chuẩn 11 cột."""
+    from src.crawlers.nguoiquansat_crawler import parse_nqs_article
+
+    html = """
+    <html>
+      <body>
+        <h1 class="the-article-title">Dòng tiền lớn đổ mạnh vào nhóm cổ phiếu VN30 giúp chỉ số vượt đỉnh</h1>
+        <div class="the-article-meta">Ngày đăng: 07/09/2026</div>
+        <p>Thị trường chứng khoán ghi nhận thanh khoản bùng nổ, khối ngoại đẩy mạnh mua ròng các mã ngân hàng và chứng khoán.</p>
+        <p>Ủy ban Chứng khoán Nhà nước tiếp tục thúc đẩy triển khai hệ thống giao dịch KRX theo Quyết định 1726/QĐ-TTg.</p>
+      </body>
+    </html>
+    """
+    rec = parse_nqs_article(html, "https://nguoiquansat.vn/dong-tien-lon-vn30-12345.html", fallback_title="Test")
+    assert rec is not None
+    assert rec["source"] == "nguoiquansat"
+    assert rec["issuing_body"] == "Người Quan Sát (Nguoiquansat.vn)"
+    assert rec["doc_type"] == "EQUITY_COMMENTARY"
+    assert "VN30" in rec["headline"]
+    assert "thanh khoản bùng nổ" in rec["body"]
+
+
+def test_tapchicongthuong_crawler_parsing() -> None:
+    """Kiểm tra bóc tách bài viết Tạp chí Công Thương chuẩn 11 cột."""
+    from src.crawlers.tapchicongthuong_crawler import parse_tcct_article
+
+    html = """
+    <html>
+      <body>
+        <h1 class="title-detail">Bộ Công Thương đẩy mạnh phát triển năng lượng tái tạo và điện khí LNG</h1>
+        <div class="date-time">04/09/2026 09:15</div>
+        <p>Triển khai Quy hoạch Điện VIII, Bộ Công Thương đang hoàn thiện cơ chế mua bán điện trực tiếp DPPA theo Nghị định 80/2024/NĐ-CP.</p>
+        <p>Các tập đoàn năng lượng đẩy nhanh tiến độ đầu tư để đảm bảo an ninh năng lượng quốc gia.</p>
+      </body>
+    </html>
+    """
+    rec = parse_tcct_article(html, "https://tapchicongthuong.vn/phat-trien-nang-luong-tai-tao-89123.htm", fallback_title="Test")
+    assert rec is not None
+    assert rec["source"] == "tcct"
+    assert rec["issuing_body"] == "Tạp chí Công Thương (Bộ Công Thương)"
+    assert rec["doc_type"] == "SECTOR_MAGAZINE"
+    assert "80/2024/NĐ-CP" in rec["body"] or rec["doc_number"] is not None
+    assert "Điện VIII" in rec["body"]
+
+
+def test_nhandan_crawler_parsing() -> None:
+    """Kiểm tra bóc tách bài viết Báo Nhân Dân chuẩn 11 cột."""
+    from src.crawlers.nhandan_crawler import parse_nhandan_article
+
+    html = """
+    <html>
+      <body>
+        <h1 class="title">Chính phủ ban hành kế hoạch hành động thực hiện Nghị quyết phát triển kinh tế vùng</h1>
+        <div class="time">05/09/2026 15:30</div>
+        <p>Thủ tướng Chính phủ yêu cầu các bộ, ngành đẩy nhanh giải ngân vốn đầu tư công các dự án đường cao tốc trọng điểm.</p>
+        <p>Mục tiêu tăng trưởng GDP cả nước năm 2026 phấn đấu đạt từ 6,5% đến 7% theo Nghị quyết của Quốc hội.</p>
+      </body>
+    </html>
+    """
+    rec = parse_nhandan_article(html, "https://nhandan.vn/ke-hoach-hanh-dong-kinh-te-vung-post12345.html", fallback_title="Test")
+    assert rec is not None
+    assert rec["source"] == "nhandan"
+    assert rec["issuing_body"] == "Báo Nhân Dân (Cơ quan ngôn luận Trung ương Đảng)"
+    assert rec["doc_type"] == "OFFICIAL_PRESS"
+    assert "đầu tư công" in rec["body"]
+
+
+def test_tienphong_crawler_parsing() -> None:
+    """Kiểm tra bóc tách bài viết Báo Tiền Phong chuẩn 11 cột."""
+    from src.crawlers.tienphong_crawler import parse_tienphong_article
+
+    html = """
+    <html>
+      <body>
+        <h1 class="article__title">Thị trường bất động sản khu công nghiệp đón làn sóng đầu tư mới</h1>
+        <div class="article__time">06/09/2026 11:20</div>
+        <p>Nhu cầu thuê đất công nghiệp tại Bình Dương, Bắc Ninh và Hải Phòng tăng cao nhờ dòng vốn FDI giải ngân mạnh mẽ.</p>
+        <p>Các doanh nghiệp phát triển hạ tầng khu công nghiệp đẩy mạnh mở rộng quỹ đất theo quy hoạch mới.</p>
+      </body>
+    </html>
+    """
+    rec = parse_tienphong_article(html, "https://tienphong.vn/bat-dong-san-khu-cong-nghiep-don-song-fdi-post12345.tpo", fallback_title="Test")
+    assert rec is not None
+    assert rec["source"] == "tienphong"
+    assert rec["issuing_body"] == "Báo Tiền Phong (Tienphong.vn)"
+    assert rec["doc_type"] == "FINANCIAL_MEDIA"
+    assert "FDI" in rec["body"]
+

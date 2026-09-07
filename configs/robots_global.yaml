@@ -429,49 +429,53 @@ tier3_sources:
       domain: nguoiquansat.vn
       base_url: https://nguoiquansat.vn
       sitemap_url: https://nguoiquansat.vn/sitemap.xml
-      target_table: core.news
+      target_table: core.macro_policy
       crawl_delay_seconds: 0.8
       priority: MEDIUM
       category: EQUITY_COMMENTARY
-      status: PENDING
-      ingested_records_count: 0
+      status: DONE
+      ingested_records_count: 5
+      crawler_module: src/crawlers/nguoiquansat_crawler.py
     tcct:
       name: Tạp chí Công Thương
-      domain: tcct.vn
-      base_url: https://tcct.vn
-      target_table: core.news
+      domain: tapchicongthuong.vn
+      base_url: https://tapchicongthuong.vn
+      sitemap_url: https://tapchicongthuong.vn/sitemap.xml
+      target_table: core.macro_policy
       crawl_delay_seconds: 10.0
       priority: MEDIUM
       category: SECTOR_MAGAZINE
-      status: PENDING
-      ingested_records_count: 0
+      status: DONE
+      ingested_records_count: 5
+      crawler_module: src/crawlers/tapchicongthuong_crawler.py
     vov:
       name: Đài Tiếng nói Việt Nam (VOV)
       domain: vov.vn
       base_url: https://vov.vn
-      target_table: core.news
+      target_table: core.macro_policy
       crawl_delay_seconds: 20.0
       priority: LOW
       category: GENERAL_NEWS
-      status: PENDING
+      status: BLOCKED
       ingested_records_count: 0
     nhandan:
       name: Báo Nhân Dân
       domain: nhandan.vn
       base_url: https://nhandan.vn
       sitemap_url: https://nhandan.vn/sitemap.xml
-      target_table: core.news
+      target_table: core.macro_policy
       crawl_delay_seconds: 1.0
       priority: MEDIUM
       category: OFFICIAL_PRESS
-      status: PENDING
-      ingested_records_count: 0
+      status: DONE
+      ingested_records_count: 5
+      crawler_module: src/crawlers/nhandan_crawler.py
     tuoitre:
       name: Báo Tuổi Trẻ
       domain: tuoitre.vn
       base_url: https://tuoitre.vn
       sitemap_url: https://tuoitre.vn/sitemaps/index.rss
-      target_table: core.news
+      target_table: core.macro_policy
       crawl_delay_seconds: 0.8
       priority: MEDIUM
       category: GENERAL_NEWS
@@ -482,12 +486,13 @@ tier3_sources:
       domain: tienphong.vn
       base_url: https://tienphong.vn
       sitemap_url: https://tienphong.vn/sitemaps.xml
-      target_table: core.news
-      crawl_delay_seconds: 0.8
+      target_table: core.macro_policy
+      crawl_delay_seconds: 1.0
       priority: MEDIUM
-      category: GENERAL_NEWS
-      status: PENDING
-      ingested_records_count: 0
+      category: FINANCIAL_MEDIA
+      status: DONE
+      ingested_records_count: 5
+      crawler_module: src/crawlers/tienphong_crawler.py
     vnanet:
       name: Thông tấn xã Việt Nam (VNA)
       domain: vnanet.vn
