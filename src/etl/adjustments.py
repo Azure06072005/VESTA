@@ -96,7 +96,9 @@ def compute_adjustment_events(events_df: pd.DataFrame, ohlcv_df: pd.DataFrame, s
             multiplier = 1.0 / (1.0 + exercise_ratio)
             adjustment_type = "share_issue"
         elif event.get("event_type") == "DIVIDEND" and value_per_share is not None and value_per_share > 0:
-            prior_rows = ohlcv_sorted[ohlcv_sorted["date"] < ex_date]
+            ex_ts = pd.to_datetime(ex_date)
+            date_ts = pd.to_datetime(ohlcv_sorted["date"])
+            prior_rows = ohlcv_sorted[date_ts < ex_ts]
             if prior_rows.empty:
                 continue
             cum_close = float(prior_rows.iloc[-1]["close"])
@@ -157,7 +159,7 @@ def write_adjustment_events(df: pd.DataFrame, symbol: str, con: "duckdb.DuckDBPy
     return len(out)
 
 
-def get_adjustment_factor(adjustment_events_df: pd.DataFrame, as_of_date: dt.date) -> float:
+def get_adjustment_factor(adjustment_events_df: pd.DataFrame, as_of_date: dt.date | pd.Timestamp) -> float:
     """Cumulative multiplier to apply to a raw price on as_of_date --
     product of every adjustment event with ex_date strictly after
     as_of_date (backward-adjustment convention: prices are expressed in
@@ -165,7 +167,9 @@ def get_adjustment_factor(adjustment_events_df: pd.DataFrame, as_of_date: dt.dat
     """
     if adjustment_events_df.empty:
         return 1.0
-    applicable = adjustment_events_df[adjustment_events_df["ex_date"] > as_of_date]
+    ex_dates = pd.to_datetime(adjustment_events_df["ex_date"])
+    target_ts = pd.to_datetime(as_of_date)
+    applicable = adjustment_events_df[ex_dates > target_ts]
     if applicable.empty:
         return 1.0
     values = [float(v) for v in applicable["multiplier"].tolist()]

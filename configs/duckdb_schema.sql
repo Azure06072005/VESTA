@@ -299,3 +299,28 @@ CREATE TABLE IF NOT EXISTS core.macro_policy (
     fetched_at    TIMESTAMP NOT NULL,
     PRIMARY KEY (source_url)
 );
+
+-- core.market_foreign_flow_daily: Foreign investor trading volume & room (volume-only, B3/B4 compliant)
+CREATE TABLE IF NOT EXISTS core.market_foreign_flow_daily (
+    symbol        VARCHAR NOT NULL,
+    date          DATE NOT NULL,
+    buy_volume    DOUBLE,
+    sell_volume   DOUBLE,
+    net_volume    DOUBLE,
+    foreign_room  DOUBLE,
+    fetched_at    TIMESTAMP NOT NULL,
+    PRIMARY KEY (symbol, date)
+);
+
+-- core.market_index_daily: Benchmark market indices (VN-INDEX, VN30, HNX)
+CREATE TABLE IF NOT EXISTS core.market_index_daily (
+    index_code    VARCHAR NOT NULL,
+    date          DATE NOT NULL,
+    open          DOUBLE,
+    high          DOUBLE,
+    low           DOUBLE,
+    close         DOUBLE,
+    volume        BIGINT,
+    fetched_at    TIMESTAMP NOT NULL,
+    PRIMARY KEY (index_code, date)
+);

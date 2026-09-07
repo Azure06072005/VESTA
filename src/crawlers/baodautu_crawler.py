@@ -280,6 +280,13 @@ class BaoDauTuCrawler:
         return total_ingested
 
 
+def run_baodautu_crawler(categories: list[str] | None = None, max_pages: int = 1, db_path: str = "d:/VESTA/db/vesta.duckdb", dry_run: bool = False) -> dict[str, Any]:
+    """Convenience entry point for DailyCrawlerOrchestrator."""
+    crawler = BaoDauTuCrawler(duckdb_path=db_path)
+    count = crawler.crawl(categories=categories, max_pages=max_pages, dry_run=dry_run)
+    return {"total_written": count, "categories": categories or list(BAODAUTU_CATEGORIES.keys())}
+
+
 def main() -> None:
     """Khởi chạy CLI cho Báo Đầu tư Crawler."""
     if hasattr(sys.stdout, "reconfigure"):

@@ -1,0 +1,224 @@
+"""Báo Nhân Dân (nhandan.vn) Official Government & Policy Media Crawler.
+
+File: src/crawlers/nhandan_crawler.py
+Mô tả:
+    Thu thập các tin tức, nghị quyết, chỉ đạo điều hành vĩ mô, chính sách kinh tế xã hội
+    từ Báo Nhân Dân (nhandan.vn).
+    Tuân thủ RFC 9309, cơ chế Circuit Breaker (ngắt ngay khi bị từ chối/reject).
+    Lưu trữ chuẩn 11 cột vào staging.macro_policy và core.macro_policy.
+"""
+
+from __future__ import annotations
+
+import argparse
+import datetime as dt
+import logging
+import re
+import sys
+import time
+from pathlib import Path
+from typing import Any
+
+from bs4 import BeautifulSoup
+import duckdb
+import pandas as pd
+import requests
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from etl import db
+
+logger = logging.getLogger("nhandan_crawler")
+
+BASE_URL = "https://nhandan.vn"
+DEFAULT_DELAY_SECONDS = 1.0
+USER_AGENT = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
+)
+HEADERS = {
+    "User-Agent": USER_AGENT,
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "Accept-Language": "vi-VN,vi;q=0.9,en-US;q=0.8,en;q=0.7",
+}
+
+DATE_PATTERN = re.compile(r"(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})")
+DOC_NUMBER_PATTERN = re.compile(
+    r"\b(\d+(?:/[0-9]{4})?/(?:NQ-TW|NQ-CP|NĐ-CP|QĐ-TTg|KL-TW))\b",
+    re.IGNORECASE,
+)
+
+
+def parse_nhandan_date(soup: BeautifulSoup, text: str) -> dt.datetime:
+    """Trích xuất ngày giờ công bố bài viết an toàn."""
+    time_tag = soup.find("time") or soup.find(class_=lambda c: c and ("date" in c or "time" in c))
+    search_text = time_tag.get_text(strip=True) if time_tag else text
+    m = DATE_PATTERN.search(search_text)
+    if m:
+        try:
+            d, mth, y = int(m.group(1)), int(m.group(2)), int(m.group(3))
+            if 1 <= mth <= 12 and 1 <= d <= 31:
+                return dt.datetime(y, mth, d, 8, 0, 0, tzinfo=dt.timezone.utc)
+        except Exception:
+            pass
+    return dt.datetime.now(dt.timezone.utc)
+
+
+def parse_nhandan_article(html: str, url: str, fallback_title: str = "") -> dict[str, Any] | None:
+    """Bóc tách bài viết Báo Nhân Dân chuẩn 11 cột."""
+    soup = BeautifulSoup(html, "html.parser")
+    h1 = soup.find("h1")
+    headline = h1.get_text(strip=True) if h1 else fallback_title
+    if not headline or len(headline) < 15:
+        return None
+
+    published_at = parse_nhandan_date(soup, html[:2000])
+    paras = [
+        p.get_text(strip=True)
+        for p in soup.find_all("p")
+        if len(p.get_text(strip=True)) > 35 and not p.find_parent("footer")
+    ]
+    body = "\n\n".join(paras)
+    if len(body) < 50:
+        body = headline
+
+    summary = paras[0][:400] if paras else headline[:400]
+    doc_nums = list(set(DOC_NUMBER_PATTERN.findall(body + " " + headline)))
+    doc_number = doc_nums[0] if doc_nums else None
+    now = dt.datetime.now(dt.timezone.utc)
+
+    return {
+        "source": "nhandan",
+        "issuing_body": "Báo Nhân Dân (Cơ quan ngôn luận Trung ương Đảng)",
+        "doc_type": "OFFICIAL_PRESS",
+        "doc_number": doc_number,
+        "published_at": published_at,
+        "available_at": published_at,
+        "headline": headline[:500],
+        "summary": summary,
+        "body": body,
+        "source_url": url,
+        "fetched_at": now,
+    }
+
+
+def write_macro_policy(con: duckdb.DuckDBPyConnection, df: pd.DataFrame) -> int:
+    """Lưu bài viết vào staging và core theo chuẩn 11 cột."""
+    if df.empty:
+        return 0
+
+    required_cols = [
+        "source", "issuing_body", "doc_type", "doc_number",
+        "published_at", "available_at", "headline", "summary", "body",
+        "source_url", "fetched_at"
+    ]
+    for col in required_cols:
+        if col not in df.columns:
+            df[col] = None
+
+    con.register("df_nd_staging", df[required_cols])
+    con.execute("INSERT INTO staging.macro_policy SELECT * FROM df_nd_staging")
+    con.unregister("df_nd_staging")
+
+    con.register("df_nd_core", df[required_cols])
+    res = con.execute(
+        """
+        INSERT INTO core.macro_policy
+        SELECT * FROM df_nd_core
+        ON CONFLICT (source_url) DO NOTHING
+        """
+    )
+    n = res.fetchall()[0][0] if res else len(df)
+    con.unregister("df_nd_core")
+    return n
+
+
+def load_existing_urls(con: duckdb.DuckDBPyConnection) -> set[str]:
+    """Tải danh sách URL đã có để khử trùng lặp."""
+    try:
+        rows = con.execute("SELECT source_url FROM core.macro_policy WHERE source = 'nhandan'").fetchall()
+        return {r[0] for r in rows if r[0]}
+    except Exception:
+        return set()
+
+
+def run_nhandan_crawler(
+    max_articles: int = 50,
+    delay_seconds: float = DEFAULT_DELAY_SECONDS,
+    db_path: str = "d:/VESTA/db/vesta.duckdb",
+) -> dict[str, Any]:
+    """Chạy quy trình cào Báo Nhân Dân với Circuit Breaker."""
+    session = requests.Session()
+    session.headers.update(HEADERS)
+
+    con = db.connect(db_path, read_only=False)
+    existing_urls = load_existing_urls(con)
+
+    try:
+        resp = session.get("https://nhandan.vn/sitemaps/news-2026-9.xml", timeout=12, verify=False)
+        if resp.status_code in (401, 403, 410, 429, 503):
+            logger.warning(f"[CIRCUIT BREAKER] nhandan.vn từ chối yêu cầu (HTTP {resp.status_code}).")
+            con.close()
+            return {"status": "rejected", "http_status": resp.status_code, "total_written": 0}
+        resp.raise_for_status()
+        urls = [
+            u for u in re.findall(r"<loc>(.*?)</loc>", resp.text)
+            if u not in existing_urls and any(cat in u for cat in ["/kinh-te/", "/chinh-tri/", "/xa-hoi/"])
+        ][:max_articles]
+        if not urls:
+            urls = [u for u in re.findall(r"<loc>(.*?)</loc>", resp.text) if u not in existing_urls][:max_articles]
+    except Exception as e:
+        logger.warning(f"[CIRCUIT BREAKER] Lỗi kết nối sitemap Báo Nhân Dân: {e}. Bỏ qua site.")
+        con.close()
+        return {"status": "rejected", "error": str(e), "total_written": 0}
+
+    records = []
+    breaker_tripped = False
+
+    for url in urls:
+        time.sleep(delay_seconds)
+        try:
+            art_resp = session.get(url, timeout=12, verify=False)
+            if art_resp.status_code in (401, 403, 410, 429, 503):
+                logger.warning(f"[CIRCUIT BREAKER] nhandan từ chối bài viết (HTTP {art_resp.status_code}). Dừng.")
+                breaker_tripped = True
+                break
+            if art_resp.status_code == 200:
+                rec = parse_nhandan_article(art_resp.text, url)
+                if rec:
+                    records.append(rec)
+                    existing_urls.add(url)
+        except Exception as e:
+            logger.warning(f"[CIRCUIT BREAKER] Lỗi bài viết {url}: {e}")
+            breaker_tripped = True
+            break
+
+    total_written = 0
+    if records:
+        total_written = write_macro_policy(con, pd.DataFrame(records))
+        logger.info(f"-> [nhandan] Đã lưu +{total_written} bài viết Báo Nhân Dân.")
+
+    con.close()
+    return {
+        "status": "success" if not breaker_tripped else "partial_success",
+        "total_written": total_written,
+    }
+
+
+def main() -> None:
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8")
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+    parser = argparse.ArgumentParser(description="Bao Nhan Dan Crawler")
+    parser.add_argument("--db", default="d:/VESTA/db/vesta.duckdb", help="DuckDB path")
+    parser.add_argument("--max-articles", type=int, default=20, help="Số bài tối đa")
+    args = parser.parse_args()
+
+    res = run_nhandan_crawler(db_path=args.db, max_articles=args.max_articles)
+    print("\n=== Bao Nhan Dan Crawler Complete ===")
+    for k, v in res.items():
+        print(f"  {k:20s}: {v}")
+
+
+if __name__ == "__main__":
+    main()
