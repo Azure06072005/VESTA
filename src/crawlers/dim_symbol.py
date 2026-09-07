@@ -94,6 +94,11 @@ def _authenticate() -> None:
     """Read the vnstock API key from the environment. Never hardcode it,
     never accept it as a function argument from a caller that might log it.
     """
+    if hasattr(sys.stdout, "reconfigure"):
+        try:
+            sys.stdout.reconfigure(encoding="utf-8")
+        except Exception:
+            pass
     db.load_env()
     api_key = os.environ.get(REQUIRED_ENV_VAR)
     if not api_key:
@@ -128,30 +133,27 @@ def fetch_raw() -> tuple[pd.DataFrame, pd.DataFrame]:
     return exchange_df, industry_df
 
 def build_dim_symbol(exchange_df: pd.DataFrame, industry_df: pd.DataFrame) -> pd.DataFrame:
-    """Pure transform: left-join exchange listing with industry sectors on
-    `symbol`, append delisted_date (always NULL -- see module docstring)
-    and fetched_at. No network access -- fully unit-testable with
-    synthetic DataFrames.
+    """Pure transformation. Joins exchange listing with industry classification.
+
+    Delisted symbols have delisted_date=NULL because vnstock's API does not
+    expose the actual date -- documented gap, not fabricated.
     """
-    for required_col, df, name in [
-        ("symbol", exchange_df, "exchange_df"),
-        ("symbol", industry_df, "industry_df"),
-    ]:
-        if required_col not in df.columns:
-            raise ValueError(f"{name} missing required columns '{required_col}'")
+    for req in ("symbol", "exchange"):
+        if req not in exchange_df.columns:
+            raise ValueError(f"exchange_df missing required column: {req}")
 
     ind = industry_df.copy()
-    if "icb_code" in ind.columns and "industry_code" not in ind.columns:
-        ind = ind.rename(columns={"icb_code": "industry_code", "icb_name": "industry_name"})
-    if "industry_code" not in ind.columns:
-        ind["industry_code"] = None
-    if "industry_name" not in ind.columns:
-        ind["industry_name"] = None
+    for col in ("symbol", "industry_code", "industry_name"):
+        if col not in ind.columns:
+            ind[col] = None
 
     # Deduplicate industry_df on symbol (e.g. vnstock_data exposes multi-level ICB)
     ind_dedup = ind.drop_duplicates(subset=["symbol"])[["symbol", "industry_code", "industry_name"]]
 
     ex = exchange_df.copy()
+    # Filter for equities only (vnstock returns futures, corpbonds, bonds, CW alongside equities)
+    if "type" in ex.columns:
+        ex = ex[ex["type"] == "stock"].copy()
     if "en_organ_name" not in ex.columns:
         ex["en_organ_name"] = ex.get("organ_short_name", ex.get("organ_name", ex["symbol"]))
 

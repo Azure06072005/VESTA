@@ -128,22 +128,56 @@ class DailyCrawlerOrchestrator:
             start_t = time.time()
             records = 0
             try:
+                top_symbols = ["VCB", "VNM", "HPG", "FPT", "VIC"]
                 if mod_name == "dim_symbol":
                     from src.crawlers import dim_symbol
-                    res = dim_symbol.run(duckdb_path=self.db_path)
+                    res = dim_symbol.run()
                     records = res if isinstance(res, int) else (res.get("written", 0) if isinstance(res, dict) else 0)
 
                 elif mod_name == "market_ohlcv":
-                    # Fetch recent bars for VN30 symbols incrementally
                     from src.crawlers import market_ohlcv
-                    # Sync top liquid VN30 tickers for daily bar
-                    res = market_ohlcv.run_incremental(duckdb_path=self.db_path, lookback_days=3) if hasattr(market_ohlcv, "run_incremental") else 0
-                    records = res if isinstance(res, int) else 0
+                    start_date = (dt.date.today() - dt.timedelta(days=7)).strftime("%Y-%m-%d")
+                    for sym in top_symbols:
+                        try:
+                            n = market_ohlcv.run(sym, start=start_date)
+                            records += (n if isinstance(n, int) else 0)
+                        except Exception as e_sym:
+                            logger.warning(f"Lỗi tải OHLCV {sym}: {e_sym}")
 
                 elif mod_name == "corporate_news":
                     from src.crawlers import vnstock_news
-                    res = vnstock_news.run(duckdb_path=self.db_path) if hasattr(vnstock_news, "run") else 0
-                    records = res if isinstance(res, int) else 0
+                    for sym in top_symbols:
+                        try:
+                            n = vnstock_news.run(sym)
+                            records += (n if isinstance(n, int) else 0)
+                        except Exception as e_sym:
+                            logger.warning(f"Lỗi tải tin {sym}: {e_sym}")
+
+                elif mod_name == "fundamentals":
+                    from src.crawlers import fundamentals
+                    for sym in top_symbols[:3]:
+                        try:
+                            n = fundamentals.run(sym, report_type="all")
+                            records += (n if isinstance(n, int) else 0)
+                        except Exception as e_sym:
+                            logger.warning(f"Lỗi tải BCTC {sym}: {e_sym}")
+
+                elif mod_name == "corporate_events":
+                    from src.crawlers import corporate_events
+                    for sym in top_symbols:
+                        try:
+                            n = corporate_events.run(sym)
+                            records += (n if isinstance(n, int) else 0)
+                        except Exception as e_sym:
+                            logger.warning(f"Lỗi tải sự kiện {sym}: {e_sym}")
+
+                elif mod_name == "quote_snapshots":
+                    from src.crawlers import snapshots
+                    try:
+                        n = snapshots.run(top_symbols)
+                        records += (n if isinstance(n, int) else 0)
+                    except Exception as e_snap:
+                        logger.warning(f"Lỗi tải snapshots: {e_snap}")
 
                 results[mod_name] = {
                     "status": "success",
@@ -185,9 +219,13 @@ class DailyCrawlerOrchestrator:
                 if feat_name == "balance_sheet_enhancer":
                     from src.crawlers.cafef_finance_enhancer import CafeFFinanceEnhancer
                     enhancer = CafeFFinanceEnhancer(duckdb_path=self.db_path, delay=0.8)
-                    # Run missing active symbols queue
-                    active_symbols = ["VNM", "VCB", "HPG", "FPT", "VIC", "VHM", "MSN", "MWG", "TCB", "MBB"]
+                    active_symbols = ["VNM", "VCB", "HPG", "FPT", "VIC"]
                     records = enhancer.enhance_symbols(active_symbols, report_types=["cdkt"]) if hasattr(enhancer, "enhance_symbols") else 0
+
+                elif feat_name == "market_indices":
+                    from src.crawlers.cafef_data_market import CafeFMarketDataEnhancer
+                    enhancer = CafeFMarketDataEnhancer(duckdb_path=self.db_path)
+                    records = enhancer.ingest_market_index() if hasattr(enhancer, "ingest_market_index") else 0
 
                 elif feat_name == "foreign_flow_volume":
                     from src.crawlers.cafef_foreign_flow import run_cafef_foreign_flow

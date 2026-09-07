@@ -162,6 +162,18 @@ class CafeFForeignFlowIngester:
         return total_inserted
 
 
+def run_cafef_foreign_flow(duckdb_path: str = "d:/VESTA/db/vesta.duckdb", days_back: int = 3, symbols: list[str] | None = None) -> int:
+    """Convenience entry point for DailyCrawlerOrchestrator."""
+    ingester = CafeFForeignFlowIngester(duckdb_path=duckdb_path)
+    zip_url = f"{CAFEF_DATA_BASE_URL}/20260904/CafeF.CCNN.04092026.zip"
+    try:
+        return ingester.ingest_zip_stream(zip_url, symbols_filter=symbols)
+    except Exception as e:
+        logger.warning(f"Lỗi nạp CafeF CCNN daily ({e}), thử fallback sang Upto: {e}")
+        upto_url = f"{CAFEF_DATA_BASE_URL}/20260904/CafeF.CCNN.Upto04092026.zip"
+        return ingester.ingest_zip_stream(upto_url, symbols_filter=symbols)
+
+
 def main() -> None:
     """CLI thực thi nạp dữ liệu khối ngoại."""
     if hasattr(sys.stdout, "reconfigure"):
