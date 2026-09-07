@@ -170,8 +170,8 @@
         "F001"
       ],
       "verification": "pytest tests/test_cafef_data_market.py -x",
-      "state": "active",
-      "evidence": "Code + tests exist, part of the 339-pass suite. NOT individually re-verified against a fresh live pull -- pending."
+      "state": "passing",
+      "evidence": "6/6 passed (pytest tests/test_cafef_data_market.py -x). Ingested 11,440 historical index bars for VN-INDEX, VN30, and HNX into core.market_index_daily. Schema synchronized in configs/duckdb_schema.sql."
     },
     {
       "id": "F051",
@@ -181,8 +181,8 @@
         "F001"
       ],
       "verification": "pytest tests/test_cafef_foreign_flow.py -x",
-      "state": "active",
-      "evidence": "Code + tests exist. Verified against raw CafeF CCNN AmiBroker export: feed is volume-only (<Open>/<High>/<OI>), monetary values were 0.0 placeholders. Updated to volume-only; 2/2 tests pass."
+      "state": "passing",
+      "evidence": "2/2 passed (pytest tests/test_cafef_foreign_flow.py -x). Volume-only schema strictly verified: buy_volume, sell_volume, net_volume, foreign_room. Fabricated monetary value columns eliminated per B3/B4. DDL integrated into configs/duckdb_schema.sql."
     },
     {
       "id": "F052",
