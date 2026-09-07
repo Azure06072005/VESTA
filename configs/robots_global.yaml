@@ -1,0 +1,892 @@
+# ==============================================================================
+# VESTA QUANT SYSTEM — GLOBAL CRAWLER & ROBOTS COMPLIANCE CONFIGURATION
+# File: configs/robots_global.yaml
+# Specification: Unified multi-tier crawling configuration covering:
+#   - Tier 1: vnstock / vnstock_data API Primary Crawling
+#   - Tier 2: CafeF & Vietstock Finance Enhancers (Gap Filling, Balance Sheet, Research Reports)
+#   - Tier 3: Macro, Policy, Economical Laws, Sectoral Associations & World News
+#             (Synthesized from 74 robots.txt specifications in scratch/robots)
+# Optimization: Watermark-based incremental crawling, RFC 9309 politeness delays,
+#               and zero look-ahead bias compliance (Circular 96/2020/TT-BTC).
+# ==============================================================================
+
+global_settings:
+  system_name: "VESTA-Autonomous-Trading-System"
+  version: "2.1.0"
+  timezone: "Asia/Ho_Chi_Minh"
+  database:
+    target_path: "d:/VESTA/db/vesta.duckdb"
+    staging_schema: "staging"
+    core_schema: "core"
+    meta_schema: "meta"
+  network:
+    default_user_agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36 (VESTA-Quant-Crawler/2.1)"
+    request_timeout_seconds: 15
+    max_retries: 4
+    backoff_factor: 1.5
+    retry_http_status_codes: [429, 500, 502, 503, 504]
+  lookahead_bias_guardrails:
+    enabled: true
+    bctc_disclosure_lag_days: 30       # Circular 96/2020/TT-BTC disclosure deadline
+    news_publication_lag_minutes: 0    # Timestamped to exact release time
+  time_cost_optimization:
+    watermark_incremental: true        # Query max(published_at) or max(date) before scanning
+    stop_on_watermark_hit: true        # Cease pagination immediately upon reaching existing records
+    max_daily_runtime_minutes: 45      # Cap total daily automated pipeline runtime
+    sitemap_delta_check: true          # Inspect <lastmod> in sitemaps before fetching HTML pages
+
+# ------------------------------------------------------------------------------
+# TIER 1: PRIMARY API CRAWLING (VNSTOCK / VNSTOCK_DATA ECOSYSTEM)
+# ------------------------------------------------------------------------------
+tier1_vnstock_api:
+  provider: "vnstock / vnstock_data"
+  api_key_env: "VNSTOCK_API_KEY"
+  rate_limit:
+    calls_per_minute: 60
+    pause_on_rate_limit_seconds: 45
+  modules:
+    dim_symbol:
+      target_table: "core.dim_symbol"
+      module_path: "src/crawlers/dim_symbol.py"
+      schedule: "08:00 daily (Mon-Fri)"
+      exchanges: ["HOSE", "HNX", "UPCOM"]
+      description: "Universe directory master (1,751 symbols total, 1,522 active listed equities)"
+
+    market_ohlcv:
+      target_table: "core.market_ohlcv_daily"
+      module_path: "src/crawlers/market_ohlcv.py"
+      schedule: "15:35 daily (Mon-Fri)"
+      lookback_days_incremental: 3
+      full_history_start: "2020-01-01"
+      description: "Daily open, high, low, close, volume price series"
+
+    corporate_news:
+      target_table: "core.news"
+      module_path: "src/crawlers/vnstock_news.py"
+      schedule: "Every 2 hours (08:30 - 18:30)"
+      source_label: "vnstock_news"
+      description: "Ticker-tagged news and corporate press releases"
+
+    fundamentals:
+      target_table: "core.fundamentals"
+      module_path: "src/crawlers/fundamentals.py"
+      schedule: "18:00 daily during earnings season (Jan, Apr, Jul, Oct)"
+      report_types: ["income_statement", "cash_flow", "ratios"]
+      source_label: "vnstock_data"
+      note: "Primary BCTC source. Balance sheet gap is filled by CafeF in Tier 2."
+
+    corporate_events:
+      target_table: "core.corporate_events"
+      module_path: "src/crawlers/corporate_events.py"
+      schedule: "17:00 daily (Mon-Fri)"
+      event_types: ["DIVIDEND_CASH", "DIVIDEND_STOCK", "BONUS_SHARE", "RIGHTS_ISSUE", "AGM"]
+      description: "Corporate actions and dividend payout tracking"
+
+    quote_snapshots:
+      target_table: "core.quote_snapshots"
+      module_path: "src/crawlers/snapshots.py"
+      schedule: "11:35 & 15:05 daily (Mon-Fri)"
+      description: "Intraday quote board, bid-ask spread, valuation multiples (P/E, P/B)"
+
+# ------------------------------------------------------------------------------
+# TIER 2: ENHANCERS & GAP FILLING (CAFEF & VIETSTOCK FINANCE)
+# ------------------------------------------------------------------------------
+tier2_enhancers:
+  cafef:
+    name: "CafeF Financial Ecosystem"
+    base_web_url: "https://cafef.vn"
+    base_api_url: "https://apiweb.cafef.vn"
+    crawl_delay_seconds: 0.8
+    headers:
+      Origin: "https://cafef.vn"
+      Referer: "https://cafef.vn/"
+    features:
+      balance_sheet_enhancer:
+        enabled: true
+        module_path: "src/crawlers/cafef_finance_enhancer.py"
+        endpoint: "/api/v2/BCTC/GetReportCDKT"
+        target_table: "core.fundamentals"
+        source_label: "cafef"
+        purpose: "Populate missing balance sheet statements (CDKT) where vnstock_data returns empty"
+        period_type: "quarter"
+        historical_years: 5
+
+      article_body_enrichment:
+        enabled: true
+        module_path: "src/crawlers/cafef_article_body.py"
+        target_table: "core.news"
+        purpose: "Enrich full paragraph text for headline-only corporate articles"
+        batch_size: 100
+
+      market_indices:
+        enabled: true
+        module_path: "src/crawlers/cafef_data_market.py"
+        target_table: "core.market_index_daily"
+        indices: ["VN-INDEX", "VN30-INDEX", "HNX-INDEX", "UPCOM-INDEX"]
+        purpose: "Benchmark index daily bars and market breadth calculation"
+
+      foreign_flow_volume:
+        enabled: true
+        module_path: "src/crawlers/cafef_foreign_flow.py"
+        target_table: "core.foreign_flow_daily"
+        mode: "volume_only"
+        purpose: "Daily foreign investor buy/sell/net trading volume"
+
+  vietstock:
+    name: "Vietstock Finance Portal"
+    base_web_url: "https://vietstock.vn"
+    base_finance_url: "https://finance.vietstock.vn"
+    crawl_delay_seconds: 1.2
+    features:
+      equity_research_reports:
+        enabled: true
+        module_path: "src/crawlers/vietstock_finance_enhancer.py"
+        target_table: "core.stock_research_reports"
+        endpoint: "https://finance.vietstock.vn/bao-cao-phan-tich/phan-tich-doanh-nghiep"
+        schedule: "19:00 daily (Mon-Fri)"
+        purpose: "Broker research reports, consensus target prices, and investment ratings"
+        brokers_tracked: ["VPBankS", "SSI", "VNDirect", "HSC", "Mirae Asset", "KBSV", "BaoViet"]
+
+      financial_indicators_crossref:
+        enabled: true
+        module_path: "src/crawlers/vietstock_finance_enhancer.py"
+        target_table: "core.fundamentals"
+        purpose: "Cross-validate and fill fundamental ratio metrics"
+
+# ------------------------------------------------------------------------------
+# TIER 3: NEWS, POLICY, ECONOMICAL LAWS, ASSOCIATIONS & WORLD MACRO
+# (All 74 domain specifications derived from d:/VESTA/scratch/robots)
+# ------------------------------------------------------------------------------
+tier3_sources:
+  macro_regulatory:
+    sbv_gov_vn:
+      name: "Ngân hàng Nhà nước Việt Nam (SBV)"
+      domain: "sbv.gov.vn"
+      base_url: "https://sbv.gov.vn"
+      sitemap_url: "https://sbv.gov.vn/sitemap.xml"
+      target_table: "core.macro_policy"
+      crawl_delay_seconds: 1.0
+      priority: "CRITICAL"
+      category: "MONETARY_POLICY"
+      tracked_data: ["Lãi suất điều hành", "Tỷ giá trung tâm", "Chỉ thị tăng trưởng tín dụng", "Thông tư NHNN"]
+
+    baochinhphu_vn:
+      name: "Cổng Thông tin Điện tử Chính phủ"
+      domain: "baochinhphu.vn"
+      base_url: "https://baochinhphu.vn"
+      target_table: "core.macro_policy"
+      crawl_delay_seconds: 0.5
+      priority: "CRITICAL"
+      category: "GOVERNMENT_DECREE"
+      tracked_data: ["Nghị quyết Chính phủ", "Quyết định Thủ tướng", "Chỉ đạo điều hành kinh tế vĩ mô"]
+
+    mof_gov_vn:
+      name: "Bộ Tài chính Việt Nam"
+      domain: "mof.gov.vn"
+      base_url: "https://mof.gov.vn"
+      target_table: "core.macro_policy"
+      crawl_delay_seconds: 1.0
+      priority: "HIGH"
+      category: "FISCAL_POLICY"
+      tracked_data: ["Chính sách tài khóa", "Quy định trái phiếu doanh nghiệp (Nghị định 08/65)", "Thuế và ngân sách"]
+
+    moit_gov_vn:
+      name: "Bộ Công Thương Việt Nam"
+      domain: "moit.gov.vn"
+      base_url: "https://moit.gov.vn"
+      target_table: "core.macro_policy"
+      crawl_delay_seconds: 1.0
+      priority: "HIGH"
+      category: "INDUSTRY_TRADE"
+      tracked_data: ["Quy hoạch Điện VIII", "Điều hành giá xăng dầu", "Hạn ngạch xuất nhập khẩu"]
+
+    ssc_gov_vn:
+      name: "Ủy ban Chứng khoán Nhà nước (SSC)"
+      domain: "ssc.gov.vn"
+      base_url: "https://ssc.gov.vn"
+      target_table: "core.macro_policy"
+      crawl_delay_seconds: 1.0
+      priority: "CRITICAL"
+      category: "MARKET_SURVEILLANCE"
+      tracked_data: ["Xử phạt vi phạm chứng khoán", "Cảnh báo thao túng giá", "Dự thảo Luật Chứng khoán"]
+
+    gdt_gov_vn:
+      name: "Tổng cục Thuế Việt Nam"
+      domain: "gdt.gov.vn"
+      base_url: "https://gdt.gov.vn"
+      target_table: "core.macro_policy"
+      crawl_delay_seconds: 1.0
+      priority: "MEDIUM"
+      category: "TAXATION"
+
+    moj_gov_vn:
+      name: "Bộ Tư pháp Việt Nam"
+      domain: "moj.gov.vn"
+      base_url: "https://moj.gov.vn"
+      sitemap_url: "https://moj.gov.vn/sitemap.xml"
+      target_table: "core.macro_policy"
+      crawl_delay_seconds: 1.0
+      priority: "MEDIUM"
+      category: "LEGAL_SYSTEM"
+
+    moh_gov_vn:
+      name: "Bộ Y tế Việt Nam"
+      domain: "moh.gov.vn"
+      base_url: "https://moh.gov.vn"
+      target_table: "core.macro_policy"
+      crawl_delay_seconds: 1.0
+      priority: "MEDIUM"
+      category: "HEALTHCARE_REGULATION"
+
+    hsx_vn:
+      name: "Sở Giao dịch Chứng khoán TP.HCM (HOSE)"
+      domain: "hsx.vn"
+      base_url: "https://hsx.vn"
+      target_table: "core.macro_policy"
+      crawl_delay_seconds: 1.0
+      priority: "HIGH"
+      category: "EXCHANGE_NOTICE"
+      tracked_data: ["Cổ phiếu diện kiểm soát/hạn chế giao dịch", "Danh sách chứng khoán không được cấp margin"]
+
+    hnx_vn:
+      name: "Sở Giao dịch Chứng khoán Hà Nội (HNX)"
+      domain: "hnx.vn"
+      base_url: "https://hnx.vn"
+      target_table: "core.macro_policy"
+      crawl_delay_seconds: 1.0
+      priority: "HIGH"
+      category: "EXCHANGE_NOTICE"
+
+    vietnam_gov:
+      name: "Trang Thông tin Điện tử Chính phủ"
+      domain: "chinhphu.vn"
+      base_url: "https://chinhphu.vn"
+      target_table: "core.macro_policy"
+      crawl_delay_seconds: 1.0
+      priority: "MEDIUM"
+      category: "GOVERNMENT_AFFAIRS"
+
+  economical_laws_policies:
+    thuvienphapluat:
+      name: "Thư Viện Pháp Luật"
+      domain: "thuvienphapluat.vn"
+      base_url: "https://thuvienphapluat.vn"
+      sitemap_url: "https://thuvienphapluat.vn/resitemap.xml"
+      target_table: "core.macro_policy"
+      crawl_delay_seconds: 1.5
+      priority: "HIGH"
+      category: "LAW_LIBRARY"
+      tracked_data: ["Luật Đất đai", "Luật Các tổ chức tín dụng", "Luật Kinh doanh BĐS", "Luật Chứng khoán"]
+
+    luatvn:
+      name: "Luật Việt Nam"
+      domain: "luatvietnam.vn"
+      base_url: "https://luatvietnam.vn"
+      sitemap_url: "https://luatvietnam.vn/sitemap.xml"
+      target_table: "core.macro_policy"
+      crawl_delay_seconds: 1.5
+      priority: "HIGH"
+      category: "LAW_SYSTEM"
+
+    fta_moit:
+      name: "Cổng Thông tin Hiệp định Thương mại Tự do"
+      domain: "fta.moit.gov.vn"
+      base_url: "https://fta.moit.gov.vn"
+      target_table: "core.macro_policy"
+      crawl_delay_seconds: 1.0
+      priority: "MEDIUM"
+      category: "TRADE_AGREEMENTS"
+      tracked_data: ["CPTPP", "EVFTA", "RCEP", "Thuế quan xuất nhập khẩu"]
+
+  financial_media_portals:
+    cafef_vn:
+      name: "CafeF Tin tức"
+      domain: "cafef.vn"
+      base_url: "https://cafef.vn"
+      sitemap_url: "https://cafef.vn/sitemap.xml"
+      target_table: "core.news"
+      crawl_delay_seconds: 0.5
+      priority: "CRITICAL"
+      category: "FINANCIAL_PORTAL"
+
+    vietstock_vn:
+      name: "Vietstock Media"
+      domain: "vietstock.vn"
+      base_url: "https://vietstock.vn"
+      sitemap_url: "https://vietstock.vn/sitemap.xml"
+      target_table: "core.news"
+      crawl_delay_seconds: 1.0
+      priority: "HIGH"
+      category: "FINANCIAL_PORTAL"
+
+    vneconomy_vn:
+      name: "VnEconomy — Tạp chí Kinh tế Việt Nam"
+      domain: "vneconomy.vn"
+      base_url: "https://vneconomy.vn"
+      sitemap_url: "https://vneconomy.vn/sitemap.xml"
+      target_table: "core.news"
+      crawl_delay_seconds: 1.0         # Strictly enforces Crawl-delay: 1 per robots.txt
+      priority: "HIGH"
+      category: "BUSINESS_MAGAZINE"
+
+    tinnhanhchungkhoan_vn:
+      name: "Tin Nhanh Chứng Khoán"
+      domain: "tinnhanhchungkhoan.vn"
+      base_url: "https://tinnhanhchungkhoan.vn"
+      sitemap_url: "https://tinnhanhchungkhoan.vn/sitemap.xml"
+      target_table: "core.news"
+      crawl_delay_seconds: 0.8
+      priority: "HIGH"
+      category: "EQUITY_MEDIA"
+
+    baodautu_vn:
+      name: "Báo Đầu tư"
+      domain: "baodautu.vn"
+      base_url: "https://baodautu.vn"
+      sitemap_url: "https://baodautu.vn/sitemap.xml"
+      target_table: "core.news"
+      crawl_delay_seconds: 0.8
+      priority: "HIGH"
+      category: "INVESTMENT_MEDIA"
+
+    thoibaonganhang_vn:
+      name: "Thời báo Ngân hàng"
+      domain: "thoibaonganhang.vn"
+      base_url: "https://thoibaonganhang.vn"
+      sitemap_url: "https://thoibaonganhang.vn/category_sitemap_site_1.xml"
+      target_table: "core.news"
+      crawl_delay_seconds: 0.8
+      priority: "HIGH"
+      category: "BANKING_MEDIA"
+
+    thoibaotaichinh:
+      name: "Thời báo Tài chính Việt Nam"
+      domain: "thoibaotaichinhvietnam.vn"
+      base_url: "https://thoibaotaichinhvietnam.vn"
+      sitemap_url: "https://thoibaotaichinhvietnam.vn/sitemap_site_1.xml"
+      target_table: "core.news"
+      crawl_delay_seconds: 0.8
+      priority: "HIGH"
+      category: "FINANCIAL_MEDIA"
+
+    vietnamfinance:
+      name: "VietnamFinance (DNDT)"
+      domain: "vietnamfinance.vn"
+      base_url: "https://vietnamfinance.vn"
+      sitemap_url: "https://vietnamfinance.vn/sitemap.xml"
+      target_table: "core.news"
+      crawl_delay_seconds: 0.8
+      priority: "MEDIUM"
+      category: "FINANCIAL_MEDIA"
+
+    nguoiquansat:
+      name: "Người Quan Sát"
+      domain: "nguoiquansat.vn"
+      base_url: "https://nguoiquansat.vn"
+      sitemap_url: "https://nguoiquansat.vn/sitemap.xml"
+      target_table: "core.news"
+      crawl_delay_seconds: 0.8
+      priority: "MEDIUM"
+      category: "EQUITY_COMMENTARY"
+
+    tcct:
+      name: "Tạp chí Công Thương"
+      domain: "tcct.vn"
+      base_url: "https://tcct.vn"
+      target_table: "core.news"
+      crawl_delay_seconds: 10.0        # Strictly enforces Crawl-delay: 10 per robots.txt
+      priority: "MEDIUM"
+      category: "SECTOR_MAGAZINE"
+
+    vov:
+      name: "Đài Tiếng nói Việt Nam (VOV)"
+      domain: "vov.vn"
+      base_url: "https://vov.vn"
+      target_table: "core.news"
+      crawl_delay_seconds: 20.0        # Strictly enforces Crawl-delay: 20 per robots.txt
+      priority: "LOW"
+      category: "GENERAL_NEWS"
+
+    nhandan:
+      name: "Báo Nhân Dân"
+      domain: "nhandan.vn"
+      base_url: "https://nhandan.vn"
+      sitemap_url: "https://nhandan.vn/sitemap.xml"
+      target_table: "core.news"
+      crawl_delay_seconds: 1.0
+      priority: "MEDIUM"
+      category: "OFFICIAL_PRESS"
+
+    tuoitre:
+      name: "Báo Tuổi Trẻ"
+      domain: "tuoitre.vn"
+      base_url: "https://tuoitre.vn"
+      sitemap_url: "https://tuoitre.vn/sitemaps/index.rss"
+      target_table: "core.news"
+      crawl_delay_seconds: 0.8
+      priority: "MEDIUM"
+      category: "GENERAL_NEWS"
+
+    tienphong:
+      name: "Báo Tiền Phong"
+      domain: "tienphong.vn"
+      base_url: "https://tienphong.vn"
+      sitemap_url: "https://tienphong.vn/sitemaps.xml"
+      target_table: "core.news"
+      crawl_delay_seconds: 0.8
+      priority: "MEDIUM"
+      category: "GENERAL_NEWS"
+
+    vnanet:
+      name: "Thông tấn xã Việt Nam (VNA)"
+      domain: "vnanet.vn"
+      base_url: "https://vnanet.vn"
+      sitemap_url: "https://vnanet.vn/sitemap.xml"
+      target_table: "core.news"
+      crawl_delay_seconds: 1.0
+      priority: "MEDIUM"
+      category: "NEWS_AGENCY"
+
+  industry_associations:
+    # --- Real Estate & Urban Infrastructure ---
+    horea:
+      name: "Hiệp hội Bất động sản TP.HCM (HoREA)"
+      domain: "horea.org.vn"
+      base_url: "https://horea.org.vn"
+      target_table: "core.macro_policy"
+      crawl_delay_seconds: 1.0
+      priority: "HIGH"
+      sector: "REAL_ESTATE"
+      symbols_affected: ["VIC", "VHM", "NVL", "KDH", "PDR", "DXG", "DIG", "NLG"]
+      tracked_data: ["Công văn góp ý Luật Đất đai", "Tháo gỡ pháp lý dự án BĐS"]
+
+    huba:
+      name: "Hiệp hội Doanh nghiệp TP.HCM (HUBA)"
+      domain: "huba.vn"
+      base_url: "https://huba.vn"
+      target_table: "core.macro_policy"
+      crawl_delay_seconds: 1.0
+      priority: "MEDIUM"
+      sector: "ENTERPRISE_ALLIANCE"
+
+    # --- FMCG, Agriculture & Fisheries ---
+    vba:
+      name: "Hiệp hội Bia - Rượu - Nước giải khát Việt Nam (VBA)"
+      domain: "vba.com.vn"
+      base_url: "https://vba.com.vn"
+      target_table: "core.macro_policy"
+      crawl_delay_seconds: 1.0
+      priority: "HIGH"
+      sector: "BEVERAGE_FMCG"
+      symbols_affected: ["SAB", "BHN", "MSN"]
+      tracked_data: ["Thuế Tiêu thụ Đặc biệt đồ uống có cồn/đường"]
+
+    vacod:
+      name: "Hiệp hội Phát triển Hàng tiêu dùng Việt Nam (VACOD)"
+      domain: "vacod.vn"
+      base_url: "https://vacod.vn"
+      target_table: "core.macro_policy"
+      crawl_delay_seconds: 1.0
+      priority: "MEDIUM"
+      sector: "CONSUMER_GOODS"
+
+    hoinongdan:
+      name: "Cổng Thông tin Hội Nông dân Việt Nam"
+      domain: "hoinongdan.org.vn"
+      base_url: "http://www.hoinongdan.org.vn"
+      target_table: "core.macro_policy"
+      crawl_delay_seconds: 0.5
+      priority: "HIGH"
+      sector: "AGRICULTURE"
+      symbols_affected: ["DPM", "DCM", "BFC", "PAN", "LTG", "HAG", "TAR"]
+      tracked_data: ["Mùa vụ, hạn mặn, chính sách trợ cấp nông nghiệp"]
+
+    vasep_com_vn:
+      name: "Hiệp hội Chế biến và Xuất khẩu Thủy sản Việt Nam (VASEP)"
+      domain: "vasep.com.vn"
+      base_url: "https://vasep.com.vn"
+      sitemap_url: "https://vasep.com.vn/sitemap.xml"
+      target_table: "core.macro_policy"
+      crawl_delay_seconds: 1.0
+      priority: "HIGH"
+      sector: "SEAFOOD_EXPORT"
+      symbols_affected: ["VHC", "ANV", "IDI", "FMC", "MPC", "CMX"]
+      tracked_data: ["Kim ngạch tôm/cá tra, thuế chống bán phá giá DOC Hoa Kỳ, thẻ vàng IUU"]
+
+    vfaea:
+      name: "Hiệp hội Phân bón Việt Nam"
+      domain: "vfaea.vn"
+      base_url: "https://vfaea.vn"
+      sitemap_url: "https://vfaea.vn/wp-sitemap.xml"
+      target_table: "core.macro_policy"
+      crawl_delay_seconds: 1.0
+      priority: "MEDIUM"
+      sector: "FERTILIZER"
+      symbols_affected: ["DPM", "DCM", "BFC", "LAS"]
+
+    vra:
+      name: "Hiệp hội Cao su Việt Nam (VRA)"
+      domain: "vra.com.vn"
+      base_url: "https://vra.com.vn"
+      target_table: "core.macro_policy"
+      crawl_delay_seconds: 1.0
+      priority: "MEDIUM"
+      sector: "RUBBER"
+      symbols_affected: ["GVR", "PHR", "DPR", "DRI"]
+
+    vpsaspice:
+      name: "Hiệp hội Hồ tiêu và Cây gia vị Việt Nam (VPSA)"
+      domain: "vpsaspice.org"
+      base_url: "https://vpsaspice.org"
+      sitemap_url: "https://vpsaspice.org/sitemap_index.xml"
+      target_table: "core.macro_policy"
+      crawl_delay_seconds: 1.0
+      priority: "LOW"
+      sector: "SPICES_AGRI"
+
+    # --- Banking, Energy, Materials & Heavy Industry ---
+    vnba_org_vn:
+      name: "Hiệp hội Ngân hàng Việt Nam (VNBA)"
+      domain: "vnba.org.vn"
+      base_url: "https://vnba.org.vn"
+      target_table: "core.macro_policy"
+      crawl_delay_seconds: 1.0
+      priority: "HIGH"
+      sector: "BANKING"
+      symbols_affected: ["VCB", "BID", "CTG", "MBB", "TCB", "VPB", "ACB", "STB"]
+      tracked_data: ["Lãi suất huy động/cho vay, trần room tín dụng, nợ xấu nhóm 3-5"]
+
+    hoidaukhi:
+      name: "Hội Dầu khí Việt Nam"
+      domain: "hoidaukhi.vn"
+      base_url: "https://hoidaukhi.vn"
+      sitemap_url: "https://hoidaukhi.vn/sitemap_index.xml"
+      target_table: "core.macro_policy"
+      crawl_delay_seconds: 1.0
+      priority: "HIGH"
+      sector: "OIL_GAS"
+      symbols_affected: ["GAS", "PVD", "PVS", "BSR", "PLX", "PVT"]
+      tracked_data: ["Đại dự án Lô B Ô Môn, tiến độ các mỏ khí, giá dầu thế giới"]
+
+    viea:
+      name: "Hiệp hội Doanh nghiệp Điện tử Việt Nam (VEIA)"
+      domain: "veia.org.vn"
+      base_url: "https://veia.org.vn"
+      sitemap_url: "https://veia.org.vn/wp-sitemap.xml"
+      target_table: "core.macro_policy"
+      crawl_delay_seconds: 1.0
+      priority: "MEDIUM"
+      sector: "ELECTRONICS"
+
+    avnuc:
+      name: "Hội Năng lượng Nguyên tử / Năng lượng Sạch Việt Nam"
+      domain: "avnuc.vn"
+      base_url: "https://avnuc.vn"
+      sitemap_url: "https://avnuc.vn/sitemap_index.xml"
+      target_table: "core.macro_policy"
+      crawl_delay_seconds: 1.0
+      priority: "LOW"
+      sector: "CLEAN_ENERGY"
+
+    vsa_com_vn:
+      name: "Hiệp hội Thép Việt Nam (VSA)"
+      domain: "vsa.com.vn"
+      base_url: "https://vsa.com.vn"
+      sitemap_url: "https://vsa.com.vn/wp-sitemap.xml"
+      target_table: "core.macro_policy"
+      crawl_delay_seconds: 1.0
+      priority: "HIGH"
+      sector: "STEEL_MATERIALS"
+      symbols_affected: ["HPG", "HSG", "NKG", "VGS", "TLH"]
+      tracked_data: ["Sản lượng tiêu thụ thép xây dựng/HRC, vụ việc điều tra chống bán phá giá HRC từ Trung Quốc"]
+
+    vnpca:
+      name: "Hiệp hội Nhựa Việt Nam (VPA)"
+      domain: "vnpca.org.vn"
+      base_url: "https://vnpca.org.vn"
+      sitemap_url: "https://vnpca.org.vn/wp-sitemap.xml"
+      target_table: "core.macro_policy"
+      crawl_delay_seconds: 1.0
+      priority: "MEDIUM"
+      sector: "PLASTICS"
+      symbols_affected: ["BMP", "NTP", "AAA", "PLP"]
+
+    vama:
+      name: "Hiệp hội các Nhà sản xuất Ô tô Việt Nam (VAMA)"
+      domain: "vama.org.vn"
+      base_url: "http://vama.org.vn"
+      sitemap_url: "http://vama.org.vn/sitemap.xml"
+      target_table: "core.macro_policy"
+      crawl_delay_seconds: 1.0
+      priority: "MEDIUM"
+      sector: "AUTOMOTIVE"
+      symbols_affected: ["VAX", "HHS", "TCH", "CTF"]
+      tracked_data: ["Doanh số bán xe hàng tháng, lệ phí trước bạ"]
+
+    vntextile:
+      name: "Hiệp hội Dệt May Việt Nam (VITAS)"
+      domain: "vitas.org.vn"
+      base_url: "https://vitas.org.vn"
+      target_table: "core.macro_policy"
+      crawl_delay_seconds: 1.0
+      priority: "HIGH"
+      sector: "TEXTILE_GARMENT"
+      symbols_affected: ["TNG", "MSH", "STK", "GIL", "VGT"]
+      tracked_data: ["Đơn hàng may mặc xuất khẩu sang Mỹ/EU, tiêu chuẩn xanh ESG"]
+
+    # --- Logistics, Digital Economy, Pharma & Services ---
+    vla:
+      name: "Hiệp hội Doanh nghiệp Dịch vụ Logistics Việt Nam (VLA)"
+      domain: "vla.com.vn"
+      base_url: "https://vla.com.vn"
+      sitemap_url: "https://vla.com.vn/sitemap.xml"
+      target_table: "core.macro_policy"
+      crawl_delay_seconds: 3.0         # Strictly enforces Crawl-delay: 3 per robots.txt
+      priority: "HIGH"
+      sector: "LOGISTICS_SHIPPING"
+      symbols_affected: ["GMD", "HAH", "VOS", "VSC", "TMS"]
+      tracked_data: ["Cước vận tải biển Container, phụ phí cảng biển, tắc nghẽn Biển Đỏ"]
+
+    vecom:
+      name: "Hiệp hội Thương mại Điện tử Việt Nam (VECOM)"
+      domain: "vecom.vn"
+      base_url: "https://vecom.vn"
+      sitemap_url: "https://vecom.vn/sitemap.xml"
+      target_table: "core.macro_policy"
+      crawl_delay_seconds: 10.0        # Strictly enforces Crawl-delay: 10 per robots.txt
+      priority: "MEDIUM"
+      sector: "ECOMMERCE_TECH"
+      symbols_affected: ["DGW", "MWG", "FRT"]
+
+    nda:
+      name: "Hiệp hội Dữ liệu Quốc gia (NDA)"
+      domain: "nda.org.vn"
+      base_url: "https://nda.org.vn"
+      target_table: "core.macro_policy"
+      crawl_delay_seconds: 2.0
+      priority: "MEDIUM"
+      sector: "TECH_AI_DATA"
+      symbols_affected: ["FPT", "CMG", "ELC", "ITD"]
+
+    via:
+      name: "Hiệp hội Internet Việt Nam (VIA)"
+      domain: "via.org.vn"
+      base_url: "https://via.org.vn"
+      target_table: "core.macro_policy"
+      crawl_delay_seconds: 1.0
+      priority: "MEDIUM"
+      sector: "TELECOM_INTERNET"
+
+    vda:
+      name: "Hiệp hội Doanh nghiệp Dược Việt Nam (VNPCA)"
+      domain: "vda.org.vn"
+      base_url: "https://vda.org.vn"
+      target_table: "core.macro_policy"
+      crawl_delay_seconds: 1.0
+      priority: "MEDIUM"
+      sector: "PHARMACEUTICALS"
+      symbols_affected: ["DHG", "IMP", "TRA", "DBD", "DMC"]
+
+    hhbvt:
+      name: "Hiệp hội Bệnh viện tư nhân Việt Nam"
+      domain: "hiephoibenhvientu.com.vn"
+      base_url: "https://hiephoibenhvientu.com.vn"
+      sitemap_url: "https://hiephoibenhvientu.com.vn/wp-sitemap.xml"
+      target_table: "core.macro_policy"
+      crawl_delay_seconds: 1.0
+      priority: "LOW"
+      sector: "HEALTHCARE"
+
+    vinasme:
+      name: "Hiệp hội Doanh nghiệp Nhỏ và Vừa Việt Nam (VINASME)"
+      domain: "vinasme.vn"
+      base_url: "https://vinasme.vn"
+      target_table: "core.macro_policy"
+      crawl_delay_seconds: 1.0
+      priority: "LOW"
+      sector: "SME_COMMERCE"
+
+    vinaprint:
+      name: "Hiệp hội In Việt Nam (VINAPRINT)"
+      domain: "vinaprint.com.vn"
+      base_url: "https://www.vinaprint.com.vn"
+      target_table: "core.macro_policy"
+      crawl_delay_seconds: 1.0
+      priority: "LOW"
+      sector: "PACKAGING_PRINTING"
+      symbols_affected: ["DHC", "HAP", "INN"]
+
+    vita_vn:
+      name: "Hiệp hội Du lịch Việt Nam (VITA)"
+      domain: "vita.vn"
+      base_url: "https://vita.vn"
+      target_table: "core.macro_policy"
+      crawl_delay_seconds: 1.0
+      priority: "MEDIUM"
+      sector: "TOURISM_AVIATION"
+      symbols_affected: ["VJC", "HVN", "SKG", "DAH", "VTD"]
+
+    vafie_org:
+      name: "Hiệp hội Doanh nghiệp Đầu tư Nước ngoài (VAFIE)"
+      domain: "vafie.org.vn"
+      base_url: "https://vafie.org.vn"
+      sitemap_url: "https://vafie.org.vn/sitemap.xml"
+      target_table: "core.macro_policy"
+      crawl_delay_seconds: 1.0
+      priority: "MEDIUM"
+      sector: "FDI_INVESTMENT"
+
+    vusta:
+      name: "Liên hiệp các Hội Khoa học & Kỹ thuật Việt Nam (VUSTA)"
+      domain: "vusta.vn"
+      base_url: "https://vusta.vn"
+      target_table: "core.macro_policy"
+      crawl_delay_seconds: 1.0
+      priority: "LOW"
+      sector: "SCIENCE_TECHNOLOGY"
+
+  world_macro_institutions:
+    data_worldbank_org:
+      name: "World Bank Open Data"
+      domain: "data.worldbank.org"
+      base_url: "https://api.worldbank.org/v2"
+      target_table: "core.macro_policy"
+      crawl_delay_seconds: 0.5
+      priority: "HIGH"
+      category: "GLOBAL_MACRO_API"
+      api_type: "REST_API"
+      series_tracked: ["NY.GDP.MKTP.KD.ZG", "FP.CPI.TOTL.ZG", "BX.KLT.DINV.WD.GD.ZS"]
+      tracked_data: ["GDP growth Việt Nam", "Lạm phát CPI", "Dòng vốn FDI ròng"]
+
+    imf:
+      name: "International Monetary Fund (IMF)"
+      domain: "imf.org"
+      base_url: "https://www.imf.org"
+      sitemap_url: "https://www.imf.org/sitemap.xml"
+      target_table: "core.macro_policy"
+      crawl_delay_seconds: 1.5
+      priority: "HIGH"
+      category: "GLOBAL_MACRO"
+      tracked_data: ["Báo cáo Điều IV Việt Nam", "Dự báo tăng trưởng kinh tế toàn cầu & Đông Nam Á"]
+
+    tradingeconomics:
+      name: "Trading Economics"
+      domain: "tradingeconomics.com"
+      base_url: "https://tradingeconomics.com"
+      sitemap_url: "https://tradingeconomics.com/sitemap.xml"
+      target_table: "core.macro_policy"
+      crawl_delay_seconds: 2.0
+      priority: "HIGH"
+      category: "HIGH_FREQ_INDICATOR"
+      tracked_data: ["Chỉ số PMI Việt Nam hàng tháng", "Lãi suất Fed", "Tỷ giá USD/VND thế giới"]
+
+    bloomberg:
+      name: "Bloomberg Emerging Markets"
+      domain: "bloomberg.com"
+      base_url: "https://www.bloomberg.com"
+      sitemap_url: "https://www.bloomberg.com/sitemaps/news/index.xml"
+      target_table: "core.news"
+      crawl_delay_seconds: 2.0
+      priority: "MEDIUM"
+      category: "GLOBAL_WIRE"
+
+    reuters:
+      name: "Reuters Asia-Pacific"
+      domain: "reuters.com"
+      base_url: "https://www.reuters.com"
+      sitemap_url: "https://www.reuters.com/arc/outboundfeeds/sitemap-index/?outputType=xml"
+      target_table: "core.news"
+      crawl_delay_seconds: 2.0
+      priority: "MEDIUM"
+      category: "GLOBAL_WIRE"
+
+    goldmansachs:
+      name: "Goldman Sachs Macro Insights"
+      domain: "goldmansachs.com"
+      base_url: "https://www.goldmansachs.com"
+      sitemap_url: "https://www.goldmansachs.com/sitemap.xml"
+      target_table: "core.news"
+      crawl_delay_seconds: 2.0
+      priority: "LOW"
+      category: "INVESTMENT_BANKING"
+
+    spglobal:
+      name: "S&P Global Ratings & Indices"
+      domain: "spglobal.com"
+      base_url: "https://www.spglobal.com"
+      sitemap_url: "https://www.spglobal.com/en/sitemap.xml"
+      target_table: "core.macro_policy"
+      crawl_delay_seconds: 10.0       # Strictly enforces Crawl-delay: 10 per robots.txt
+      priority: "MEDIUM"
+      category: "CREDIT_RATING_PMI"
+      tracked_data: ["Vietnam Manufacturing PMI", "Xếp hạng tín nhiệm quốc gia"]
+
+    yahoo_finance:
+      name: "Yahoo Finance Global Commodities & FX"
+      domain: "finance.yahoo.com"
+      base_url: "https://finance.yahoo.com"
+      sitemap_url: "https://finance.yahoo.com/sitemap_en-us_quotes_index.xml"
+      target_table: "core.market_index_daily"
+      crawl_delay_seconds: 1.0
+      priority: "HIGH"
+      category: "GLOBAL_COMMODITIES"
+      tracked_symbols: ["BZ=F", "GC=F", "DX-Y.NYB", "^DJI", "^GSPC"]
+      tracked_data: ["Dầu Brent", "Vàng thế giới", "Chỉ số Dollar Index (DXY)", "S&P 500"]
+
+    wsj_com:
+      name: "The Wall Street Journal (WSJ)"
+      domain: "wsj.com"
+      base_url: "https://www.wsj.com"
+      sitemap_url: "https://www.wsj.com/sitemap.xml"
+      target_table: "core.news"
+      crawl_delay_seconds: null
+      priority: "PROHIBITED"
+      status: "BLOCKED"
+      category: "GLOBAL_MEDIA"
+      compliance_note: "RFC 9309 Disallow: / blanket ban for automated crawlers. Excluded from automated runs."
+
+# ------------------------------------------------------------------------------
+# AUTOMATED DAILY CRAWL SCHEDULES & EXECUTION PIPELINE
+# ------------------------------------------------------------------------------
+daily_pipeline_schedules:
+  job_01_morning_macro:
+    name: "Morning Macro, Legal & Overnight Global Sweep"
+    cron: "30 6 * * *"                 # 06:30 Daily
+    target_tiers: ["tier3.world_macro_institutions", "tier3.macro_regulatory", "tier3.economical_laws_policies"]
+    max_duration_minutes: 8
+    incremental_strategy: "delta_watermark"
+
+  job_02_pre_market_readiness:
+    name: "Pre-Market Symbol Directory & Exchange Status"
+    cron: "15 8 * * 1-5"               # 08:15 Mon-Fri
+    target_tiers: ["tier1_vnstock_api.modules.dim_symbol", "tier3.macro_regulatory.hsx_vn", "tier3.macro_regulatory.hnx_vn"]
+    max_duration_minutes: 3
+    incremental_strategy: "upsert_active_universe"
+
+  job_03_intraday_news:
+    name: "Intraday Financial News & Corporate Disclosures"
+    cron: "45 11,45 14 * * 1-5"        # 11:45 & 14:45 Mon-Fri
+    target_tiers: ["tier1_vnstock_api.modules.corporate_news", "tier2_enhancers.cafef.features.article_body_enrichment", "tier3.financial_media_portals"]
+    max_duration_minutes: 5
+    incremental_strategy: "watermark_latest_timestamp"
+
+  job_04_post_market_ohlcv:
+    name: "Post-Market OHLCV, Quotes & Foreign Flow Volume"
+    cron: "35 15 * * 1-5"              # 15:35 Mon-Fri
+    target_tiers: ["tier1_vnstock_api.modules.market_ohlcv", "tier1_vnstock_api.modules.quote_snapshots", "tier2_enhancers.cafef.features.foreign_flow_volume", "tier2_enhancers.cafef.features.market_indices"]
+    max_duration_minutes: 6
+    incremental_strategy: "fetch_latest_trading_date"
+
+  job_05_evening_corporate_deep_dive:
+    name: "Evening BCTC Enhancement, Corporate Events & Broker Research"
+    cron: "30 18 * * 1-5"              # 18:30 Mon-Fri
+    target_tiers: ["tier1_vnstock_api.modules.corporate_events", "tier2_enhancers.cafef.features.balance_sheet_enhancer", "tier2_enhancers.vietstock.features.equity_research_reports"]
+    max_duration_minutes: 15
+    incremental_strategy: "missing_symbols_queue"
+
+  job_06_weekend_comprehensive_audit:
+    name: "Weekend Multi-Source Macro & Association Audit"
+    cron: "0 20 * * 0"                 # 20:00 Sunday
+    target_tiers: ["tier3.industry_associations", "tier3.world_macro_institutions.data_worldbank_org"]
+    max_duration_minutes: 20
+    incremental_strategy: "weekly_full_reconciliation"
