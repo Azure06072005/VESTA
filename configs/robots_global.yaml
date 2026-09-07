@@ -316,7 +316,7 @@ tier3_sources:
       priority: HIGH
       category: LAW_SYSTEM
       status: DONE
-      ingested_records_count: 3
+      ingested_records_count: 7
       crawler_module: src/crawlers/luatvietnam_crawler.py
     fta_moit:
       name: Cổng Thông tin Hiệp định Thương mại Tự do
@@ -410,7 +410,7 @@ tier3_sources:
       priority: HIGH
       category: FINANCIAL_MEDIA
       status: DONE
-      ingested_records_count: 6
+      ingested_records_count: 72
       crawler_module: src/crawlers/thoibaotaichinh_crawler.py
     vietnamfinance:
       name: VietnamFinance (DNDT)
@@ -422,7 +422,7 @@ tier3_sources:
       priority: MEDIUM
       category: FINANCIAL_MEDIA
       status: DONE
-      ingested_records_count: 3
+      ingested_records_count: 998
       crawler_module: src/crawlers/vietnamfinance_crawler.py
     nguoiquansat:
       name: Người Quan Sát
@@ -629,7 +629,7 @@ tier3_sources:
       - DPR
       - DRI
       status: DONE
-      ingested_records_count: 6
+      ingested_records_count: 23
       crawler_module: src/crawlers/vra_crawler.py
     vpsaspice:
       name: Hiệp hội Hồ tiêu và Cây gia vị Việt Nam (VPSA)
@@ -743,7 +743,7 @@ tier3_sources:
       - DBD
       - DMC
       status: DONE
-      ingested_records_count: 3
+      ingested_records_count: 158
       crawler_module: src/crawlers/vnpca_crawler.py
     vama:
       name: Hiệp hội các Nhà sản xuất Ô tô Việt Nam (VAMA)
@@ -780,7 +780,7 @@ tier3_sources:
       tracked_data:
       - Đơn hàng may mặc xuất khẩu sang Mỹ/EU, tiêu chuẩn xanh ESG
       status: DONE
-      ingested_records_count: 3
+      ingested_records_count: 79
       crawler_module: src/crawlers/vntextile_crawler.py
     vla:
       name: Hiệp hội Doanh nghiệp Dịch vụ Logistics Việt Nam (VLA)
