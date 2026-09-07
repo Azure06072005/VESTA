@@ -203,6 +203,7 @@ def build_events_for_symbol(con: duckdb.DuckDBPyConnection, symbol: str) -> pd.D
                 continue
             latest_row = vintage_df.sort_values("period_end").iloc[-1]
             merged_fundamentals[report_type] = json.loads(latest_row["data_json"])
+            merged_fundamentals[f"{report_type}_source"] = latest_row["source"]
             fundamentals_as_of = latest_row["period_end"]
 
         fundamentals_json = json.dumps(merged_fundamentals, default=str, ensure_ascii=False) if merged_fundamentals else None

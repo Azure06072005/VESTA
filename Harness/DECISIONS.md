@@ -2,6 +2,75 @@
 
 Newest at the top. Don't reverse any of these without a new, stated reason.
 
+## 2026-09-06: Foreign flow crawler (F051) converted to volume-only per B3/B4
+- Reason: Inspection of raw AmiBroker export CafeF.NN_*.csv revealed that
+  <Low> and <Close> columns are 0.0 placeholders rather than monetary transaction
+  values in VND. Ingesting them as buy_value and sell_value violated guardrail B3/B4
+  (fabricating numbers or storing zero-values presented as transaction amounts).
+- Decision: core.market_foreign_flow_daily DDL and src/crawlers/cafef_foreign_flow.py
+  parser updated to volume-only (symbol, date, buy_volume, sell_volume, net_volume,
+  foreign_room, fetched_at). Any monetary value estimates will be computed
+  transparently downstream in F2xx using OHLCV prices, not fabricated during ingestion.
+
+## 2026-09-06: F005 balance_sheet gap REVERSED via cafef.vn BCTC API (F052) & source column added
+- Reason: the 2026-08-12 entry accepted vnstock_data's balance_sheet()
+  returning empty as a genuine, sourced upstream limitation. A new
+  crawler, src/crawlers/cafef_finance_enhancer.py (tracked as F052 above),
+  populates real balance_sheet/income_statement/cash_flow/ratio data via
+  apiweb.cafef.vn/api/v2/BCTC (GetReportCDKT, GetReportDetail, GetReportLCTT,
+  FinancialIndicators) -- the SAME endpoint this project independently
+  verified live on 2026-08-31/09-02 during the F001b/.har-analysis work
+  (required Origin/Referer headers confirmed real at that time). This is
+  a genuine second source, not a fix to the original vnstock_data gap
+  itself -- src/crawlers/fundamentals.py (F005) is UNCHANGED and still
+  correctly documents balance_sheet as empty for its own source.
+  available_at = period_end + 30 days, per Circular 96/2020/TT-BTC,
+  matching F005's existing sourced lag convention.
+- Source collision resolution: core.fundamentals and staging.fundamentals
+  were migrated via src/etl/migrations.py to add `source VARCHAR DEFAULT 'vnstock_data'`
+  and backfilled distinguishing vnstock_data (156,340 rows) from cafef (22,795 rows).
+  get_as_of() was updated to support `preferred_source="vnstock_data"` with explicit
+  source tagging. get_as_reported() remains strictly chronological to prevent look-ahead
+  bias. F052 is marked `blocked` until downstream schema mapping/normalization for
+  cafef's raw Vietnamese line items is fully completed.
+- Constraint: per AGENTS.md ("don't reverse a deliberate prior choice
+  without a new, stated reason"), this entry is that stated reason. The
+  2026-08-12 entry is NOT deleted -- it remains accurate for vnstock_data
+  as a source; this entry documents a second, independent source closing
+  the gap for the table as a whole.
+
+## 2026-09-06: Harness catch-up -- F05x auxiliary tier retroactively created for 21 untracked crawlers
+- Reason: 21 crawlers + 2 support scripts (batch_equity_enhancer.py,
+  merge_crawlers_staging.py) were built and committed to the `crawling`
+  branch without any corresponding feature_list.json entries, violating
+  WIP=1/One-Feature-One-Proof. A prior session's own audit report
+  additionally mislabeled two of them as "F007" and "F009" -- both IDs
+  already have different, established meanings (realtime-quote-snapshot
+  and the F0xx tier checkpoint respectively, confirmed unchanged on both
+  the `main` and `crawling` branches). That mislabeling is retracted, not
+  adopted.
+- Decision: new tier F05x created (F050-F071) plus its own checkpoint
+  gate (F072), structurally parallel to F009 but NOT a dependency of
+  F101/F102 -- those remain scoped to dim_symbol/market_ohlcv_daily/
+  fundamentals/news only, per this session's separate scope-boundary
+  decision. All F05x features marked `active` (except F052 marked `blocked`
+  due to schema normalization needs), not `passing`: a shared
+  339-test suite exists and collectively passes, but no individual
+  feature has been separately live-verified with fresh pasted evidence
+  the way F001-F009 originally were -- aggregate test-suite passage is
+  not equivalent to per-feature verification.
+- Confirmed test-suite state (2026-09-06, independently re-run outside
+  any session's self-report): 339 passed, 1 xfailed, 2 failed
+  (test_data_integrity.py -- hardcodes an absolute Windows path and a
+  live-data row-count threshold, see separate entry below), 5 errors
+  (tests/fixtures/*.html missing from a fresh clone -- possible .gitignore
+  or commit gap, not yet root-caused).
+- Constraint: F072 (the new tier checkpoint) must re-verify each F05x
+  feature individually before any of them moves to `passing`, and must
+  explicitly decide -- not assume -- whether F102 should ever be extended
+  to consume core.macro_policy/core.stock_research_reports. That decision
+  does not happen implicitly by these tables existing.
+
 ## 2026-09-03: F004c extract_symbol() redesign completed & verified live (35 clean editorial rows in core.news)
 - Reason: following the 38,982-row purge of contaminated false-positive rows,
   `extract_symbol()` was completely redesigned with strict syntactic whitelisting
