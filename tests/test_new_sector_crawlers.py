@@ -372,3 +372,282 @@ def test_tienphong_crawler_parsing() -> None:
     assert rec["doc_type"] == "FINANCIAL_MEDIA"
     assert "FDI" in rec["body"]
 
+
+def test_vecom_crawler_parsing() -> None:
+    """Kiểm tra bóc tách bài viết VECOM chuẩn 11 cột."""
+    from src.crawlers.vecom_crawler import parse_vecom_article
+
+    html = """
+    <html>
+      <body>
+        <h1>Báo cáo Chỉ số Thương mại điện tử Việt Nam EBI năm 2026</h1>
+        <time datetime="2026-08-25">25/08/2026</time>
+        <p>Quy mô thị trường thương mại điện tử Việt Nam tiếp tục duy trì tốc độ tăng trưởng trên 25% mỗi năm.</p>
+        <p>Các doanh nghiệp bán lẻ công nghệ như MWG, DGW và FPT Shop đẩy mạnh mô hình bán hàng đa kênh omnichannel.</p>
+      </body>
+    </html>
+    """
+    rec = parse_vecom_article(html, "https://vecom.vn/bao-cao-ebi-2026.html", fallback_title="Test")
+    assert rec is not None
+    assert rec["source"] == "vecom"
+    assert rec["issuing_body"] == "Hiệp hội Thương mại Điện tử Việt Nam (VECOM)"
+    assert rec["doc_type"] == "ECOMMERCE_TECH"
+    assert "MWG" in rec["body"]
+
+
+def test_vama_crawler_parsing() -> None:
+    """Kiểm tra bóc tách bài viết VAMA chuẩn 11 cột."""
+    from src.crawlers.vama_crawler import parse_vama_article
+
+    html = """
+    <html>
+      <body>
+        <h1>Báo cáo doanh số bán hàng thị trường ô tô toàn quốc tháng 8 năm 2026</h1>
+        <span class="date">05/09/2026</span>
+        <p>Doanh số bán ô tô của các đơn vị thành viên VAMA tăng mạnh nhờ chính sách giảm lệ phí trước bạ.</p>
+        <p>Phân khúc xe điện và xe hybrid ghi nhận mức tăng trưởng vượt bậc so với cùng kỳ.</p>
+      </body>
+    </html>
+    """
+    rec = parse_vama_article(html, "http://vama.org.vn/doanh-so-thang-8-2026.html", fallback_title="Test")
+    assert rec is not None
+    assert rec["source"] == "vama"
+    assert rec["issuing_body"] == "Hiệp hội các Nhà sản xuất Ô tô Việt Nam (VAMA)"
+    assert rec["doc_type"] == "AUTOMOTIVE_INDUSTRY"
+    assert "lệ phí trước bạ" in rec["body"]
+
+
+def test_vafie_crawler_parsing() -> None:
+    """Kiểm tra bóc tách bài viết VAFIE chuẩn 11 cột."""
+    from src.crawlers.vafie_crawler import parse_vafie_article
+
+    html = """
+    <html>
+      <body>
+        <h1>Kinh tế tư nhân cần lớn lên trong hệ sinh thái liên kết với FDI</h1>
+        <div class="date">04/09/2026 11:17</div>
+        <p>Tại Hội thảo giải pháp tài chính kinh tế tư nhân, nhiều chuyên gia đề xuất tăng cường liên kết chuỗi cung ứng FDI.</p>
+        <p>Các khu công nghiệp của KBC, BCM, IDC đang thu hút dòng vốn đầu tư công nghệ cao từ Mỹ và EU.</p>
+      </body>
+    </html>
+    """
+    rec = parse_vafie_article(html, "https://vafie.org.vn/kinh-te-tu-nhan-lien-ket-fdi-d858.html")
+    assert rec is not None
+    assert rec["source"] == "vafie"
+    assert rec["issuing_body"] == "Hiệp hội Doanh nghiệp Đầu tư Nước ngoài (VAFIE)"
+    assert rec["doc_type"] == "FDI_INVESTMENT"
+    assert "KBC" in rec["body"]
+
+
+def test_viea_crawler_parsing() -> None:
+    """Kiểm tra bóc tách bài viết VEIA chuẩn 11 cột."""
+    from src.crawlers.viea_crawler import parse_viea_article
+
+    html = """
+    <html>
+      <body>
+        <h1>Mở rộng kết nối chuỗi cung ứng điện tử bán dẫn và robot cao cấp</h1>
+        <time>03/09/2026</time>
+        <p>Hiệp hội Doanh nghiệp Điện tử Việt Nam chủ trì kết nối các nhà sản xuất linh kiện vi mạch bán dẫn.</p>
+        <p>Mục tiêu nâng cao tỷ lệ nội địa hóa trong chuỗi sản xuất thiết bị công nghệ thông tin.</p>
+      </body>
+    </html>
+    """
+    rec = parse_viea_article(html, "https://veia.org.vn/chuoi-cung-ung-dien-tu-2026/")
+    assert rec is not None
+    assert rec["source"] == "viea"
+    assert rec["issuing_body"] == "Hiệp hội Doanh nghiệp Điện tử Việt Nam (VEIA)"
+    assert rec["doc_type"] == "ELECTRONICS_INDUSTRY"
+    assert "bán dẫn" in rec["body"]
+
+
+def test_huba_crawler_parsing() -> None:
+    """Kiểm tra bóc tách bài viết HUBA chuẩn 11 cột."""
+    from src.crawlers.huba_crawler import parse_huba_article
+
+    html = """
+    <html>
+      <body>
+        <h1>Hiệp hội doanh nghiệp TP.HCM - Slogan</h1>
+        <h2>Lịch công tác HUBA và tháo gỡ khó khăn tín dụng doanh nghiệp</h2>
+        <div class="time">07/09/2026</div>
+        <p>HUBA phối hợp với Ngân hàng Nhà nước chi nhánh TP.HCM tổ chức chương trình kết nối ngân hàng - doanh nghiệp.</p>
+        <p>Gói tín dụng ưu đãi lãi suất thấp hỗ trợ các doanh nghiệp sản xuất xuất khẩu phục hồi đơn hàng.</p>
+      </body>
+    </html>
+    """
+    rec = parse_huba_article(html, "https://huba.vn/lich-cong-tac-2026/")
+    assert rec is not None
+    assert rec["source"] == "huba"
+    assert rec["issuing_body"] == "Hiệp hội Doanh nghiệp TP.HCM (HUBA)"
+    assert rec["doc_type"] == "ENTERPRISE_ALLIANCE"
+    assert "Lịch công tác" in rec["headline"]
+
+
+def test_tuoitre_crawler_parsing() -> None:
+    """Kiểm tra bóc tách bài viết Tuổi Trẻ chuẩn 11 cột."""
+    from src.crawlers.tuoitre_crawler import parse_tuoitre_article
+
+    html = """
+    <html>
+      <body>
+        <h1>Vingroup đóng góp ngân sách gần 150.000 tỉ đồng năm 2026</h1>
+        <p>Tập đoàn Vingroup tiếp tục dẫn đầu khối doanh nghiệp tư nhân trong việc đóng góp ngân sách nhà nước.</p>
+        <p>Doanh thu từ lĩnh vực xe điện VinFast và bất động sản Vinhomes duy trì đà tăng trưởng ấn tượng.</p>
+      </body>
+    </html>
+    """
+    rec = parse_tuoitre_article(html, "https://tuoitre.vn/vingroup-dong-gop-ngan-sach-12345.htm", fallback_title="Test")
+    assert rec is not None
+    assert rec["source"] == "tuoitre"
+    assert rec["issuing_body"] == "Báo Tuổi Trẻ (Tuoitre.vn)"
+    assert "Vingroup" in rec["headline"]
+
+
+def test_vpsaspice_crawler_parsing() -> None:
+    """Kiểm tra bóc tách bài viết VPSA chuẩn 11 cột."""
+    from src.crawlers.vpsaspice_crawler import parse_vpsa_article
+
+    html = """
+    <html>
+      <body>
+        <h1>Kim ngạch xuất khẩu hồ tiêu Việt Nam vượt mốc 1,2 tỷ USD năm 2026</h1>
+        <time>03/09/2026</time>
+        <p>Hiệp hội Hồ tiêu và Cây gia vị Việt Nam công bố kim ngạch xuất khẩu 8 tháng đầu năm đạt kết quả tích cực.</p>
+        <p>Giá thu mua tiêu đen và tiêu trắng tại Tây Nguyên duy trì ở mức cao kỷ lục.</p>
+      </body>
+    </html>
+    """
+    rec = parse_vpsa_article(html, "https://vpsaspice.org/xuat-khau-ho-tieu-2026/")
+    assert rec is not None
+    assert rec["source"] == "vpsaspice"
+    assert rec["issuing_body"] == "Hiệp hội Hồ tiêu và Cây gia vị Việt Nam (VPSA)"
+    assert rec["doc_type"] == "SPICES_AGRI"
+
+
+def test_hhbvt_crawler_parsing() -> None:
+    """Kiểm tra bóc tách bài viết HHBVT chuẩn 11 cột."""
+    from src.crawlers.hhbvt_crawler import parse_hhbvt_article
+
+    html = """
+    <html>
+      <body>
+        <h1>Chính sách tự chủ viện phí và tháo gỡ vướng mắc bảo hiểm y tế</h1>
+        <time>01/09/2026</time>
+        <p>Hiệp hội Bệnh viện tư nhân kiến nghị Bộ Y tế hoàn thiện cơ chế thanh toán chi phí khám chữa bệnh BHYT.</p>
+        <p>Khuyến khích thu hút nguồn lực xã hội hóa đầu tư trang thiết bị y tế hiện đại tại các cơ sở tư nhân.</p>
+      </body>
+    </html>
+    """
+    rec = parse_hhbvt_article(html, "https://hiephoibenhvientu.com.vn/chinh-sach-tu-chu-2026/")
+    assert rec is not None
+    assert rec["source"] == "hhbvt"
+    assert rec["issuing_body"] == "Hiệp hội Bệnh viện tư nhân Việt Nam"
+    assert rec["doc_type"] == "HEALTHCARE"
+
+
+def test_avnuc_crawler_parsing() -> None:
+    """Kiểm tra bóc tách bài viết AVNUC chuẩn 11 cột."""
+    from src.crawlers.avnuc_crawler import parse_avnuc_article
+
+    html = """
+    <html>
+      <body>
+        <h1>Định hướng phát triển năng lượng nguyên tử vì mục đích hòa bình năm 2026</h1>
+        <time>02/09/2026</time>
+        <p>Hội Năng lượng Nguyên tử Việt Nam thảo luận kế hoạch ứng dụng công nghệ bức xạ trong y tế và công nghiệp.</p>
+        <p>Đồng thời nghiên cứu lộ trình phát triển các nguồn năng lượng sạch bền vững theo Quy hoạch Điện VIII.</p>
+      </body>
+    </html>
+    """
+    rec = parse_avnuc_article(html, "https://avnuc.vn/dinh-huong-nang-luong-2026/")
+    assert rec is not None
+    assert rec["source"] == "avnuc"
+    assert rec["issuing_body"] == "Hội Năng lượng Nguyên tử / Sạch Việt Nam (AVNUC)"
+    assert rec["doc_type"] == "CLEAN_ENERGY"
+
+
+def test_vinasme_crawler_parsing() -> None:
+    """Kiểm tra bóc tách bài viết VINASME chuẩn 11 cột."""
+    from src.crawlers.vinasme_crawler import parse_vinasme_article
+
+    html = """
+    <html>
+      <body>
+        <h1>Chính sách tín dụng ưu đãi lãi suất cho doanh nghiệp vừa và nhỏ</h1>
+        <time>06/09/2026</time>
+        <p>Hiệp hội Doanh nghiệp Nhỏ và Vừa Việt Nam đề xuất nới lỏng điều kiện thế chấp tài sản vay vốn ngân hàng.</p>
+        <p>Quỹ bảo lãnh tín dụng cần được mở rộng quy mô để hỗ trợ doanh nghiệp tiếp cận nguồn vốn phục hồi kinh doanh.</p>
+      </body>
+    </html>
+    """
+    rec = parse_vinasme_article(html, "https://vinasme.vn/tin-tuc/chinh-sach-tin-dung-sme-2026.html")
+    assert rec is not None
+    assert rec["source"] == "vinasme"
+    assert rec["issuing_body"] == "Hiệp hội Doanh nghiệp Nhỏ và Vừa Việt Nam (VINASME)"
+    assert rec["doc_type"] == "SME_COMMERCE"
+
+
+def test_vacod_crawler_parsing() -> None:
+    """Kiểm tra bóc tách bài viết VACOD chuẩn 11 cột."""
+    from src.crawlers.vacod_crawler import parse_vacod_article
+
+    html = """
+    <html>
+      <body>
+        <h1>Thúc đẩy kích cầu tiêu dùng nội địa và xúc tiến thương mại hàng Việt Nam</h1>
+        <time>05/09/2026</time>
+        <p>Hiệp hội Phát triển Hàng tiêu dùng Việt Nam tổ chức tuần lễ tôn vinh hàng tiêu dùng chất lượng cao.</p>
+        <p>Các chuỗi bán lẻ hiện đại tăng cường liên kết tiêu thụ nông sản và sản phẩm OCOP từ các hợp tác xã.</p>
+      </body>
+    </html>
+    """
+    rec = parse_vacod_article(html, "https://vacod.vn/kich-cau-tieu-dung-2026.htm")
+    assert rec is not None
+    assert rec["source"] == "vacod"
+    assert rec["issuing_body"] == "Hiệp hội Phát triển Hàng tiêu dùng Việt Nam (VACOD)"
+    assert rec["doc_type"] == "CONSUMER_GOODS"
+
+
+def test_vusta_crawler_parsing() -> None:
+    """Kiểm tra bóc tách bài viết VUSTA chuẩn 11 cột."""
+    from src.crawlers.vusta_crawler import parse_vusta_article
+
+    html = """
+    <html>
+      <body>
+        <h1>Tư vấn phản biện chính sách khoa học công nghệ và đổi mới sáng tạo</h1>
+        <time>04/09/2026</time>
+        <p>Liên hiệp các Hội Khoa học và Kỹ thuật Việt Nam đẩy mạnh hoạt động tư vấn phản biện dự thảo luật.</p>
+        <p>Đóng góp ý kiến hoàn thiện khung pháp lý về chuyển đổi số và phát triển kinh tế tuần hoàn.</p>
+      </body>
+    </html>
+    """
+    rec = parse_vusta_article(html, "https://vusta.vn/tu-van-phan-bien-khcn-2026.html")
+    assert rec is not None
+    assert rec["source"] == "vusta"
+    assert rec["issuing_body"] == "Liên hiệp các Hội Khoa học & Kỹ thuật Việt Nam (VUSTA)"
+    assert rec["doc_type"] == "SCIENCE_TECHNOLOGY"
+
+
+def test_via_crawler_parsing() -> None:
+    """Kiểm tra bóc tách bài viết VIA chuẩn 11 cột."""
+    from src.crawlers.via_crawler import parse_via_article
+
+    html = """
+    <html>
+      <body>
+        <h1>Hiệp hội Internet Việt Nam</h1>
+        <p>Chính sách mới về chuyển đổi số và phát triển trung tâm dữ liệu AI tại Việt Nam.</p>
+        <p>Các doanh nghiệp viễn thông và công nghệ thông tin mở rộng hạ tầng cáp quang biển quốc tế.</p>
+      </body>
+    </html>
+    """
+    rec = parse_via_article(html, "https://via.org.vn/chinh-sach-ai-2026", fallback_title="Quy định mới về an toàn dữ liệu và trung tâm tính toán AI")
+    assert rec is not None
+    assert rec["source"] == "via"
+    assert rec["issuing_body"] == "Hiệp hội Internet Việt Nam (VIA)"
+    assert rec["doc_type"] == "TELECOM_INTERNET"
+    assert "an toàn dữ liệu" in rec["headline"]
+
+

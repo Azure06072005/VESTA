@@ -585,6 +585,214 @@ class DailyCrawlerOrchestrator:
                     logger.error(f"   [ERROR] worldbank lỗi: {e}")
                     results["worldbank"] = {"status": "failed", "error": str(e)}
 
+        # 22. Hiệp hội Thương mại Điện tử VECOM (vecom.vn)
+        if not categories or "industry_associations" in categories or "vecom" in categories:
+            logger.info("-> [Tier 3] Quét thương mại điện tử: VECOM (vecom.vn)")
+            if dry_run:
+                results["vecom"] = {"status": "dry_run", "records": 0}
+            else:
+                try:
+                    from src.crawlers.vecom_crawler import run_vecom_crawler
+                    res = run_vecom_crawler(db_path=self.db_path, max_articles=5)
+                    records = res.get("total_written", 0) if isinstance(res, dict) else 0
+                    results["vecom"] = {"status": res.get("status", "success"), "records": records}
+                    logger.info(f"   [OK] vecom: +{records} bài viết TMĐT mới.")
+                except Exception as e:
+                    logger.error(f"   [ERROR] vecom lỗi: {e}")
+                    results["vecom"] = {"status": "failed", "error": str(e)}
+
+        # 23. Hiệp hội các Nhà sản xuất Ô tô VAMA (vama.org.vn)
+        if not categories or "industry_associations" in categories or "vama" in categories:
+            logger.info("-> [Tier 3] Quét thị trường ô tô: VAMA (vama.org.vn)")
+            if dry_run:
+                results["vama"] = {"status": "dry_run", "records": 0}
+            else:
+                try:
+                    from src.crawlers.vama_crawler import run_vama_crawler
+                    res = run_vama_crawler(db_path=self.db_path, max_articles=5)
+                    records = res.get("total_written", 0) if isinstance(res, dict) else 0
+                    results["vama"] = {"status": res.get("status", "success"), "records": records}
+                    logger.info(f"   [OK] vama: +{records} bài viết ô tô mới.")
+                except Exception as e:
+                    logger.error(f"   [ERROR] vama lỗi: {e}")
+                    results["vama"] = {"status": "failed", "error": str(e)}
+
+        # 24. Hiệp hội Doanh nghiệp Đầu tư Nước ngoài VAFIE (vafie.org.vn)
+        if not categories or "industry_associations" in categories or "vafie" in categories:
+            logger.info("-> [Tier 3] Quét dòng vốn FDI & chính sách đầu tư: VAFIE (vafie.org.vn)")
+            if dry_run:
+                results["vafie"] = {"status": "dry_run", "records": 0}
+            else:
+                try:
+                    from src.crawlers.vafie_crawler import run_vafie_crawler
+                    res = run_vafie_crawler(db_path=self.db_path, max_articles=5)
+                    records = res.get("total_written", 0) if isinstance(res, dict) else 0
+                    results["vafie"] = {"status": res.get("status", "success"), "records": records}
+                    logger.info(f"   [OK] vafie: +{records} bài viết FDI mới.")
+                except Exception as e:
+                    logger.error(f"   [ERROR] vafie lỗi: {e}")
+                    results["vafie"] = {"status": "failed", "error": str(e)}
+
+        # 25. Hiệp hội Doanh nghiệp Điện tử Việt Nam VEIA (veia.org.vn)
+        if not categories or "industry_associations" in categories or "viea" in categories:
+            logger.info("-> [Tier 3] Quét công nghệ & bán dẫn: VEIA (veia.org.vn)")
+            if dry_run:
+                results["viea"] = {"status": "dry_run", "records": 0}
+            else:
+                try:
+                    from src.crawlers.viea_crawler import run_viea_crawler
+                    res = run_viea_crawler(db_path=self.db_path, max_articles=5)
+                    records = res.get("total_written", 0) if isinstance(res, dict) else 0
+                    results["viea"] = {"status": res.get("status", "success"), "records": records}
+                    logger.info(f"   [OK] viea: +{records} bài viết điện tử mới.")
+                except Exception as e:
+                    logger.error(f"   [ERROR] viea lỗi: {e}")
+                    results["viea"] = {"status": "failed", "error": str(e)}
+
+        # 26. Hiệp hội Doanh nghiệp TP.HCM HUBA (huba.vn)
+        if not categories or "industry_associations" in categories or "huba" in categories:
+            logger.info("-> [Tier 3] Quét diễn đàn & doanh nghiệp TP.HCM: HUBA (huba.vn)")
+            if dry_run:
+                results["huba"] = {"status": "dry_run", "records": 0}
+            else:
+                try:
+                    from src.crawlers.huba_crawler import run_huba_crawler
+                    res = run_huba_crawler(db_path=self.db_path, max_articles=5)
+                    records = res.get("total_written", 0) if isinstance(res, dict) else 0
+                    results["huba"] = {"status": res.get("status", "success"), "records": records}
+                    logger.info(f"   [OK] huba: +{records} bài viết doanh nghiệp TP.HCM mới.")
+                except Exception as e:
+                    logger.error(f"   [ERROR] huba lỗi: {e}")
+                    results["huba"] = {"status": "failed", "error": str(e)}
+
+        # 27. Báo Tuổi Trẻ (tuoitre.vn)
+        if not categories or "financial_media_portals" in categories or "tuoitre" in categories:
+            logger.info("-> [Tier 3] Quét kinh doanh & kinh tế: Báo Tuổi Trẻ (tuoitre.vn)")
+            if dry_run:
+                results["tuoitre"] = {"status": "dry_run", "records": 0}
+            else:
+                try:
+                    from src.crawlers.tuoitre_crawler import run_tuoitre_crawler
+                    res = run_tuoitre_crawler(db_path=self.db_path, max_articles=5)
+                    records = res.get("total_written", 0) if isinstance(res, dict) else 0
+                    results["tuoitre"] = {"status": res.get("status", "success"), "records": records}
+                    logger.info(f"   [OK] tuoitre: +{records} bài viết kinh doanh mới.")
+                except Exception as e:
+                    logger.error(f"   [ERROR] tuoitre lỗi: {e}")
+                    results["tuoitre"] = {"status": "failed", "error": str(e)}
+
+        # 28. Hiệp hội Hồ tiêu và Cây gia vị VPSA (vpsaspice.org)
+        if not categories or "industry_associations" in categories or "vpsaspice" in categories:
+            logger.info("-> [Tier 3] Quét nông sản & hồ tiêu: VPSA (vpsaspice.org)")
+            if dry_run:
+                results["vpsaspice"] = {"status": "dry_run", "records": 0}
+            else:
+                try:
+                    from src.crawlers.vpsaspice_crawler import run_vpsaspice_crawler
+                    res = run_vpsaspice_crawler(db_path=self.db_path, max_articles=5)
+                    records = res.get("total_written", 0) if isinstance(res, dict) else 0
+                    results["vpsaspice"] = {"status": res.get("status", "success"), "records": records}
+                    logger.info(f"   [OK] vpsaspice: +{records} bài viết hồ tiêu mới.")
+                except Exception as e:
+                    logger.error(f"   [ERROR] vpsaspice lỗi: {e}")
+                    results["vpsaspice"] = {"status": "failed", "error": str(e)}
+
+        # 29. Hiệp hội Bệnh viện tư nhân HHBVT (hiephoibenhvientu.com.vn)
+        if not categories or "industry_associations" in categories or "hhbvt" in categories:
+            logger.info("-> [Tier 3] Quét y tế & bệnh viện tư: HHBVT (hiephoibenhvientu.com.vn)")
+            if dry_run:
+                results["hhbvt"] = {"status": "dry_run", "records": 0}
+            else:
+                try:
+                    from src.crawlers.hhbvt_crawler import run_hhbvt_crawler
+                    res = run_hhbvt_crawler(db_path=self.db_path, max_articles=5)
+                    records = res.get("total_written", 0) if isinstance(res, dict) else 0
+                    results["hhbvt"] = {"status": res.get("status", "success"), "records": records}
+                    logger.info(f"   [OK] hhbvt: +{records} bài viết y tế mới.")
+                except Exception as e:
+                    logger.error(f"   [ERROR] hhbvt lỗi: {e}")
+                    results["hhbvt"] = {"status": "failed", "error": str(e)}
+
+        # 30. Hội Năng lượng Nguyên tử / Sạch AVNUC (avnuc.vn)
+        if not categories or "industry_associations" in categories or "avnuc" in categories:
+            logger.info("-> [Tier 3] Quét năng lượng sạch: AVNUC (avnuc.vn)")
+            if dry_run:
+                results["avnuc"] = {"status": "dry_run", "records": 0}
+            else:
+                try:
+                    from src.crawlers.avnuc_crawler import run_avnuc_crawler
+                    res = run_avnuc_crawler(db_path=self.db_path, max_articles=5)
+                    records = res.get("total_written", 0) if isinstance(res, dict) else 0
+                    results["avnuc"] = {"status": res.get("status", "success"), "records": records}
+                    logger.info(f"   [OK] avnuc: +{records} bài viết năng lượng mới.")
+                except Exception as e:
+                    logger.error(f"   [ERROR] avnuc lỗi: {e}")
+                    results["avnuc"] = {"status": "failed", "error": str(e)}
+
+        # 31. Hiệp hội Doanh nghiệp Nhỏ và Vừa VINASME (vinasme.vn)
+        if not categories or "industry_associations" in categories or "vinasme" in categories:
+            logger.info("-> [Tier 3] Quét khối SME: VINASME (vinasme.vn)")
+            if dry_run:
+                results["vinasme"] = {"status": "dry_run", "records": 0}
+            else:
+                try:
+                    from src.crawlers.vinasme_crawler import run_vinasme_crawler
+                    res = run_vinasme_crawler(db_path=self.db_path, max_articles=5)
+                    records = res.get("total_written", 0) if isinstance(res, dict) else 0
+                    results["vinasme"] = {"status": res.get("status", "success"), "records": records}
+                    logger.info(f"   [OK] vinasme: +{records} bài viết SME mới.")
+                except Exception as e:
+                    logger.error(f"   [ERROR] vinasme lỗi: {e}")
+                    results["vinasme"] = {"status": "failed", "error": str(e)}
+
+        # 32. Hiệp hội Phát triển Hàng tiêu dùng VACOD (vacod.vn)
+        if not categories or "industry_associations" in categories or "vacod" in categories:
+            logger.info("-> [Tier 3] Quét hàng tiêu dùng: VACOD (vacod.vn)")
+            if dry_run:
+                results["vacod"] = {"status": "dry_run", "records": 0}
+            else:
+                try:
+                    from src.crawlers.vacod_crawler import run_vacod_crawler
+                    res = run_vacod_crawler(db_path=self.db_path, max_articles=5)
+                    records = res.get("total_written", 0) if isinstance(res, dict) else 0
+                    results["vacod"] = {"status": res.get("status", "success"), "records": records}
+                    logger.info(f"   [OK] vacod: +{records} bài viết hàng tiêu dùng mới.")
+                except Exception as e:
+                    logger.error(f"   [ERROR] vacod lỗi: {e}")
+                    results["vacod"] = {"status": "failed", "error": str(e)}
+
+        # 33. Liên hiệp các Hội Khoa học & Kỹ thuật VUSTA (vusta.vn)
+        if not categories or "industry_associations" in categories or "vusta" in categories:
+            logger.info("-> [Tier 3] Quét KH&CN: VUSTA (vusta.vn)")
+            if dry_run:
+                results["vusta"] = {"status": "dry_run", "records": 0}
+            else:
+                try:
+                    from src.crawlers.vusta_crawler import run_vusta_crawler
+                    res = run_vusta_crawler(db_path=self.db_path, max_articles=5)
+                    records = res.get("total_written", 0) if isinstance(res, dict) else 0
+                    results["vusta"] = {"status": res.get("status", "success"), "records": records}
+                    logger.info(f"   [OK] vusta: +{records} bài viết KH&CN mới.")
+                except Exception as e:
+                    logger.error(f"   [ERROR] vusta lỗi: {e}")
+                    results["vusta"] = {"status": "failed", "error": str(e)}
+
+        # 34. Hiệp hội Internet Việt Nam VIA (via.org.vn)
+        if not categories or "industry_associations" in categories or "via" in categories:
+            logger.info("-> [Tier 3] Quét Internet & số hóa: VIA (via.org.vn)")
+            if dry_run:
+                results["via"] = {"status": "dry_run", "records": 0}
+            else:
+                try:
+                    from src.crawlers.via_crawler import run_via_crawler
+                    res = run_via_crawler(db_path=self.db_path, max_articles=5)
+                    records = res.get("total_written", 0) if isinstance(res, dict) else 0
+                    results["via"] = {"status": res.get("status", "success"), "records": records}
+                    logger.info(f"   [OK] via: +{records} bài viết Internet mới.")
+                except Exception as e:
+                    logger.error(f"   [ERROR] via lỗi: {e}")
+                    results["via"] = {"status": "failed", "error": str(e)}
+
         return results
 
     def run_daily_pipeline(self, tier: str = "all", dry_run: bool = False) -> Dict[str, Any]:

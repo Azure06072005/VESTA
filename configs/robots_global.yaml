@@ -243,7 +243,7 @@ tier3_sources:
       crawl_delay_seconds: 1.0
       priority: MEDIUM
       category: LEGAL_SYSTEM
-      status: PENDING
+      status: BLOCKED
       ingested_records_count: 0
     moh_gov_vn:
       name: Bộ Y tế Việt Nam
@@ -253,7 +253,7 @@ tier3_sources:
       crawl_delay_seconds: 1.0
       priority: MEDIUM
       category: HEALTHCARE_REGULATION
-      status: PENDING
+      status: UNREACHABLE
       ingested_records_count: 0
     hsx_vn:
       name: Sở Giao dịch Chứng khoán TP.HCM (HOSE)
@@ -266,7 +266,7 @@ tier3_sources:
       tracked_data:
       - Cổ phiếu diện kiểm soát/hạn chế giao dịch
       - Danh sách chứng khoán không được cấp margin
-      status: PENDING
+      status: UNREACHABLE
       ingested_records_count: 0
     hnx_vn:
       name: Sở Giao dịch Chứng khoán Hà Nội (HNX)
@@ -331,7 +331,7 @@ tier3_sources:
       - EVFTA
       - RCEP
       - Thuế quan xuất nhập khẩu
-      status: PENDING
+      status: UNREACHABLE
       ingested_records_count: 0
   financial_media_portals:
     cafef_vn:
@@ -479,8 +479,9 @@ tier3_sources:
       crawl_delay_seconds: 0.8
       priority: MEDIUM
       category: GENERAL_NEWS
-      status: PENDING
-      ingested_records_count: 0
+      status: DONE
+      ingested_records_count: 3
+      crawler_module: src/crawlers/tuoitre_crawler.py
     tienphong:
       name: Báo Tiền Phong
       domain: tienphong.vn
@@ -535,8 +536,9 @@ tier3_sources:
       crawl_delay_seconds: 1.0
       priority: MEDIUM
       sector: ENTERPRISE_ALLIANCE
-      status: PENDING
-      ingested_records_count: 0
+      status: DONE
+      ingested_records_count: 3
+      crawler_module: src/crawlers/huba_crawler.py
     vba:
       name: Hiệp hội Bia - Rượu - Nước giải khát Việt Nam (VBA)
       domain: vba.com.vn
@@ -561,8 +563,9 @@ tier3_sources:
       crawl_delay_seconds: 1.0
       priority: MEDIUM
       sector: CONSUMER_GOODS
-      status: PENDING
-      ingested_records_count: 0
+      status: DONE
+      ingested_records_count: 3
+      crawler_module: src/crawlers/vacod_crawler.py
     hoinongdan:
       name: Cổng Thông tin Hội Nông dân Việt Nam
       domain: hoinongdan.org.vn
@@ -645,8 +648,9 @@ tier3_sources:
       crawl_delay_seconds: 1.0
       priority: LOW
       sector: SPICES_AGRI
-      status: PENDING
-      ingested_records_count: 0
+      status: DONE
+      ingested_records_count: 3
+      crawler_module: src/crawlers/vpsaspice_crawler.py
     vnba_org_vn:
       name: Hiệp hội Ngân hàng Việt Nam (VNBA)
       domain: vnba.org.vn
@@ -699,8 +703,9 @@ tier3_sources:
       crawl_delay_seconds: 1.0
       priority: MEDIUM
       sector: ELECTRONICS
-      status: PENDING
-      ingested_records_count: 0
+      status: DONE
+      ingested_records_count: 3
+      crawler_module: src/crawlers/viea_crawler.py
     avnuc:
       name: Hội Năng lượng Nguyên tử / Năng lượng Sạch Việt Nam
       domain: avnuc.vn
@@ -710,8 +715,9 @@ tier3_sources:
       crawl_delay_seconds: 1.0
       priority: LOW
       sector: CLEAN_ENERGY
-      status: PENDING
-      ingested_records_count: 0
+      status: DONE
+      ingested_records_count: 3
+      crawler_module: src/crawlers/avnuc_crawler.py
     vsa_com_vn:
       name: Hiệp hội Thép Việt Nam (VSA)
       domain: vsa.com.vn
@@ -766,8 +772,9 @@ tier3_sources:
       - CTF
       tracked_data:
       - Doanh số bán xe hàng tháng, lệ phí trước bạ
-      status: PENDING
-      ingested_records_count: 0
+      status: DONE
+      ingested_records_count: 3
+      crawler_module: src/crawlers/vama_crawler.py
     vntextile:
       name: Hiệp hội Dệt May Việt Nam (VITAS)
       domain: vitas.org.vn
@@ -820,8 +827,9 @@ tier3_sources:
       - DGW
       - MWG
       - FRT
-      status: PENDING
-      ingested_records_count: 0
+      status: DONE
+      ingested_records_count: 3
+      crawler_module: src/crawlers/vecom_crawler.py
     nda:
       name: Hiệp hội Dữ liệu Quốc gia (NDA)
       domain: nda.org.vn
@@ -845,8 +853,9 @@ tier3_sources:
       crawl_delay_seconds: 1.0
       priority: MEDIUM
       sector: TELECOM_INTERNET
-      status: PENDING
-      ingested_records_count: 0
+      status: DONE
+      ingested_records_count: 3
+      crawler_module: src/crawlers/via_crawler.py
     vda:
       name: Hiệp hội Doanh nghiệp Dược Việt Nam (VNPCA)
       domain: vda.org.vn
@@ -861,7 +870,7 @@ tier3_sources:
       - TRA
       - DBD
       - DMC
-      status: PENDING
+      status: UNREACHABLE
       ingested_records_count: 0
     hhbvt:
       name: Hiệp hội Bệnh viện tư nhân Việt Nam
@@ -872,8 +881,9 @@ tier3_sources:
       crawl_delay_seconds: 1.0
       priority: LOW
       sector: HEALTHCARE
-      status: PENDING
-      ingested_records_count: 0
+      status: DONE
+      ingested_records_count: 3
+      crawler_module: src/crawlers/hhbvt_crawler.py
     vinasme:
       name: Hiệp hội Doanh nghiệp Nhỏ và Vừa Việt Nam (VINASME)
       domain: vinasme.vn
@@ -882,8 +892,9 @@ tier3_sources:
       crawl_delay_seconds: 1.0
       priority: LOW
       sector: SME_COMMERCE
-      status: PENDING
-      ingested_records_count: 0
+      status: DONE
+      ingested_records_count: 3
+      crawler_module: src/crawlers/vinasme_crawler.py
     vinaprint:
       name: Hiệp hội In Việt Nam (VINAPRINT)
       domain: vinaprint.com.vn
@@ -923,8 +934,9 @@ tier3_sources:
       crawl_delay_seconds: 1.0
       priority: MEDIUM
       sector: FDI_INVESTMENT
-      status: PENDING
-      ingested_records_count: 0
+      status: DONE
+      ingested_records_count: 3
+      crawler_module: src/crawlers/vafie_crawler.py
     vusta:
       name: Liên hiệp các Hội Khoa học & Kỹ thuật Việt Nam (VUSTA)
       domain: vusta.vn
@@ -933,8 +945,9 @@ tier3_sources:
       crawl_delay_seconds: 1.0
       priority: LOW
       sector: SCIENCE_TECHNOLOGY
-      status: PENDING
-      ingested_records_count: 0
+      status: DONE
+      ingested_records_count: 3
+      crawler_module: src/crawlers/vusta_crawler.py
   world_macro_institutions:
     data_worldbank_org:
       name: World Bank Open Data
@@ -968,7 +981,7 @@ tier3_sources:
       tracked_data:
       - Báo cáo Điều IV Việt Nam
       - Dự báo tăng trưởng kinh tế toàn cầu & Đông Nam Á
-      status: PENDING
+      status: BLOCKED
       ingested_records_count: 0
     tradingeconomics:
       name: Trading Economics
@@ -983,7 +996,7 @@ tier3_sources:
       - Chỉ số PMI Việt Nam hàng tháng
       - Lãi suất Fed
       - Tỷ giá USD/VND thế giới
-      status: PENDING
+      status: BLOCKED
       ingested_records_count: 0
     bloomberg:
       name: Bloomberg Emerging Markets
@@ -1016,7 +1029,7 @@ tier3_sources:
       crawl_delay_seconds: 2.0
       priority: LOW
       category: INVESTMENT_BANKING
-      status: PENDING
+      status: BLOCKED
       ingested_records_count: 0
     spglobal:
       name: S&P Global Ratings & Indices
@@ -1030,7 +1043,7 @@ tier3_sources:
       tracked_data:
       - Vietnam Manufacturing PMI
       - Xếp hạng tín nhiệm quốc gia
-      status: PENDING
+      status: BLOCKED
       ingested_records_count: 0
     yahoo_finance:
       name: Yahoo Finance Global Commodities & FX
