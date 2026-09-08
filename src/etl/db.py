@@ -16,7 +16,7 @@ import duckdb
 DB_PATH = pathlib.Path(
     os.environ.get(
         "VESTA_DB_PATH",
-        pathlib.Path(__file__).resolve().parents[2] / "db" / "vesta_latest_backup.duckdb",
+        pathlib.Path(__file__).resolve().parents[2] / "db" / "vesta.duckdb",
     )
 )
 SCHEMA_SQL_PATH = (
