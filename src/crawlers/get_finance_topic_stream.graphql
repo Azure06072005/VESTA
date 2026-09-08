@@ -1,0 +1,136 @@
+query GetFinanceTopicStream($listInput: LightyearListInput!, $clientContext: ClientContext!, $start: Int!, $count: Int!, $imageResize: [ImageResizeInput!]! = []) {
+  lightyearList(
+    list_input: $listInput
+    cc: $clientContext
+    start: $start
+    count: $count
+  ) {
+    ...LightyearListHydratedStream
+  }
+}
+fragment ResizedResolutions on ImageResized {
+  url
+  height
+  width
+  transformLabel
+}
+fragment Image on Image {
+  type: imgType
+  originalUrl: url
+  originalHeight: height
+  originalWidth: width
+  resolutions: resized(resizeInput: $imageResize) {
+    ...ResizedResolutions
+  }
+}
+fragment ContentAttributes on ContentAttributes {
+  description
+  summary
+  pubDate: publishTime
+  displayTime
+  isHosted
+  canonicalUrl
+  clickthroughUrl(cc: $clientContext)
+  provider {
+    displayName
+    url
+    providerContentUrl
+    providerId
+  }
+  thumbnail {
+    ...Image
+  }
+  mabMeta {
+    mabLogString
+  }
+}
+fragment FinanceStockTickers on Finance {
+  stockTickers {
+    symbol
+  }
+}
+fragment StoryData on Story {
+  id: uuid
+  __typename
+  title
+  previewUrl(cc: $clientContext)
+  isPremiumNews
+  isLiveBlog
+  embeddedLiveBlog {
+    status
+  }
+  contentAttributes {
+    ...ContentAttributes
+  }
+  finance {
+    ...FinanceStockTickers
+  }
+}
+fragment VideoData on Video {
+  id: uuid
+  __typename
+  title
+  duration
+  previewUrl(cc: $clientContext)
+  liveEventInfo {
+    scheduledStartTime
+    scheduledStopTime
+    status
+  }
+  contentAttributes {
+    ...ContentAttributes
+  }
+  finance {
+    ...FinanceStockTickers
+  }
+}
+fragment OutlinkData on Outlink {
+  __typename
+  uuid
+  description
+  displayTime
+  headline
+  url
+  provider {
+    displayName
+    url
+    providerContentUrl
+    providerId
+  }
+  contentAttributes {
+    thumbnail {
+      ...Image
+    }
+  }
+}
+fragment HydratedStoryOrVideoAsset on HydratedAsset {
+  __typename
+  asset {
+    __typename
+    ... on Story {
+      ...StoryData
+    }
+    ... on Video {
+      ...VideoData
+    }
+    ... on Outlink {
+      ...OutlinkData
+    }
+  }
+}
+fragment PaginationInfo on PaginationInfo {
+  totalCount
+  start
+  nextPage: hasNextPage
+  count
+}
+fragment LightyearListHydratedStream on LightyearList {
+  main: contentItems {
+    stream: assets {
+      ...HydratedStoryOrVideoAsset
+    }
+    pageInfo {
+      ...PaginationInfo
+    }
+  }
+}

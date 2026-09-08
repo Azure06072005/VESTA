@@ -118,3 +118,59 @@ def test_run_validation_skips_tables_that_do_not_exist_yet():
     assert report["orphan_symbols"] == {}
     assert report["future_timestamps"] == {}
     assert report["orphan_adjustment_events"] == []
+
+
+def test_dim_symbol_cafef_symbols_recognized_as_valid(tmp_path):
+    con = db.bootstrap_schema(tmp_path / "test.duckdb")
+    _seed_dim_symbol(con, ["FPT"])
+    con.execute(
+        "INSERT INTO core.dim_symbol_cafef (symbol, org_name, exchange, center_id, is_vn30, is_hnx30, slug_base, source, fetched_at, raw_json) "
+        "VALUES ('BAM', 'BAM Minerals', 'UPCOM', 9, false, false, '/du-lieu/bam', 'cafef', '2026-01-01 00:00:00', '{}')"
+    )
+    con.execute(
+        "INSERT INTO core.market_ohlcv_daily VALUES "
+        "('BAM', '2026-01-01', 10, 11, 9, 10, 500, '2026-01-01 00:00:00')"
+    )
+    vcr.validate_or_raise(con)  # must not raise
+
+
+def test_known_non_equity_patterns_and_allowlist_pass_validation(tmp_path):
+    con = db.bootstrap_schema(tmp_path / "test.duckdb")
+    _seed_dim_symbol(con, ["FPT"])
+    # Covered warrant, corporate bond, HNX derivative, ETF, index, documented residual equity
+    known_symbols = ["CHPG2541", "BID122005", "41I1G9000", "E1VFVN30", "VNX-ALL", "TCS"]
+    for s in known_symbols:
+        con.execute(
+            f"INSERT INTO core.market_ohlcv_daily VALUES "
+            f"('{s}', '2026-01-01', 10, 11, 9, 10, 100, '2026-01-01 00:00:00')"
+        )
+    vcr.validate_or_raise(con)  # must not raise
+
+
+def test_unknown_symbol_still_fails_loudly(tmp_path):
+    con = db.bootstrap_schema(tmp_path / "test.duckdb")
+    _seed_dim_symbol(con, ["FPT"])
+    con.execute(
+        "INSERT INTO core.market_ohlcv_daily VALUES "
+        "('TOTALLY_BOGUS', '2026-01-01', 10, 11, 9, 10, 100, '2026-01-01 00:00:00')"
+    )
+    with pytest.raises(vcr.ValidationError, match="orphan symbols"):
+        vcr.validate_or_raise(con)
+
+
+def test_non_equity_patterns_zero_false_positives_on_known_equity_shapes():
+    """Guards against regressions where a real equity (e.g. OTC names like
+    CARLSBERG, FUTA, E12, CIENCO1) matches a non-equity exception pattern.
+    """
+    from pipeline.symbol_classification import is_known_non_dim_symbol
+
+    test_equity_tickers = [
+        "FPT", "VIC", "VNM", "MWG", "TCB", "HPG", "SSI",
+        # Tricky OTC tickers that start with C or FU or E1
+        "CARLSBERG", "COKHIOTO32", "CHIPSANG", "CONSTREXIM", "CIENCO1",
+        "CIENCO8", "FUTA", "CIENCO6", "CAPQUANG", "CASEAMIEX", "CIPUTRAHN",
+        "CADISUN", "CIENCO5", "CTGROUP", "COCACOLA", "CALOFIC", "CARGILL",
+        "E12", "COOPBANK", "CATHAYLIFE",
+    ]
+    false_positives = [s for s in test_equity_tickers if is_known_non_dim_symbol(s)]
+    assert false_positives == [], f"Unexpected false positives among real equity tickers: {false_positives}"

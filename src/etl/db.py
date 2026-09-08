@@ -13,7 +13,12 @@ import duckdb
 
 # Single source of truth for the DB location. db/ is gitignored (see
 # conventions.md "data/ and out/... are gitignored" pattern extended to db/).
-DB_PATH = pathlib.Path(__file__).resolve().parents[2] / "db" / "vesta.duckdb"
+DB_PATH = pathlib.Path(
+    os.environ.get(
+        "VESTA_DB_PATH",
+        pathlib.Path(__file__).resolve().parents[2] / "db" / "vesta_latest_backup.duckdb",
+    )
+)
 SCHEMA_SQL_PATH = (
     pathlib.Path(__file__).resolve().parents[2] / "configs" / "duckdb_schema.sql"
 )

@@ -3,13 +3,13 @@ global_settings:
   version: 2.1.0
   timezone: Asia/Ho_Chi_Minh
   database:
-    target_path: d:/VESTA/db/vesta.duckdb
+    target_path: d:/VESTA/db/vesta_latest_backup.duckdb
     staging_schema: staging
     core_schema: core
     meta_schema: meta
   network:
-    default_user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0
-      Safari/537.36 (VESTA-Quant-Crawler/2.1)
+    default_user_agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36
+      (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36 (VESTA-Quant-Crawler/2.1)
     request_timeout_seconds: 15
     max_retries: 4
     backoff_factor: 1.5
@@ -43,7 +43,8 @@ tier1_vnstock_api:
       - HOSE
       - HNX
       - UPCOM
-      description: Universe directory master (1,751 symbols total, 1,522 active listed equities)
+      description: Universe directory master (1,751 symbols total, 1,522 active listed
+        equities)
     market_ohlcv:
       target_table: core.market_ohlcv_daily
       module_path: src/crawlers/market_ohlcv.py
@@ -82,7 +83,8 @@ tier1_vnstock_api:
       target_table: core.quote_snapshots
       module_path: src/crawlers/snapshots.py
       schedule: 11:35 & 15:05 daily (Mon-Fri)
-      description: Intraday quote board, bid-ask spread, valuation multiples (P/E, P/B)
+      description: Intraday quote board, bid-ask spread, valuation multiples (P/E,
+        P/B)
 tier2_enhancers:
   cafef:
     name: CafeF Financial Ecosystem
@@ -99,7 +101,8 @@ tier2_enhancers:
         endpoint: /api/v2/BCTC/GetReportCDKT
         target_table: core.fundamentals
         source_label: cafef
-        purpose: Populate missing balance sheet statements (CDKT) where vnstock_data returns empty
+        purpose: Populate missing balance sheet statements (CDKT) where vnstock_data
+          returns empty
         period_type: quarter
         historical_years: 5
       article_body_enrichment:
@@ -136,7 +139,8 @@ tier2_enhancers:
         target_table: core.stock_research_reports
         endpoint: https://finance.vietstock.vn/bao-cao-phan-tich/phan-tich-doanh-nghiep
         schedule: 19:00 daily (Mon-Fri)
-        purpose: Broker research reports, consensus target prices, and investment ratings
+        purpose: Broker research reports, consensus target prices, and investment
+          ratings
         brokers_tracked:
         - VPBankS
         - SSI
@@ -243,8 +247,8 @@ tier3_sources:
       crawl_delay_seconds: 1.0
       priority: MEDIUM
       category: LEGAL_SYSTEM
-      status: BLOCKED
-      ingested_records_count: 0
+      status: ACTIVE
+      ingested_records_count: 40
     moh_gov_vn:
       name: Bộ Y tế Việt Nam
       domain: moh.gov.vn
@@ -503,8 +507,8 @@ tier3_sources:
       crawl_delay_seconds: 1.0
       priority: MEDIUM
       category: NEWS_AGENCY
-      status: PENDING
-      ingested_records_count: 0
+      status: ACTIVE
+      ingested_records_count: 17
   industry_associations:
     horea:
       name: Hiệp hội Bất động sản TP.HCM (HoREA)
@@ -734,7 +738,8 @@ tier3_sources:
       - VGS
       - TLH
       tracked_data:
-      - Sản lượng tiêu thụ thép xây dựng/HRC, vụ việc điều tra chống bán phá giá HRC từ Trung Quốc
+      - Sản lượng tiêu thụ thép xây dựng/HRC, vụ việc điều tra chống bán phá giá HRC
+        từ Trung Quốc
       status: DONE
       ingested_records_count: 12
       crawler_module: src/crawlers/vsa_crawler.py
@@ -1065,8 +1070,8 @@ tier3_sources:
       - Vàng thế giới
       - Chỉ số Dollar Index (DXY)
       - S&P 500
-      status: PENDING
-      ingested_records_count: 0
+      status: ACTIVE
+      ingested_records_count: 53
     wsj_com:
       name: The Wall Street Journal (WSJ)
       domain: wsj.com
@@ -1077,7 +1082,8 @@ tier3_sources:
       priority: PROHIBITED
       status: BLOCKED
       category: GLOBAL_MEDIA
-      compliance_note: 'RFC 9309 Disallow: / blanket ban for automated crawlers. Excluded from automated runs.'
+      compliance_note: 'RFC 9309 Disallow: / blanket ban for automated crawlers. Excluded
+        from automated runs.'
       ingested_records_count: 0
 daily_pipeline_schedules:
   job_01_morning_macro:

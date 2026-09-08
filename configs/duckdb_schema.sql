@@ -38,6 +38,21 @@ CREATE TABLE IF NOT EXISTS core.dim_symbol (
     PRIMARY KEY (symbol)
 );
 
+-- core.dim_symbol_cafef (F001b): CafeF company directory cross-reference source.
+-- Covers OTC equities and unlisted historical tickers not present in vnstock's dim_symbol.
+CREATE TABLE IF NOT EXISTS core.dim_symbol_cafef (
+    symbol       VARCHAR NOT NULL PRIMARY KEY,
+    org_name     VARCHAR NOT NULL,
+    exchange     VARCHAR NOT NULL,
+    center_id    INTEGER NOT NULL,
+    is_vn30      BOOLEAN NOT NULL,
+    is_hnx30     BOOLEAN NOT NULL,
+    slug_base    VARCHAR NOT NULL,
+    source       VARCHAR NOT NULL DEFAULT 'cafef',
+    fetched_at   TIMESTAMP NOT NULL,
+    raw_json     VARCHAR NOT NULL
+);
+
 -- staging/core.market_ohlcv_daily (F002): daily OHLCV per symbol.
 -- staging holds raw fetched rows pre-validation; core is validated +
 -- promoted, deduped on (symbol, date). Column names for the source fetch
@@ -312,7 +327,7 @@ CREATE TABLE IF NOT EXISTS core.market_foreign_flow_daily (
     PRIMARY KEY (symbol, date)
 );
 
--- core.market_index_daily: Benchmark market indices (VN-INDEX, VN30, HNX)
+-- core.market_index_daily: Benchmark market indices & global macro commodities (VN-INDEX, S&P 500, DXY, Crude Oil, Gold, Coffee, Rice, etc.)
 CREATE TABLE IF NOT EXISTS core.market_index_daily (
     index_code    VARCHAR NOT NULL,
     date          DATE NOT NULL,
@@ -324,3 +339,27 @@ CREATE TABLE IF NOT EXISTS core.market_index_daily (
     fetched_at    TIMESTAMP NOT NULL,
     PRIMARY KEY (index_code, date)
 );
+
+-- staging/core.market_global_equity_daily: Daily OHLCV for international leading equities (Magnificent 7, Global Tech, etc.)
+CREATE TABLE IF NOT EXISTS staging.market_global_equity_daily (
+    symbol        VARCHAR NOT NULL,
+    date          DATE NOT NULL,
+    open          DOUBLE,
+    high          DOUBLE,
+    low           DOUBLE,
+    close         DOUBLE,
+    volume        BIGINT,
+    fetched_at    TIMESTAMP NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS core.market_global_equity_daily (
+    symbol        VARCHAR NOT NULL,
+    date          DATE NOT NULL,
+    open          DOUBLE,
+    high          DOUBLE,
+    low           DOUBLE,
+    close         DOUBLE,
+    volume        BIGINT,
+    fetched_at    TIMESTAMP NOT NULL,
+    PRIMARY KEY (symbol, date)
+);

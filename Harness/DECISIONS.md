@@ -2,6 +2,47 @@
 
 Newest at the top. Don't reverse any of these without a new, stated reason.
 
+## 2026-09-08: F101 crossref validation symbol universe union & non-equity exception classification
+- Reason: validate_crossref.py --all previously failed with 2,186 apparent orphan symbols in
+  core.market_ohlcv_daily, 296 in core.news, and 427 in core.realtime_quote_snapshot.
+  Diagnostic investigation revealed that:
+  (1) validate_crossref.py was querying core.dim_symbol alone (1,751 active listed equities).
+      155 of the 170 apparent equity-shaped orphans were already persisted in core.dim_symbol_cafef
+      (984 rows: 750 OTC, 152 UPCOM, 54 HNX, 28 HOSE), which had been created by F001b to close
+      the unlisted/OTC equity gap.
+  (2) The remaining non-equity symbols are instruments traded on the HOSE/HNX matching engines:
+      1,984 Covered Warrants (CW: ^C[A-Z0-9]{6,9}$), 24 Corporate Bonds (^[A-Z0-9]{3}[0-9]{5,6}$),
+      14 HNX Derivatives / Futures contracts (^41[IB][A-Z0-9]{6}$: '41' HNX derivatives product code,
+      'I' = VN30 Index Futures, 'B' = Government Bond Futures), 28 ETFs (^(?:FU|E1)[A-Z0-9]+$),
+      and 3 composite Market Indices (VNX-ALL, VNXALL, HN0-INDEX).
+  (3) Exactly 4 historical common equities are genuine permanent residual gaps: companies delisted or
+      dissolved years before directory indexing, verified absent from both vnstock and CafeF live directories:
+      - HBB: Habubank (merged into SHB in August 2012, 1 row from 2011).
+      - TCS: CTCP Than Cao Sơn - Vinacomin (delisted on August 4, 2020 on HNX for share-swap merger;
+        2,506 historical trading rows spanning 2008–2020, with max date 2020-08-03).
+      - I40: CTCP Đầu tư và Xây dựng 40 (delisted from UPCoM on February 13, 2014; 20 rows from 2011–2013).
+      - NAN: 3 OTC trading rows from May 2025.
+- Decision:
+  - Created shared module src/pipeline/symbol_classification.py:
+    (a) Reuses WARRANT_CODE_PATTERN directly from src/crawlers/cafef_symbol_directory.py.
+    (b) CORPORATE_BOND_PATTERN (^[A-Z0-9]{3,4}(?:H\d{7}|\d{1,2}Y\d{6}|\d{5,6})$) was verified against
+        all 79 real corporate bonds in CafeF's master directory (73 standard, 4 HNX tranches like MSNH2328002,
+        2 tenor tranches like LPB10Y202204) with exactly 0 false positives against active equities.
+    (c) HNX_DERIVATIVE_PATTERN (^41[IB][A-Z0-9]{6}$) covers HNX index & bond futures contracts.
+    (d) FUND_ETF_PATTERN (^(?:FU[A-Z0-9]{6}|E1VFVN\d{2})$) covers exchange funds with 0 false positives.
+    (e) Explicit allowlists for the 3 market indices and 4 documented permanent residual gaps.
+  - Updated src/pipeline/validate_crossref.py: get_valid_symbols() now unions core.dim_symbol ∪
+    core.dim_symbol_cafef. find_orphan_symbols() filters out verified non-equity instruments and
+    the 4 documented residual gaps. Any unexplained symbol still fails loudly.
+  - Connection mode: run_validation() defaults to db.connect(read_only=True) ONLY when con is None,
+    enabling non-blocking validation runs when IDE DB viewers hold read handles, while honoring
+    any caller-supplied connection unchanged.
+  - Added core.dim_symbol_cafef DDL to configs/duckdb_schema.sql for fresh install parity.
+  - Verification: 11 unit tests in tests/test_crossref_validation.py pass 100% (including false-positive
+    regression tests across tricky OTC corporate tickers: CARLSBERG, COCACOLA, CIENCO1–8, FUTA, E12).
+    validate_crossref.py --all passes cleanly on real data (0 unexplained orphans across all tables,
+    0 future timestamps, 0 orphan adjustment events).
+
 ## 2026-09-06: Foreign flow crawler (F051) converted to volume-only per B3/B4
 - Reason: Inspection of raw AmiBroker export CafeF.NN_*.csv revealed that
   <Low> and <Close> columns are 0.0 placeholders rather than monetary transaction

@@ -48,18 +48,39 @@ class ValidationError(Exception):
     """
 
 
+from pipeline.symbol_classification import is_known_non_dim_symbol  # noqa: E402
+
+
 def get_valid_symbols(con: duckdb.DuckDBPyConnection) -> set[str]:
+    """Universe of known equity symbols: core.dim_symbol (active listed equities)
+    union core.dim_symbol_cafef (CafeF OTC/delisted/historical directory).
+    """
     rows = con.execute("SELECT symbol FROM core.dim_symbol").fetchall()
-    return {r[0] for r in rows}
+    valid = {r[0] for r in rows}
+
+    cafef_exists = con.execute(
+        "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'core' AND table_name = 'dim_symbol_cafef'"
+    ).fetchone()
+    if cafef_exists and cafef_exists[0] > 0:
+        rows_cafef = con.execute("SELECT symbol FROM core.dim_symbol_cafef").fetchall()
+        valid.update(r[0] for r in rows_cafef)
+
+    return valid
 
 
 def find_orphan_symbols(
     con: duckdb.DuckDBPyConnection, schema: str, table: str, symbol_col: str, valid_symbols: set[str]
 ) -> list[str]:
-    """Symbols present in this table but absent from core.dim_symbol."""
+    """Symbols present in this table but absent from the valid symbol universe
+    (core.dim_symbol union core.dim_symbol_cafef), excluding known non-equity
+    instruments (covered warrants, corporate bonds, HNX derivatives/futures,
+    ETFs, market indices) and documented historical residual gaps.
+    """
     rows = con.execute(f"SELECT DISTINCT {symbol_col} FROM {schema}.{table}").fetchall()  # noqa: S608
     present = {r[0] for r in rows}
-    return sorted(present - valid_symbols)
+    raw_orphans = present - valid_symbols
+    unexplained = [s for s in raw_orphans if not is_known_non_dim_symbol(s)]
+    return sorted(unexplained)
 
 
 def find_future_timestamps(
@@ -103,7 +124,7 @@ def run_validation(con: "duckdb.DuckDBPyConnection | None" = None) -> dict[str, 
     raise. Used by validate_or_raise() and by tests that want to inspect
     the report shape directly.
     """
-    con = con or db.bootstrap_schema()
+    con = con or db.connect(read_only=True)
     valid_symbols = get_valid_symbols(con)
 
     orphan_symbols: dict[str, list[str]] = {}
