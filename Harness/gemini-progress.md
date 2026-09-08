@@ -239,3 +239,43 @@ Template for future entries:
 - Completed: Cleaned up and consolidated `scratch/` directory: merged 29 ad-hoc temporary test scripts into modular, well-documented session scripts (`session_f001_symbols.py`, `session_f002_ohlcv.py`, `session_f003_news.py`, `session_f005_fundamentals.py`, `session_db_status.py`).
 - Verification: 137 passed, 1 xfailed (full test suite, 138 collected); `ruff` clean; `mypy` clean.
 - Next session should: Proceed to F006 (Corporate events crawl) or F101/F102 validation and point-in-time join.
+
+## Session 7 — 2026-09-08
+- Alignment: Formalized the complete 8-Stage Machine Learning Pipeline Lifecycle (aligned with MLOps loop diagram):
+  1. **Raw Data** `[COMPLETE]`: 5.17M OHLCV rows (`core.market_ohlcv_daily`), 658K news events (`core.news`), quarterly financial statements (`core.fundamentals`), corporate events (`core.corporate_events`).
+  2. **Data Validation** `[CURRENT WORK / IN QUEUE]`:
+     - F101: Cross-dataset referential integrity gate (`validate_crossref.py`) — verified PASS across full universe.
+     - F103: Enterprise 7-Dimension Data Quality Pipeline (`data_quality.py`) — 15 checks across Completeness, Uniqueness, Validity, Timeliness, Accuracy, Consistency, and Fitness for Purpose (zero look-ahead bias verified via window LEAD with 0 leakage violations). 14 passed, 0 errors, status: PASS.
+  3. **Data Preprocessing** `[QUEUED]`:
+     - F102: Point-in-time join (`pit_join.py`) — 658,182 events in `core.pit_events`.
+     - F104: Feature engineering & temporal dataset preparation (`ml_features.py`) — NLP sentiment features, backward-looking technical momentum/volatility, fundamental ratios, forward return targets, and temporal Train/Val/Test splits without look-ahead leakage.
+  4. **Model Training** `[QUEUED]`: Statistical baseline & supervised modeling (F201 / F301 PhoBERT).
+  5. **Model Evaluation** `[QUEUED]`: In-sample metrics, paired t-test, Cohen's d effect size, Sharpe ratio (loopback to Preprocessing/Training if unacceptable).
+  6. **Model Validation** `[QUEUED]`: Out-of-sample holdout validation, macro regime stress test (loopback to Preprocessing/Training if unacceptable).
+  7. **Model Deployment** `[QUEUED]`: Read-only inference service (F401).
+  8. **Model Feedback** `[QUEUED]`: Drift monitoring, performance telemetry, feedback loop into raw data (F402).
+- Verification: 35/35 passed across F1xx suite (`test_crossref_validation.py`, `test_pit_join.py`, `test_data_quality_pipeline.py`, `test_ml_features.py`); `data_quality.py` reports Status: PASS.
+- Standing Instruction: Stay in queue at Data Validation. Do NOT start coding the next stages until user explicitly commands: "START THE PROCESS".
+
+## Session 8 — 2026-09-08 (11 Data Validation Techniques Integration)
+- Context & Requirements: Integrated the 11 industry-standard Data Validation Techniques (Twilio Segment, IBM Data Validation, Future Processing Best Practices) into `src/pipeline/data_quality.py`:
+  - **For Engineers**:
+    1. Data type validation (`check_data_types`): SQL schemas, DOUBLE price types, valid JSON structures.
+    2. Range validation (`check_range`): Price $>0$ and $\le 2M$ VND, volume $\ge 0$, returns $\ge -100\%$.
+    3. Format validation (`check_format`): ISO8601 `YYYY-MM-DD` dates, standard URL/URI protocols (`http`, `https`, `vnstock://`).
+    4. Presence checks (`check_presence`): Non-null mandatory columns in OHLCV, News, and PIT events.
+    5. Pattern matching (`check_pattern_matching`): Equity & index ticker regex `^[A-Z0-9_\-]{3,15}$`.
+    6. Cross-field validation (`check_cross_field`): Candlestick geometry ($H \ge L, H \ge O/C \times 0.99, L \le O/C \times 1.01$) & BCTC balance sheet identity ($Assets = Liabilities + Equity$).
+  - **For Analysts**:
+    7. Uniqueness checks (`check_uniqueness`): Composite PKs `(symbol, date)` in OHLCV, `(symbol, source_url)` in PIT events, canonical news deduplication.
+    8. Data profiling (`profile_data`): Automated distribution statistics (min/max/avg/std/quantiles for prices and volume) across 5.17M rows.
+    9. Statistical validation & Anomaly detection (`check_statistical_validation`): Zero look-ahead bias audit via window `LEAD(close)` ($T+1$ anchoring for after-15:00 news) & fat-finger price jump detection.
+    10. Business rule validation (`check_business_rules`): 15:00 trading cutoff, BCTC temporal order (`available_at >= period_end`), VN30 30/30 backtest constituent sufficiency, zero future timestamps.
+    11. External data validation (`check_external_validation`): Master universe referential integrity (`dim_symbol` U `dim_symbol_cafef`) & staging vs core reconciliation diff test.
+- Verification & Test Results:
+  - Live DuckDB run: 22/22 checks passing, 0 fatal errors, 0 warnings (Status: PASS).
+  - Profiling summary: 5,172,967 OHLCV rows (3,925 symbols, 2000-2026), 661,558 news articles, 658,182 PIT events.
+  - Test Suite: 42/42 tests passing (`pytest tests/test_crossref_validation.py tests/test_pit_join.py tests/test_data_quality_pipeline.py tests/test_ml_features.py -v`).
+  - Report export: Machine-readable JSON report generated at `out/data_quality_report.json`.
+- Next Stage in Queue: Stage 3 — Data Preprocessing (`ml_features.py` feature engineering and pipeline integration).
+

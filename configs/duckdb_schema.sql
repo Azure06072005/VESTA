@@ -171,7 +171,8 @@ CREATE TABLE IF NOT EXISTS staging.news (
     headline     VARCHAR NOT NULL,
     body         VARCHAR,
     source_url   VARCHAR NOT NULL,
-    fetched_at   TIMESTAMP NOT NULL
+    fetched_at   TIMESTAMP NOT NULL,
+    duplicate_of VARCHAR            -- nullable; set by etl.news_dedup, added in F009
 );
 
 CREATE TABLE IF NOT EXISTS core.news (
@@ -183,6 +184,7 @@ CREATE TABLE IF NOT EXISTS core.news (
     body         VARCHAR,
     source_url   VARCHAR NOT NULL,
     fetched_at   TIMESTAMP NOT NULL,
+    duplicate_of VARCHAR,           -- nullable; set by etl.news_dedup, added in F009
     PRIMARY KEY (source_url)
 );
 

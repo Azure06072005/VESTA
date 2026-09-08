@@ -104,3 +104,31 @@ section is a quick-start, not the authority.
   dependency only goes one direction, enforced by import-linter in CI.
 - Hardware budget is fixed: RTX 3060 6GB VRAM, 16GB system RAM. Any model
   config must state its expected VRAM/RAM footprint in `configs/`.
+
+## Machine Learning Pipeline Lifecycle (8-Stage Loop)
+
+```mermaid
+flowchart LR
+    A["1. Raw Data"] --> B["2. Data Validation"]
+    B --> C["3. Data Preprocessing"]
+    C --> D["4. Model Training"]
+    D --> E["5. Model Evaluation"]
+    E -- "acceptable" --> F["6. Model Validation"]
+    E -- "unacceptable" --> C
+    E -- "unacceptable" --> D
+    F -- "acceptable" --> G["7. Model Deployment"]
+    F -- "unacceptable" --> C
+    F -- "unacceptable" --> D
+    G --> H["8. Model Feedback"]
+    H --> A
+```
+
+1. **Stage 1: Raw Data** `[COMPLETE]`: Master company registry, daily OHLCV bars (5.17M rows), multi-source financial news (658K events), quarterly financial statements, and corporate action events in DuckDB lakehouse.
+2. **Stage 2: Data Validation** `[CURRENT WORK / IN QUEUE]`: Cross-dataset referential integrity (F101) + Enterprise 7-Dimension Data Quality Auditor (F103) with zero look-ahead bias audit.
+3. **Stage 3: Data Preprocessing** `[QUEUED]`: Point-in-time multi-source alignment (F102), NLP lexical scoring, backward-looking technical indicators, fundamental ratios extraction, forward return targets, and temporal Train/Val/Test splitting (F104).
+4. **Stage 4: Model Training** `[QUEUED]`: Baseline statistical / supervised ML models and fine-tuned PhoBERT-base Vietnamese financial sentiment models (F201/F301).
+5. **Stage 5: Model Evaluation** `[QUEUED]`: Statistical significance, Cohen's d effect size, paired t-test, Sharpe ratio, and error analysis. If unacceptable, loops back to Preprocessing or Training.
+6. **Stage 6: Model Validation** `[QUEUED]`: Out-of-sample temporal holdout testing and macro regime stress tests. If unacceptable, loops back to Preprocessing or Training.
+7. **Stage 7: Model Deployment** `[QUEUED]`: Read-only local FastAPI inference microservice (F401).
+8. **Stage 8: Model Feedback** `[QUEUED]`: Prediction logging, realized return tracking, concept/data drift monitoring, feeding telemetries back into raw data lake (F402).
+

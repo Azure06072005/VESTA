@@ -230,6 +230,35 @@ next session reads to avoid starting from zero.
   for the stated training-data goal, ahead of any new crawler work.
   Separately, rotate the exposed API key before any further live testing.
 
+## Session 8 — 2026-09-08
+- Alignment: Formalized the complete 8-Stage Machine Learning Pipeline Lifecycle per user directive and architectural diagram:
+  1. **Raw Data** `[COMPLETE]`: 5.17M OHLCV rows (`core.market_ohlcv_daily`), 658K news events (`core.news`), fundamentals (`core.fundamentals`), corporate events (`core.corporate_events`).
+  2. **Data Validation** `[CURRENT WORK / IN QUEUE]`:
+     - F101: Cross-dataset referential integrity (`validate_crossref.py`) — verified PASS across full universe.
+     - F103: Enterprise 7-Dimension Data Quality Pipeline (`data_quality.py`) — 15 checks across Completeness, Uniqueness, Validity, Timeliness, Accuracy, Consistency, Fitness for Purpose (zero look-ahead bias verified via window LEAD with 0 leakage violations). Status: PASS.
+  3. **Data Preprocessing** `[QUEUED]`:
+     - F102: Point-in-time join (`pit_join.py`) — 658,182 events in `core.pit_events`.
+     - F104: Feature engineering & temporal dataset preparation (`ml_features.py`) — NLP sentiment features, backward-looking technical momentum/volatility, fundamental ratios, forward return targets, and temporal Train/Val/Test splits.
+  4. **Model Training** `[QUEUED]`: Statistical baseline & supervised modeling (F201 / F301 PhoBERT).
+  5. **Model Evaluation** `[QUEUED]`: In-sample metrics, paired t-test, Cohen's d effect size, Sharpe ratio (loopback to Preprocessing/Training if unacceptable).
+  6. **Model Validation** `[QUEUED]`: Out-of-sample holdout validation, macro regime stress test (loopback to Preprocessing/Training if unacceptable).
+  7. **Model Deployment** `[QUEUED]`: Read-only inference service (F401).
+  8. **Model Feedback** `[QUEUED]`: Drift monitoring, performance telemetry, feedback loop into raw data (F402).
+- Verification: 35/35 passed across F1xx suite; `data_quality.py` reports Status: PASS.
+- Standing Instruction: Stay in queue at Data Validation. Do NOT start coding the next stages until user explicitly commands: "START THE PROCESS".
+
+## Session 9 — 2026-09-08 (11 Data Validation Techniques Integration)
+- Context & Requirements: Synthesized and deployed the 11 industry-standard Data Validation Techniques (Twilio Segment, IBM Data Validation, Future Processing Best Practices) into `src/pipeline/data_quality.py`:
+  - **For Engineers**: Data type validation, Range validation, Format validation (ISO8601), Presence checks, Pattern matching (Regex tickers), Cross-field validation (Candlestick geometry, BCTC balance sheet identity $Assets = Liabilities + Equity$).
+  - **For Analysts**: Uniqueness checks (Composite PKs, news deduplication), Data profiling (`profile_data` computing full statistical distributions), Statistical validation & anomaly detection (zero look-ahead bias audit via window LEAD, fat-finger price jumps), Business rule validation (15:00 cutoff, UPCoM VWAP, BCTC availability timing, VN30 30/30 backtest sample size), External data validation (`dim_symbol` U `dim_symbol_cafef` master universe cross-referencing and staging vs core reconciliation).
+- Verification & Test Results:
+  - Live Database Execution: 22/22 checks passing on `db/vesta.duckdb` (5.17M OHLCV rows, 661K news, 658K events), 0 fatal errors, 0 warnings (Status: PASS).
+  - Test Suite: 42/42 tests passing (`pytest tests/test_crossref_validation.py tests/test_pit_join.py tests/test_data_quality_pipeline.py tests/test_ml_features.py -v`).
+  - Report artifact exported to `out/data_quality_report.json`.
+- Next Stage in Queue: Stage 3 — Data Preprocessing (`ml_features.py` feature engineering and pipeline integration).
+
+
+
 <!--
 Template for future entries:
 
