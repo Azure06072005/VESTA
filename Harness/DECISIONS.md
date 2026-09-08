@@ -2,6 +2,24 @@
 
 Newest at the top. Don't reverse any of these without a new, stated reason.
 
+## 2026-09-08: F102 point-in-time join full universe execution across all 1,820 symbols
+- Context: F102 (src/pipeline/pit_join.py) previously existed only with single-symbol execution CLI
+  and had only been run on 'FPT' (1,228 rows).
+- Decisions:
+  1. Performance optimization: Profiling revealed that `build_events_for_symbol` was spending 99.2% of
+     runtime querying `fundamentals.get_as_of` 4 times per news row, even for historical news preceding
+     all crawled fundamentals. Because `get_as_of` enforces `fetched_at <= as_of_query_date`, any query
+     with `as_of_query_date < min(fetched_at)` is mathematically guaranteed to return empty. Adding
+     `min_fetched_date` pre-check reduced per-symbol execution from ~8.5s to 0.08s (100x speedup) with
+     100% bit-identical results and zero look-ahead bias leakage.
+  2. Multi-symbol CLI support: Added `--all`, `--vn30`, and `--symbols` options while preserving single-symbol
+     positional syntax and all existing function signatures (`run`, `build_events_for_symbol`, `write_events`).
+  3. Full universe run: Executed `pit_join --all` across all 1,820 candidate symbols (symbols present in
+     both core.news with duplicate_of IS NULL and core.market_ohlcv_daily), generating 658,182 events in
+     staging.pit_events and core.pit_events. VN30 basket (30 symbols, 28,112 events) is 100% covered.
+  4. F101 integration: Added `('core', 'pit_events', 'symbol', 'built_at')` to `TABLES_WITH_SYMBOL` in
+     `src/pipeline/validate_crossref.py`. Verified: 0 orphan symbols, 0 future timestamps.
+
 ## 2026-09-08: F101 crossref validation symbol universe union & non-equity exception classification
 - Reason: validate_crossref.py --all previously failed with 2,186 apparent orphan symbols in
   core.market_ohlcv_daily, 296 in core.news, and 427 in core.realtime_quote_snapshot.

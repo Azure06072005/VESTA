@@ -38,6 +38,7 @@ TABLES_WITH_SYMBOL = [
     ("core", "news", "symbol", "fetched_at"),
     ("core", "realtime_quote_snapshot", "symbol", "fetched_at"),
     ("core", "price_adjustment_events", "symbol", "computed_at"),
+    ("core", "pit_events", "symbol", "built_at"),
 ]
 
 
