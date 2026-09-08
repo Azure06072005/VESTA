@@ -167,6 +167,9 @@ def build_events_for_symbol(con: duckdb.DuckDBPyConnection, symbol: str) -> pd.D
         return pd.DataFrame(columns=PIT_EVENT_COLUMNS)
 
     price_series = get_adjusted_price_series(con, symbol)
+    if price_series.empty:
+        return pd.DataFrame(columns=PIT_EVENT_COLUMNS)
+
     trading_days = get_trading_calendar(con, symbol)
     # Normalize to plain date objects -- get_trading_calendar() returns
     # native date (via fetchall()), price_series['date'] comes back as
@@ -178,6 +181,11 @@ def build_events_for_symbol(con: duckdb.DuckDBPyConnection, symbol: str) -> pd.D
         if not price_series.empty
         else {}
     )
+
+    min_fetched_row = con.execute(
+        "SELECT min(fetched_at) FROM core.fundamentals WHERE symbol = ?", [symbol]
+    ).fetchone()
+    min_fetched_date = min_fetched_row[0].date() if (min_fetched_row and min_fetched_row[0]) else None
 
     built_at = dt.datetime.now(dt.timezone.utc).replace(tzinfo=None)
     rows = []
@@ -197,14 +205,15 @@ def build_events_for_symbol(con: duckdb.DuckDBPyConnection, symbol: str) -> pd.D
         merged_fundamentals: dict[str, object] = {}
         fundamentals_as_of = None
         as_of_query_date = published_at.date()
-        for report_type in fundamentals.REPORT_TYPES:
-            vintage_df = fundamentals.get_as_of(con, symbol, report_type, as_of_query_date)
-            if vintage_df.empty:
-                continue
-            latest_row = vintage_df.sort_values("period_end").iloc[-1]
-            merged_fundamentals[report_type] = json.loads(latest_row["data_json"])
-            merged_fundamentals[f"{report_type}_source"] = latest_row["source"]
-            fundamentals_as_of = latest_row["period_end"]
+        if min_fetched_date is not None and as_of_query_date >= min_fetched_date:
+            for report_type in fundamentals.REPORT_TYPES:
+                vintage_df = fundamentals.get_as_of(con, symbol, report_type, as_of_query_date)
+                if vintage_df.empty:
+                    continue
+                latest_row = vintage_df.sort_values("period_end").iloc[-1]
+                merged_fundamentals[report_type] = json.loads(latest_row["data_json"])
+                merged_fundamentals[f"{report_type}_source"] = latest_row["source"]
+                fundamentals_as_of = latest_row["period_end"]
 
         fundamentals_json = json.dumps(merged_fundamentals, default=str, ensure_ascii=False) if merged_fundamentals else None
 
@@ -263,12 +272,67 @@ def run(symbol: str) -> int:
     return write_events(events, con)
 
 
+def get_all_candidate_symbols(con: "duckdb.DuckDBPyConnection | None" = None) -> list[str]:
+    """Returns sorted list of symbols that exist in core.news (with duplicate_of IS NULL)
+    and also have OHLCV rows in core.market_ohlcv_daily.
+    """
+    con = con or db.connect(read_only=True)
+    rows = con.execute(
+        """
+        SELECT DISTINCT n.symbol
+        FROM core.news n
+        INNER JOIN (SELECT DISTINCT symbol FROM core.market_ohlcv_daily) o ON n.symbol = o.symbol
+        WHERE n.symbol IS NOT NULL AND n.duplicate_of IS NULL
+        ORDER BY n.symbol
+        """
+    ).fetchall()
+    return [r[0] for r in rows]
+
+
+VN30_SYMBOLS = [
+    "ACB", "BCM", "BID", "CTG", "DGC", "FPT", "GAS", "GVR", "HDB", "HPG",
+    "LPB", "MBB", "MSN", "MWG", "PLX", "SAB", "SHB", "SSB", "SSI", "STB",
+    "TCB", "TPB", "VCB", "VHM", "VIB", "VIC", "VJC", "VNM", "VPB", "VRE",
+]
+
+
+def run_symbols(symbols: list[str], con: "duckdb.DuckDBPyConnection | None" = None) -> dict[str, int]:
+    """Build and write pit_events for a list of symbols, reporting per-symbol counts."""
+    con = con or db.bootstrap_schema()
+    results = {}
+    total = len(symbols)
+    total_written = 0
+    print(f"F102 pit_join: starting execution across {total} symbols...")
+    for idx, symbol in enumerate(symbols, 1):
+        events = build_events_for_symbol(con, symbol)
+        n = write_events(events, con)
+        results[symbol] = n
+        total_written += n
+        if idx % 25 == 0 or idx == total:
+            print(f"  [{idx:4d}/{total:4d}] {symbol:8s}: {n:5d} events (total so far: {total_written:,})")
+    print(f"F102 pit_join: finished {total} symbols -- {total_written:,} total events written to core.pit_events.")
+    return results
+
+
 if __name__ == "__main__":
     import argparse
 
-    parser = argparse.ArgumentParser(description="F102: build the point-in-time events table for one symbol")
-    parser.add_argument("symbol")
+    parser = argparse.ArgumentParser(description="F102: build the point-in-time events table")
+    group = parser.add_mutually_exclusive_group(required=True)
+    group.add_argument("symbol", nargs="?", default=None, help="single symbol to process (e.g. FPT)")
+    group.add_argument("--all", action="store_true", help="process all symbols with news and OHLCV")
+    group.add_argument("--vn30", action="store_true", help="process the 30 VN30 constituent symbols")
+    group.add_argument("--symbols", type=str, help="comma-separated list of symbols (e.g. FPT,VIC,VNM)")
     args = parser.parse_args()
 
-    n = run(args.symbol)
-    print(f"F102 pit_join: wrote {n} rows for {args.symbol} to core.pit_events")
+    if args.symbol:
+        n = run(args.symbol)
+        print(f"F102 pit_join: wrote {n} rows for {args.symbol} to core.pit_events")
+    elif args.vn30:
+        run_symbols(VN30_SYMBOLS)
+    elif args.all:
+        candidate_symbols = get_all_candidate_symbols()
+        run_symbols(candidate_symbols)
+    elif args.symbols:
+        sym_list = [s.strip().upper() for s in args.symbols.split(",") if s.strip()]
+        run_symbols(sym_list)
