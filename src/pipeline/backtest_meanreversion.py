@@ -317,7 +317,7 @@ def run(report_path: str = "out/meanreversion_report.json", dry_run: bool = Fals
         )
         report = run_backtest(empty)
     else:
-        con = db.connect()
+        con = db.connect(read_only=True)
         events_df = load_events(con)
         report = run_backtest(events_df)
 

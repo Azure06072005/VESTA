@@ -304,6 +304,30 @@
       "embedding": null,
       "graph_embedding": null
     },
+    {
+      "id": "f103",
+      "title": "F103 — Enterprise 7-Dimension Data Quality Pipeline",
+      "content": "Comprehensive 15-check auditor across Completeness, Uniqueness, Validity, Timeliness, Accuracy, Consistency, and Fitness for Purpose. Passing.",
+      "tags": ["feature", "passing"],
+      "weight": 1.1,
+      "color": "#1d9e75",
+      "shape": "circle",
+      "size": 12,
+      "embedding": null,
+      "graph_embedding": null
+    },
+    {
+      "id": "f104",
+      "title": "F104 — ML Feature Pipeline & Dataset Preparation",
+      "content": "NLP lexicon sentiment features, backward-looking technical momentum, fundamental ratios, forward return targets, and temporal train/val/test splits. Passing.",
+      "tags": ["feature", "passing"],
+      "weight": 1.1,
+      "color": "#1d9e75",
+      "shape": "circle",
+      "size": 12,
+      "embedding": null,
+      "graph_embedding": null
+    },
 
     {
       "id": "f201",

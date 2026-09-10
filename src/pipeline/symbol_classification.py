@@ -9,7 +9,7 @@ Relationship to src/crawlers/cafef_symbol_directory.py:
   
   To prevent parallel logic drift:
   - Covered Warrants DIRECTLY reuses `WARRANT_CODE_PATTERN` from `cafef_symbol_directory`.
-  - Corporate Bonds, HNX Derivatives, and ETFs use strictly verified ticker syntax
+  - Corporate Bonds, HNX Derivatives and ETFs use strictly verified ticker syntax
     patterns that have been proven to have ZERO false positives against the full
     active equity universe (core.dim_symbol union core.dim_symbol_cafef: 2,735 symbols).
 """
