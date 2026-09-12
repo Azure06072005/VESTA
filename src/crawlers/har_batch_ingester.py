@@ -277,6 +277,196 @@ def parse_vietnamfinance(har_path: Path) -> list[dict[str, Any]]:
     return records
 
 
+def parse_nguoiquansat(har_path: Path) -> list[dict[str, Any]]:
+    records = []
+    seen = set()
+    with open(har_path, "r", encoding="utf-8", errors="ignore") as f:
+        data = json.load(f)
+
+    for e in data.get("log", {}).get("entries", []):
+        url = e.get("request", {}).get("url", "")
+        text = e.get("response", {}).get("content", {}).get("text", "")
+        if not text:
+            continue
+
+        soup = BeautifulSoup(text, "html.parser")
+        for a in soup.find_all("a"):
+            t = a.get_text(strip=True)
+            hr = a.get("href", "")
+            if len(t) > 25 and hr and ("-d" in hr or hr.endswith(".html")):
+                full_url = f"https://nguoiquansat.vn{hr}" if hr.startswith("/") else hr
+                if full_url not in seen and not any(k in full_url for k in ["/tag", "/video", "/media"]):
+                    seen.add(full_url)
+                    p = a.find_parent(["article", "div", "li"])
+                    summary = t
+                    if p:
+                        sapo = p.find(class_=re.compile(r"sapo|summary|lead|desc"))
+                        if sapo:
+                            summary = sapo.get_text(strip=True)
+                    records.append({
+                        "source": "nguoiquansat",
+                        "issuing_body": "Người Quan Sát",
+                        "doc_type": "Tin tức & Thị trường",
+                        "headline": t,
+                        "summary": summary,
+                        "body": summary,
+                        "source_url": full_url,
+                    })
+    return records
+
+
+def parse_cafef_har(har_path: Path) -> list[dict[str, Any]]:
+    records = []
+    seen = set()
+    with open(har_path, "r", encoding="utf-8", errors="ignore") as f:
+        data = json.load(f)
+
+    for e in data.get("log", {}).get("entries", []):
+        url = e.get("request", {}).get("url", "")
+        text = e.get("response", {}).get("content", {}).get("text", "")
+        if not text:
+            continue
+
+        soup = BeautifulSoup(text, "html.parser")
+        for a in soup.find_all("a"):
+            t = a.get_text(strip=True)
+            hr = a.get("href", "")
+            if len(t) > 25 and hr and (hr.endswith(".chn") or hr.endswith(".htm")):
+                full_url = f"https://cafef.vn{hr}" if hr.startswith("/") else hr
+                if full_url not in seen and not any(k in full_url for k in ["/tag", "/video", "/media"]):
+                    seen.add(full_url)
+                    p = a.find_parent(["article", "div", "li"])
+                    summary = t
+                    if p:
+                        sapo = p.find(class_=re.compile(r"sapo|summary|lead|desc"))
+                        if sapo:
+                            summary = sapo.get_text(strip=True)
+                    records.append({
+                        "source": "cafef",
+                        "issuing_body": "CafeF",
+                        "doc_type": "Tài chính & Doanh nghiệp",
+                        "headline": t,
+                        "summary": summary,
+                        "body": summary,
+                        "source_url": full_url,
+                    })
+    return records
+
+
+def parse_nhandan(har_path: Path) -> list[dict[str, Any]]:
+    records = []
+    seen = set()
+    with open(har_path, "r", encoding="utf-8", errors="ignore") as f:
+        data = json.load(f)
+
+    for e in data.get("log", {}).get("entries", []):
+        url = e.get("request", {}).get("url", "")
+        text = e.get("response", {}).get("content", {}).get("text", "")
+        if not text:
+            continue
+
+        soup = BeautifulSoup(text, "html.parser")
+        for a in soup.find_all("a"):
+            t = a.get_text(strip=True)
+            hr = a.get("href", "")
+            if len(t) > 25 and hr and ("-post" in hr or "/kinhte/" in hr):
+                full_url = f"https://nhandan.vn{hr}" if hr.startswith("/") else hr
+                if full_url not in seen and not any(k in full_url for k in ["/tag", "/video", "/media", "/photo"]):
+                    seen.add(full_url)
+                    p = a.find_parent(["article", "div", "li"])
+                    summary = t
+                    if p:
+                        sapo = p.find(class_=re.compile(r"sapo|summary|lead|desc"))
+                        if sapo:
+                            summary = sapo.get_text(strip=True)
+                    records.append({
+                        "source": "nhandan",
+                        "issuing_body": "Báo Nhân Dân",
+                        "doc_type": "Kinh tế & Chính sách",
+                        "headline": t,
+                        "summary": summary,
+                        "body": summary,
+                        "source_url": full_url,
+                    })
+    return records
+
+
+def parse_thoibaotaichinh(har_path: Path) -> list[dict[str, Any]]:
+    records = []
+    seen = set()
+    with open(har_path, "r", encoding="utf-8", errors="ignore") as f:
+        data = json.load(f)
+
+    for e in data.get("log", {}).get("entries", []):
+        url = e.get("request", {}).get("url", "")
+        text = e.get("response", {}).get("content", {}).get("text", "")
+        if not text:
+            continue
+
+        soup = BeautifulSoup(text, "html.parser")
+        for a in soup.find_all("a"):
+            t = a.get_text(strip=True)
+            hr = a.get("href", "")
+            if len(t) > 25 and hr and any(k in hr for k in ["tai-chinh", "chung-khoan", "kinh-te"]):
+                full_url = f"https://thoibaotaichinhvietnam.vn{hr}" if hr.startswith("/") else hr
+                if full_url not in seen and not any(k in full_url for k in ["/tag", "/video", "/media"]):
+                    seen.add(full_url)
+                    p = a.find_parent(["article", "div", "li"])
+                    summary = t
+                    if p:
+                        sapo = p.find(class_=re.compile(r"sapo|summary|lead|desc"))
+                        if sapo:
+                            summary = sapo.get_text(strip=True)
+                    records.append({
+                        "source": "thoibaotaichinh",
+                        "issuing_body": "Thời báo Tài chính Việt Nam",
+                        "doc_type": "Tài chính & Thuế",
+                        "headline": t,
+                        "summary": summary,
+                        "body": summary,
+                        "source_url": full_url,
+                    })
+    return records
+
+
+def parse_thoibaonganhang(har_path: Path) -> list[dict[str, Any]]:
+    records = []
+    seen = set()
+    with open(har_path, "r", encoding="utf-8", errors="ignore") as f:
+        data = json.load(f)
+
+    for e in data.get("log", {}).get("entries", []):
+        url = e.get("request", {}).get("url", "")
+        text = e.get("response", {}).get("content", {}).get("text", "")
+        if not text:
+            continue
+
+        soup = BeautifulSoup(text, "html.parser")
+        for a in soup.find_all("a"):
+            t = a.get_text(strip=True)
+            hr = a.get("href", "")
+            if len(t) > 25 and hr and hr.endswith(".html"):
+                full_url = f"https://thoibaonganhang.vn{hr}" if hr.startswith("/") else hr
+                if full_url not in seen and not any(k in full_url for k in ["/tag", "/video", "/media"]):
+                    seen.add(full_url)
+                    p = a.find_parent(["article", "div", "li"])
+                    summary = t
+                    if p:
+                        sapo = p.find(class_=re.compile(r"sapo|summary|lead|desc"))
+                        if sapo:
+                            summary = sapo.get_text(strip=True)
+                    records.append({
+                        "source": "thoibaonganhang",
+                        "issuing_body": "Thời báo Ngân hàng",
+                        "doc_type": "Ngân hàng & Tiền tệ",
+                        "headline": t,
+                        "summary": summary,
+                        "body": summary,
+                        "source_url": full_url,
+                    })
+    return records
+
+
 def write_macro_policy(con: duckdb.DuckDBPyConnection, df: pd.DataFrame) -> int:
     """Idempotently writes records into staging and core tables."""
     if df.empty:
@@ -342,6 +532,16 @@ def run_ingestion(sources: list[str], db_path: Optional[str] = None) -> dict[str
                 raw_records.extend(parse_vietstock(h))
             elif src == "vietnamfinance":
                 raw_records.extend(parse_vietnamfinance(h))
+            elif src == "nguoiquansat":
+                raw_records.extend(parse_nguoiquansat(h))
+            elif src == "cafef":
+                raw_records.extend(parse_cafef_har(h))
+            elif src == "nhandan":
+                raw_records.extend(parse_nhandan(h))
+            elif src == "thoibaotaichinh":
+                raw_records.extend(parse_thoibaotaichinh(h))
+            elif src == "thoibaonganhang":
+                raw_records.extend(parse_thoibaonganhang(h))
 
         # Deduplicate on source_url
         unique_map = {}
@@ -370,8 +570,10 @@ def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
     parser = argparse.ArgumentParser(description="Unified HAR Batch Ingester for VESTA")
     parser.add_argument("--db", type=str, default=None, help="DuckDB path")
-    parser.add_argument("--sources", nargs="+", default=["tienphong", "tuoitre", "vneconomy", "vietstock", "vietnamfinance"],
-                        help="List of sources to ingest from scratch/har/<source>")
+    parser.add_argument("--sources", nargs="+", default=[
+        "tienphong", "tuoitre", "vneconomy", "vietstock", "vietnamfinance",
+        "nguoiquansat", "cafef", "nhandan", "thoibaotaichinh", "thoibaonganhang"
+    ], help="List of sources to ingest from scratch/har/<source>")
     args = parser.parse_args()
 
     t0 = time.time()

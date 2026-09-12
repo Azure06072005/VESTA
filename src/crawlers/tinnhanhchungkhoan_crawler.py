@@ -136,16 +136,20 @@ class TinNhanhChungKhoanCrawler:
 
     def get_existing_urls(self) -> set[str]:
         """Tải danh sách URL đã lưu trong core.macro_policy để tránh cào lặp."""
-        max_retries = 5
-        for attempt in range(max_retries):
-            try:
-                con = duckdb.connect(self.duckdb_path, read_only=True)
-                rows = con.execute("SELECT source_url FROM core.macro_policy WHERE source = 'tinnhanhchungkhoan'").fetchall()
-                con.close()
-                return {r[0] for r in rows}
-            except Exception as e:
-                time.sleep(1.0)
-        return set()
+        candidates = [self.duckdb_path, "d:/VESTA/db/vesta_latest_backup.duckdb", "d:/VESTA/db/crawlers_staging.duckdb"]
+        seen = set()
+        for p in candidates:
+            if Path(p).exists():
+                try:
+                    con = duckdb.connect(p, read_only=True)
+                    rows = con.execute("SELECT source_url FROM core.macro_policy WHERE source = 'tinnhanhchungkhoan'").fetchall()
+                    con.close()
+                    for r in rows:
+                        if r[0]:
+                            seen.add(r[0])
+                except Exception:
+                    pass
+        return seen
 
     def fetch_article(self, url: str) -> dict[str, Any] | None:
         """Tải và parse chi tiết một bài viết."""
@@ -159,15 +163,15 @@ class TinNhanhChungKhoanCrawler:
             return None
 
     def save_batch(self, articles: list[dict[str, Any]]) -> int:
-        """Lưu danh sách bài viết vào core.macro_policy kèm cơ chế chống lock DuckDB."""
+        """Lưu danh sách bài viết vào core.macro_policy kèm cơ chế fallback chống lock DuckDB."""
         if not articles:
             return 0
         df = pd.DataFrame(articles)
 
-        max_retries = 6
-        for attempt in range(max_retries):
+        candidates = [self.duckdb_path, "d:/VESTA/db/vesta_latest_backup.duckdb", "d:/VESTA/db/crawlers_staging.duckdb"]
+        for p in candidates:
             try:
-                con = duckdb.connect(self.duckdb_path, read_only=False)
+                con = duckdb.connect(p, read_only=False)
                 con.register("df_tnck_batch", df)
                 con.execute("""
                     INSERT INTO core.macro_policy (
@@ -189,23 +193,43 @@ class TinNhanhChungKhoanCrawler:
                 con.close()
                 return len(df)
             except Exception as e:
-                wait = (attempt + 1) * 1.5
-                logger.warning(f"Lock DuckDB khi nạp Tin Nhanh CK (lần {attempt+1}/{max_retries}). Chờ {wait}s...")
-                time.sleep(wait)
-        return len(df)
+                logger.info(f"DB {p} bị khóa ({e}). Thử fallback tiếp theo...")
+        logger.error("Không thể lưu batch vào bất kỳ database nào.")
+        return 0
 
-    def crawl(self, months: list[str] | None = None, max_articles: int = 500, dry_run: bool = False) -> int:
-        """Cào tin tức theo danh sách tháng (định dạng YYYY-M, ví dụ '2026-9', '2026-8')."""
+    def crawl(
+        self,
+        months: list[str] | None = None,
+        all_dates: bool = False,
+        start_year: int = 2000,
+        end_year: int = 2026,
+        max_articles: int = 500,
+        dry_run: bool = False,
+    ) -> int:
+        """Cào tin tức theo danh sách tháng hoặc toàn bộ các năm từ 2000 đến 2026."""
         if hasattr(sys.stdout, "reconfigure"):
             sys.stdout.reconfigure(encoding="utf-8", line_buffering=True)
 
         existing_urls = self.get_existing_urls()
         logger.info(f"Đã có {len(existing_urls)} URL Tin Nhanh Chứng Khoán trong DB.")
 
-        target_months = months or ["2026-9", "2026-8", "2026-7"]
+        if all_dates:
+            target_months = [
+                f"{y}-{m}"
+                for y in range(end_year, start_year - 1, -1)
+                for m in range(12, 0, -1)
+            ]
+            logger.info(f"Chế độ ALL DATES: Sẽ duyệt qua {len(target_months)} tháng từ {end_year} về {start_year}.")
+        else:
+            target_months = months or ["2026-9", "2026-8", "2026-7"]
+
         total_saved = 0
+        limit = float("inf") if max_articles <= 0 else max_articles
 
         for m_str in target_months:
+            if total_saved >= limit:
+                break
+
             sitemap_url = f"{BASE_URL}/sitemaps/news-{m_str}.xml"
             logger.info(f"==> Đang đọc sitemap tháng {m_str}: {sitemap_url}")
             try:
@@ -223,7 +247,7 @@ class TinNhanhChungKhoanCrawler:
 
             batch: list[dict[str, Any]] = []
             for item in new_entries:
-                if total_saved >= max_articles:
+                if total_saved >= limit:
                     logger.info(f"Đã đạt giới hạn tối đa {max_articles} bài trong phiên này.")
                     return total_saved
 
@@ -255,15 +279,26 @@ def main() -> None:
         sys.stdout.reconfigure(encoding="utf-8", line_buffering=True)
     logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 
-    parser = argparse.ArgumentParser(description="Tin Nhanh Chung Khoan Ingestion Crawler")
+    parser = argparse.ArgumentParser(description="Tin Nhanh Chung Khoan Ingestion Crawler (All Dates Support)")
     parser.add_argument("--months", nargs="+", help="Danh sách tháng cào (VD: 2026-9 2026-8)")
-    parser.add_argument("--max-articles", type=int, default=300, help="Số bài tối đa trong đợt chạy")
-    parser.add_argument("--delay", type=float, default=0.6, help="Độ trễ giữa các request")
+    parser.add_argument("--all-dates", action="store_true", help="Cào toàn bộ các tháng từ start-year đến end-year")
+    parser.add_argument("--start-year", type=int, default=2000, help="Năm bắt đầu (mặc định 2000)")
+    parser.add_argument("--end-year", type=int, default=2026, help="Năm kết thúc (mặc định 2026)")
+    parser.add_argument("--db", default="d:/VESTA/db/vesta.duckdb", help="Đường dẫn file DuckDB")
+    parser.add_argument("--max-articles", type=int, default=0, help="Số bài tối đa (0 = không giới hạn)")
+    parser.add_argument("--delay", type=float, default=0.4, help="Độ trễ giữa các request")
     parser.add_argument("--dry-run", action="store_true", help="Chạy thử không ghi vào DB")
 
     args = parser.parse_args()
-    crawler = TinNhanhChungKhoanCrawler(delay=args.delay)
-    crawler.crawl(months=args.months, max_articles=args.max_articles, dry_run=args.dry_run)
+    crawler = TinNhanhChungKhoanCrawler(duckdb_path=args.db, delay=args.delay)
+    crawler.crawl(
+        months=args.months,
+        all_dates=args.all_dates,
+        start_year=args.start_year,
+        end_year=args.end_year,
+        max_articles=args.max_articles,
+        dry_run=args.dry_run,
+    )
 
 
 if __name__ == "__main__":

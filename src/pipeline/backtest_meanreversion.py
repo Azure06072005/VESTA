@@ -300,7 +300,11 @@ def write_report(report: dict[str, object], out_path: pathlib.Path) -> None:
     )
 
 
-def run(report_path: str = "out/meanreversion_report.json", dry_run: bool = False) -> dict[str, object]:
+def run(
+    report_path: str = "out/meanreversion_report.json",
+    dry_run: bool = False,
+    db_path: str | pathlib.Path | None = None,
+) -> dict[str, object]:
     """Entry point used by both the CLI and verification.md's smoke run.
 
     dry_run=True (per verification.md's smoke-run row) skips the real DB
@@ -317,7 +321,8 @@ def run(report_path: str = "out/meanreversion_report.json", dry_run: bool = Fals
         )
         report = run_backtest(empty)
     else:
-        con = db.connect(read_only=True)
+        target_db = db_path or db.DB_PATH
+        con = db.connect(db_path=target_db, read_only=True)
         events_df = load_events(con)
         report = run_backtest(events_df)
 
@@ -331,6 +336,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="F201: sentiment mean-reversion backtest on core.pit_events"
     )
+    parser.add_argument("--db-path", default="", help="Path to DuckDB database (default: VESTA_DB_PATH)")
     parser.add_argument("--report", default="out/meanreversion_report.json")
     parser.add_argument(
         "--dry-run",
@@ -340,7 +346,7 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
-    result = run(report_path=args.report, dry_run=args.dry_run)
+    result = run(report_path=args.report, dry_run=args.dry_run, db_path=args.db_path or None)
     print(f"Report written to {args.report}")
     print(f"total_events_loaded={result['total_events_loaded']}")
     print(f"sentiment_class_counts={result['sentiment_class_counts']}")

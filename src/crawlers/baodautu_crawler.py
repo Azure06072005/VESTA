@@ -135,35 +135,41 @@ class BaoDauTuCrawler:
                         body_paragraphs.append(text)
             body = "\n\n".join(body_paragraphs) if body_paragraphs else summary
 
-            # Ngày phát hành
+            # Ngày phát hành (Ưu tiên meta chuẩn ISO-8601 và selector .post-time bên trong bài viết)
             published_at = None
-            time_el = soup.find(class_=re.compile(r"time|date|publish", re.I))
-            if time_el:
-                time_text = time_el.text.strip()
-                # Tìm định dạng DD/MM/YYYY HH:MM hoặc YYYY-MM-DD
-                m = re.search(r"(\d{1,2}/\d{1,2}/\d{4}(?:\s+\d{1,2}:\d{2})?)", time_text)
-                if m:
-                    try:
-                        parsed = dt.datetime.strptime(m.group(1), "%d/%m/%Y %H:%M")
-                        published_at = parsed - dt.timedelta(hours=7)  # sang UTC
-                    except ValueError:
+            meta_time = soup.find("meta", property="article:published_time") or soup.find("meta", property="og:updated_time")
+            if meta_time and meta_time.get("content"):
+                try:
+                    published_at = dt.datetime.fromisoformat(meta_time["content"].replace("Z", "+00:00")).astimezone(dt.timezone.utc).replace(tzinfo=None)
+                except Exception:
+                    pass
+
+            if not published_at:
+                # Tìm chính xác thẻ bài viết .post-time hoặc .author-share-top, loại trừ hoàn toàn .date_top ở header
+                time_el = soup.select_one(".post-time, .author-share-top")
+                if not time_el:
+                    for el in soup.find_all(class_=re.compile(r"time|date|publish", re.I)):
+                        cls_str = " ".join(el.get("class", []))
+                        if any(bad in cls_str for bad in ["date_top", "header", "top", "banner"]):
+                            continue
+                        time_el = el
+                        break
+
+                if time_el:
+                    time_text = time_el.text.strip()
+                    m = re.search(r"(\d{1,2}/\d{1,2}/\d{4}(?:\s+(\d{1,2}):(\d{2}))?)", time_text)
+                    if m:
                         try:
-                            parsed = dt.datetime.strptime(m.group(1), "%d/%m/%Y")
-                            published_at = parsed - dt.timedelta(hours=7)
-                        except ValueError:
+                            if m.group(2) and m.group(3):
+                                parsed = dt.datetime.strptime(f"{m.group(1)}", "%d/%m/%Y %H:%M")
+                            else:
+                                parsed = dt.datetime.strptime(m.group(1), "%d/%m/%Y")
+                            published_at = parsed - dt.timedelta(hours=7)  # sang UTC
+                        except Exception:
                             pass
 
             if not published_at:
-                # Tìm trong meta
-                meta_time = soup.find("meta", property="article:published_time")
-                if meta_time and meta_time.get("content"):
-                    try:
-                        published_at = dt.datetime.fromisoformat(meta_time["content"].replace("Z", "+00:00")).astimezone(dt.timezone.utc).replace(tzinfo=None)
-                    except Exception:
-                        pass
-
-            if not published_at:
-                published_at = dt.datetime.now(dt.timezone.utc)
+                published_at = dt.datetime.now(dt.timezone.utc).replace(tzinfo=None)
 
             return {
                 "source": "baodautu",

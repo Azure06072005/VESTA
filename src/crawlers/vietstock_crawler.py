@@ -315,8 +315,14 @@ class VietstockCrawler:
         self.session = session or requests.Session()
         self.session.headers.update(DEFAULT_HEADERS)
 
-    def fetch_category_page(self, category_slug: str, page: int = 1) -> list[dict[str, str]]:
-        """Gọi endpoint AJAX ChannelContentPage để lấy bài viết phân trang."""
+    def fetch_category_page(
+        self,
+        category_slug: str,
+        page: int = 1,
+        from_date: str | None = None,
+        to_date: str | None = None,
+    ) -> list[dict[str, str]]:
+        """Gọi endpoint AJAX ChannelContentPage để lấy bài viết phân trang theo khoảng ngày."""
         cat_info = VIETSTOCK_CATEGORIES.get(category_slug, {})
         channel_id = cat_info.get("channelID", 144)
         referer = cat_info.get("referer", f"{BASE_URL}/{category_slug}.htm")
@@ -325,10 +331,14 @@ class VietstockCrawler:
             "X-Requested-With": "XMLHttpRequest",
             "Referer": referer,
         }
-        data = {
+        data: dict[str, Any] = {
             "channelID": channel_id,
             "page": page,
         }
+        if from_date:
+            data["fromDate"] = from_date
+        if to_date:
+            data["toDate"] = to_date
 
         try:
             resp = self.session.post(AJAX_URL, data=data, headers=headers, timeout=15)
@@ -367,64 +377,82 @@ class VietstockCrawler:
         categories: list[str] | None = None,
         max_pages: int | None = None,
         limit_per_category: int | None = None,
+        all_dates: bool = False,
+        start_year: int = 2010,
+        end_year: int = 2026,
         dry_run: bool = False,
     ) -> list[dict[str, Any]]:
-        """Chạy pipeline cào toàn diện lịch sử chuẩn F004."""
+        """Chạy pipeline cào toàn diện lịch sử chuẩn F004 với hỗ trợ All Dates (2010 - 2026)."""
+        import calendar
         target_categories = categories or list(VIETSTOCK_CATEGORIES.keys())
         all_records: list[dict[str, Any]] = []
         existing_urls = self.load_existing_urls()
         logger.info(f"Đã nạp {len(existing_urls)} URL Vietstock hiện có trong database để khử trùng lặp.")
+
+        # Xây dựng danh sách khoảng ngày nếu chạy all_dates
+        date_windows: list[tuple[str, str]] = []
+        if all_dates:
+            for y in range(end_year, start_year - 1, -1):
+                m_end = 12 if y < end_year else dt.datetime.now().month
+                for m in range(m_end, 0, -1):
+                    _, last_d = calendar.monthrange(y, m)
+                    date_windows.append((f"{y}-{m:02d}-01", f"{y}-{m:02d}-{last_d:02d}"))
+            logger.info(f"[ALL DATES] Sẽ duyệt qua {len(date_windows)} tháng từ {end_year} về {start_year}.")
+        else:
+            date_windows = [(None, None)]
 
         for cat in target_categories:
             cat_name = VIETSTOCK_CATEGORIES.get(cat, {}).get("name", cat)
             default_doc_type = VIETSTOCK_CATEGORIES.get(cat, {}).get("doc_type", "Thị trường chứng khoán")
             logger.info(f"==> Đang thu thập danh mục Vietstock: {cat} ({cat_name})")
             cat_count = 0
-            page = 1
 
-            while True:
-                if max_pages is not None and page > max_pages:
-                    logger.info(f"[{cat}] Đã đạt giới hạn tối đa {max_pages} trang.")
-                    break
+            for from_d, to_d in date_windows:
+                if from_d:
+                    logger.info(f"[{cat}] Duyệt tháng: {from_d} -> {to_d}")
 
-                links = self.fetch_category_page(cat, page=page)
-                if not links:
-                    logger.info(f"[{cat}] Trang {page}: Không có bài viết mới hoặc đã chạm cuối lịch sử.")
-                    break
+                page = 1
+                while True:
+                    if max_pages is not None and page > max_pages:
+                        break
 
-                new_links = [item for item in links if item["url"] not in existing_urls]
-                logger.info(f"[{cat}] Trang {page}: Tìm thấy {len(links)} bài ({len(new_links)} bài mới chưa cào)")
+                    links = self.fetch_category_page(cat, page=page, from_date=from_d, to_date=to_d)
+                    if not links:
+                        break
 
-                if not new_links:
-                    logger.info(f"[{cat}] Trang {page}: Toàn bộ bài viết đã có trong DB. Chuyển sang trang tiếp...")
-                    page += 1
-                    time.sleep(self.request_delay)
-                    continue
+                    new_links = [item for item in links if item["url"] not in existing_urls]
+                    logger.info(f"[{cat}] Trang {page}: Tìm thấy {len(links)} bài ({len(new_links)} bài mới)")
 
-                page_records: list[dict[str, Any]] = []
-                for item in new_links:
+                    if not new_links:
+                        # Nếu cào realtime và bài đã có -> dừng; nếu cào lịch sử theo tháng -> kiểm tra tiếp trang sau
+                        if not all_dates:
+                            page += 1
+                            time.sleep(self.request_delay)
+                            continue
+
+                    page_records: list[dict[str, Any]] = []
+                    for item in new_links:
+                        if limit_per_category and cat_count >= limit_per_category:
+                            break
+
+                        record = self.fetch_article(item["url"], default_doc_type=default_doc_type)
+                        if record:
+                            page_records.append(record)
+                            all_records.append(record)
+                            existing_urls.add(item["url"])
+                            cat_count += 1
+                            logger.info(f"[Ingested] {record['headline'][:65]}")
+                        time.sleep(self.request_delay)
+
+                    # Lưu streaming dữ liệu trang vào DuckDB
+                    if page_records and not dry_run:
+                        self.save_to_database(page_records)
+                        logger.info(f"[{cat}] Trang {page}: Đã lưu +{len(page_records)} bài mới vào DB.")
+
                     if limit_per_category and cat_count >= limit_per_category:
                         break
 
-                    record = self.fetch_article(item["url"], default_doc_type=default_doc_type)
-                    if record:
-                        page_records.append(record)
-                        all_records.append(record)
-                        existing_urls.add(item["url"])
-                        cat_count += 1
-                        logger.info(f"[Ingested] {record['headline'][:65]}")
-                    time.sleep(self.request_delay)
-
-                # Lưu streaming dữ liệu trang vào DuckDB (chuẩn F004)
-                if page_records and not dry_run:
-                    self.save_to_database(page_records)
-                    logger.info(f"[{cat}] Trang {page}: Đã lưu +{len(page_records)} bài mới vào DB.")
-
-                if limit_per_category and cat_count >= limit_per_category:
-                    logger.info(f"[{cat}] Đã đạt giới hạn {limit_per_category} bài cho danh mục.")
-                    break
-
-                page += 1
+                    page += 1
 
         return all_records
 
@@ -526,20 +554,26 @@ def main() -> None:
     """Khởi chạy CLI cho Vietstock Crawler."""
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8", line_buffering=True)
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
     parser = argparse.ArgumentParser(description="Crawler Vietstock (vietstock.vn) Financial & Market News")
     parser.add_argument("--categories", nargs="+", choices=list(VIETSTOCK_CATEGORIES.keys()), help="Danh mục chỉ định")
     parser.add_argument("--max-pages", type=int, default=None, help="Số trang tối đa mỗi danh mục (Mặc định: None = toàn bộ)")
     parser.add_argument("--limit", type=int, default=None, help="Giới hạn bài viết mỗi danh mục")
     parser.add_argument("--delay", type=float, default=DEFAULT_DELAY_SECONDS, help="Thời gian chờ giữa các request (giây)")
+    parser.add_argument("--all-dates", action="store_true", help="Cào toàn bộ lịch sử theo khoảng ngày từ start-year đến end-year")
+    parser.add_argument("--start-year", type=int, default=2010, help="Năm bắt đầu (mặc định: 2010)")
+    parser.add_argument("--end-year", type=int, default=2026, help="Năm kết thúc (mặc định: 2026)")
+    parser.add_argument("--db", default="d:/VESTA/db/vesta.duckdb", help="Đường dẫn file DuckDB")
     parser.add_argument("--dry-run", action="store_true", help="Chạy thử không lưu vào DB")
 
     args = parser.parse_args()
-    crawler = VietstockCrawler(request_delay=args.delay)
+    crawler = VietstockCrawler(db_path=args.db, request_delay=args.delay)
     records = crawler.crawl(
         categories=args.categories,
         max_pages=args.max_pages,
         limit_per_category=args.limit,
+        all_dates=args.all_dates,
+        start_year=args.start_year,
+        end_year=args.end_year,
         dry_run=args.dry_run,
     )
     print(f"Tổng số bản ghi Vietstock thu thập được: {len(records)}")

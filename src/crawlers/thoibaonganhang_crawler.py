@@ -79,13 +79,20 @@ class ThoiBaoNganHangCrawler:
 
     def get_existing_urls(self) -> set[str]:
         """Lấy danh sách các URL Thời báo Ngân hàng đã tồn tại trong database."""
-        try:
-            con = duckdb.connect(self.duckdb_path, read_only=True)
-            res = con.execute("SELECT source_url FROM core.macro_policy WHERE source = 'thoibaonganhang'").fetchall()
-            con.close()
-            return {r[0] for r in res}
-        except Exception:
-            return set()
+        candidates = [self.duckdb_path, "d:/VESTA/db/vesta_latest_backup.duckdb", "d:/VESTA/db/crawlers_staging.duckdb"]
+        seen = set()
+        for p in candidates:
+            if Path(p).exists():
+                try:
+                    con = duckdb.connect(p, read_only=True)
+                    res = con.execute("SELECT source_url FROM core.macro_policy WHERE source = 'thoibaonganhang'").fetchall()
+                    con.close()
+                    for r in res:
+                        if r[0]:
+                            seen.add(r[0])
+                except Exception:
+                    pass
+        return seen
 
     @staticmethod
     def parse_article_links(html: str) -> tuple[list[str], str | None]:
@@ -141,52 +148,67 @@ class ThoiBaoNganHangCrawler:
                         body_paragraphs.append(text)
             body = "\n\n".join(body_paragraphs) if body_paragraphs else summary
 
-            published_at = None
-            time_el = soup.find(class_=re.compile(r"time|date|publish", re.I))
-            if time_el:
-                time_text = time_el.text.strip()
-                m = re.search(r"(\d{1,2}/\d{1,2}/\d{4}(?:\s+\d{1,2}:\d{2})?)", time_text)
-                if m:
-                    try:
-                        parsed = dt.datetime.strptime(m.group(1), "%d/%m/%Y %H:%M")
-                        published_at = parsed - dt.timedelta(hours=7)
-                    except ValueError:
-                        try:
-                            parsed = dt.datetime.strptime(m.group(1), "%d/%m/%Y")
-                            published_at = parsed - dt.timedelta(hours=7)
-                        except ValueError:
-                            pass
+            # Ngày phát hành (Ưu tiên meta chuẩn ISO-8601 và selector .article-date bên trong bài viết)
+            pub_date = None
+            meta_time = soup.find("meta", property="article:published_time") or soup.find("meta", property="og:updated_time")
+            if meta_time and meta_time.get("content"):
+                try:
+                    pub_date = dt.datetime.fromisoformat(meta_time["content"].replace("Z", "+00:00")).astimezone(dt.timezone.utc)
+                except Exception:
+                    pass
 
-            if not published_at:
-                published_at = dt.datetime.now(dt.timezone.utc)
+            if not pub_date:
+                # Loại trừ hoàn toàn .system-date ở header logo
+                date_el = soup.select_one(".article-date, .format_date, .tbnh-author-meta")
+                if not date_el:
+                    for el in soup.find_all(class_=re.compile(r"datetime|time|date", re.I)):
+                        cls_str = " ".join(el.get("class", []))
+                        if any(bad in cls_str for bad in ["system-date", "header", "logo"]):
+                            continue
+                        date_el = el
+                        break
+
+                if date_el:
+                    m = re.search(r"(\d{1,2})/(\d{1,2})/(\d{4})", date_el.text)
+                    if m:
+                        d, mo, y = int(m.group(1)), int(m.group(2)), int(m.group(3))
+                        pub_date = dt.datetime(y, mo, d, 8, 0, 0, tzinfo=dt.timezone.utc)
+
+            if not pub_date:
+                pub_date = dt.datetime.now(dt.timezone.utc)
+
+            doc_number = None
+            doc_m = re.search(r"\b(\d+(?:/[0-9]{4})?/(?:NQ-CP|NĐ-CP|TT-NHNN|QĐ-NHNN|CT-NHNN))\b", f"{headline} {body}", re.I)
+            if doc_m:
+                doc_number = doc_m.group(1)
 
             return {
                 "source": "thoibaonganhang",
-                "issuing_body": "Thời báo Ngân hàng - Ngân hàng Nhà nước Việt Nam",
+                "issuing_body": "Thời báo Ngân hàng",
                 "doc_type": doc_type,
-                "doc_number": None,
-                "published_at": published_at,
-                "available_at": published_at,
+                "doc_number": doc_number,
+                "published_at": pub_date,
+                "available_at": pub_date,
                 "headline": headline,
-                "summary": summary[:2000] if summary else None,
-                "body": body,
+                "summary": summary if summary else headline,
+                "body": body if body else summary,
                 "source_url": url,
                 "fetched_at": dt.datetime.now(dt.timezone.utc),
             }
         except Exception as e:
-            logger.warning(f"Lỗi khi tải chi tiết bài viết TBNH {url}: {e}")
+            logger.warning(f"Lỗi khi trích xuất {url}: {e}")
             return None
 
     def save_batch(self, articles: list[dict[str, Any]]) -> int:
-        """Lưu danh sách bài viết vào core.macro_policy kèm cơ chế Retry."""
+        """Lưu danh sách bài viết vào core.macro_policy kèm cơ chế fallback chống lock DuckDB."""
         if not articles:
             return 0
         df = pd.DataFrame(articles)
 
-        max_retries = 5
-        for attempt in range(max_retries):
+        candidates = [self.duckdb_path, "d:/VESTA/db/vesta_latest_backup.duckdb", "d:/VESTA/db/crawlers_staging.duckdb"]
+        for p in candidates:
             try:
-                con = duckdb.connect(self.duckdb_path, read_only=False)
+                con = duckdb.connect(p, read_only=False)
                 con.register("df_tbnh_batch", df)
                 con.execute("""
                     INSERT INTO core.macro_policy (
@@ -208,9 +230,9 @@ class ThoiBaoNganHangCrawler:
                 con.close()
                 return len(df)
             except Exception as e:
-                logger.warning(f"Thử {attempt+1}/{max_retries} nạp TBNH bị lock ({e}). Chờ 2s...")
-                time.sleep(2.0)
-        return len(df)
+                logger.info(f"DB {p} bị khóa ({e}). Thử fallback tiếp theo...")
+        logger.error("Không thể lưu batch vào bất kỳ database nào.")
+        return 0
 
     def crawl(self, categories: list[str] | None = None, max_pages: int | None = None, dry_run: bool = False) -> int:
         """Thu thập tin tức từ các chuyên mục của Thời báo Ngân hàng."""
