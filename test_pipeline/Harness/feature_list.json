@@ -1,5 +1,5 @@
 {
-  "_comment": "FRESH START 2026-08-09. All features not_started. Sequencing informed by prior build data report: news crawled EARLY, DuckDB staging->core baked into every crawler from F001, available_at required in every crawler schema. WIP=1 -- do not start a feature until its listed dependencies are passing.\n\nRE-SEQUENCING DECISION (2026-09-12): WIP=1 strictly enforced. Auxiliary crawlers F053-F071 paused to not_started with reason logged in evidence; F072 (tier checkpoint) re-scoped to F050-F053 and paused (not_started); F203 set as the SOLE active feature project-wide. Per Project Rules A2/B2 (Signal Before Infrastructure), data breadth expansion cannot precede regime-stability confirmation.",
+  "_comment": "FRESH START 2026-08-09. All features not_started. Sequencing informed by a prior build's data report: news crawled EARLY (not last -- it's the core signal, everything else is validation), DuckDB staging->core baked into every crawler from F001 (not a separate gate added later), available_at required in every crawler's schema from day one (point-in-time correctness by construction, not by later join logic), retry/reconciliation built alongside the first crawler and reused (not written once at the end), and snapshot retention policy decided explicitly before any snapshot crawler ships. State machine: not_started -> active -> passing (irreversible) or active -> blocked. WIP=1 -- do not start a feature until its listed dependencies are passing. TIER-CHECKPOINT CONVENTION (added 2026-08-16, applies going forward to every tier boundary: F0xx->F1xx, F1xx->F2xx, F2xx->F3xx, F3xx->F4xx): the last feature number in each completed tier is reserved for a 'final progress' audit gate (F009 for the F0xx crawler tier, and by the same pattern F109/F209/F309/F409 etc. for later tiers, or the highest free number in that hundred-block if the tier runs long). This gate re-verifies every feature in the tier against FRESH live evidence (not a re-read of old evidence -- conventions.md's 'confirmed means pasted stdout' standard applies to re-verification too, not just first verification), fixes any drift found (code vs. claimed state, e.g. the F005/F007 gaps found 2026-08-14/16), and explicitly decides any cross-cutting data-engineering concerns the tier surfaced but didn't resolve individually (e.g. corporate-action adjustment, revision handling, dedup policy). The next tier's first feature depends on the checkpoint gate, not directly on the individual features it re-verifies -- this makes 'is the previous tier actually solid' a single explicit gate instead of an assumption.",
   "features": [
     {
       "id": "F000",
@@ -204,8 +204,8 @@
         "F006"
       ],
       "verification": "pytest tests/test_batch_equity_enhancer.py -x",
-      "state": "not_started",
-      "evidence": "PAUSED 2026-09-12 per WIP=1 enforcement: Paused behind F203 (critical-path scientific gate). Resume only after F203 reaches a logged DECISIONS.md resolution."
+      "state": "active",
+      "evidence": "Code + tests exist."
     },
     {
       "id": "F054",
@@ -215,8 +215,8 @@
         "F001"
       ],
       "verification": "pytest tests/test_vietstock_finance_enhancer.py -x",
-      "state": "not_started",
-      "evidence": "PAUSED 2026-09-12 per WIP=1 enforcement: Paused behind F203 (critical-path scientific gate). Resume only after F203 reaches a logged DECISIONS.md resolution."
+      "state": "active",
+      "evidence": "Code + tests exist."
     },
     {
       "id": "F055",
@@ -226,8 +226,8 @@
         "F001"
       ],
       "verification": "pytest tests/test_vietstock_crawler.py -x",
-      "state": "not_started",
-      "evidence": "PAUSED 2026-09-12 per WIP=1 enforcement: Paused behind F203 (critical-path scientific gate). Resume only after F203 reaches a logged DECISIONS.md resolution."
+      "state": "active",
+      "evidence": "Code + tests exist."
     },
     {
       "id": "F056",
@@ -235,8 +235,8 @@
       "behavior": "Vietnam macro indicators via World Bank's public REST API.",
       "dependencies": [],
       "verification": "pytest tests/test_worldbank_crawler.py -x",
-      "state": "not_started",
-      "evidence": "PAUSED 2026-09-12 per WIP=1 enforcement: Paused behind F203 (critical-path scientific gate). Resume only after F203 reaches a logged DECISIONS.md resolution."
+      "state": "active",
+      "evidence": "Code + tests exist."
     },
     {
       "id": "F057",
@@ -244,8 +244,8 @@
       "behavior": "Press releases, policy rate decisions, circulars from sbv.gov.vn.",
       "dependencies": [],
       "verification": "pytest tests/test_sbv_crawler.py -x",
-      "state": "not_started",
-      "evidence": "PAUSED 2026-09-12 per WIP=1 enforcement: Paused behind F203 (critical-path scientific gate). Resume only after F203 reaches a logged DECISIONS.md resolution."
+      "state": "active",
+      "evidence": "Code + tests exist."
     },
     {
       "id": "F058",
@@ -253,8 +253,8 @@
       "behavior": "Government directives, PM decisions from baochinhphu.vn.",
       "dependencies": [],
       "verification": "pytest tests/test_baochinhphu_crawler.py -x",
-      "state": "not_started",
-      "evidence": "PAUSED 2026-09-12 per WIP=1 enforcement: Paused behind F203 (critical-path scientific gate). Resume only after F203 reaches a logged DECISIONS.md resolution."
+      "state": "active",
+      "evidence": "Code + tests exist."
     },
     {
       "id": "F059",
@@ -262,8 +262,8 @@
       "behavior": "Sanctions, market supervision, issuance approvals from ssc.gov.vn.",
       "dependencies": [],
       "verification": "pytest tests/test_ssc_crawler.py -x",
-      "state": "not_started",
-      "evidence": "PAUSED 2026-09-12 per WIP=1 enforcement: Paused behind F203 (critical-path scientific gate). Resume only after F203 reaches a logged DECISIONS.md resolution."
+      "state": "active",
+      "evidence": "Code + tests exist."
     },
     {
       "id": "F060",
@@ -271,8 +271,8 @@
       "behavior": "Macro/finance/real-estate/digital-economy news, robots.txt Crawl-delay:1.0s respected.",
       "dependencies": [],
       "verification": "pytest tests/test_vneconomy_crawler.py -x",
-      "state": "not_started",
-      "evidence": "PAUSED 2026-09-12 per WIP=1 enforcement: Paused behind F203 (critical-path scientific gate). Resume only after F203 reaches a logged DECISIONS.md resolution."
+      "state": "active",
+      "evidence": "Code + tests exist."
     },
     {
       "id": "F061",
@@ -280,8 +280,8 @@
       "behavior": "Listed-company news, dividend rights, AGMs, expert commentary.",
       "dependencies": [],
       "verification": "pytest tests/test_tinnhanhchungkhoan_crawler.py -x",
-      "state": "not_started",
-      "evidence": "PAUSED 2026-09-12 per WIP=1 enforcement: Paused behind F203 (critical-path scientific gate). Resume only after F203 reaches a logged DECISIONS.md resolution."
+      "state": "active",
+      "evidence": "Code + tests exist."
     },
     {
       "id": "F062",
@@ -289,8 +289,8 @@
       "behavior": "Securities/banking/enterprise/public-investment/real-estate news (Ministry of Planning & Investment organ).",
       "dependencies": [],
       "verification": "pytest tests/test_baodautu_crawler.py -x",
-      "state": "not_started",
-      "evidence": "PAUSED 2026-09-12 per WIP=1 enforcement: Paused behind F203 (critical-path scientific gate). Resume only after F203 reaches a logged DECISIONS.md resolution."
+      "state": "active",
+      "evidence": "Code + tests exist."
     },
     {
       "id": "F063",
@@ -298,8 +298,8 @@
       "behavior": "Monetary market/rates/FX/SBV policy news via infinite-scroll pagination.",
       "dependencies": [],
       "verification": "pytest tests/test_thoibaonganhang_crawler.py -x",
-      "state": "not_started",
-      "evidence": "PAUSED 2026-09-12 per WIP=1 enforcement: Paused behind F203 (critical-path scientific gate). Resume only after F203 reaches a logged DECISIONS.md resolution."
+      "state": "active",
+      "evidence": "Code + tests exist."
     },
     {
       "id": "F064",
@@ -307,8 +307,8 @@
       "behavior": "Regulations affecting packaging/paper-product tickers (DHC, HHP, GDT, SVI).",
       "dependencies": [],
       "verification": "pytest tests/test_vinaprint_crawler.py -x",
-      "state": "not_started",
-      "evidence": "PAUSED 2026-09-12 per WIP=1 enforcement: Paused behind F203 (critical-path scientific gate). Resume only after F203 reaches a logged DECISIONS.md resolution."
+      "state": "active",
+      "evidence": "Code + tests exist."
     },
     {
       "id": "F065",
@@ -316,8 +316,8 @@
       "behavior": "Excise-tax/labeling/EPR policy affecting SAB/BHN/MSN.",
       "dependencies": [],
       "verification": "pytest tests/test_vba_crawler.py -x",
-      "state": "not_started",
-      "evidence": "PAUSED 2026-09-12 per WIP=1 enforcement: Paused behind F203 (critical-path scientific gate). Resume only after F203 reaches a logged DECISIONS.md resolution."
+      "state": "active",
+      "evidence": "Code + tests exist."
     },
     {
       "id": "F066",
@@ -325,8 +325,8 @@
       "behavior": "Data-infrastructure/cloud policy affecting FPT/CTR/ELC/CMG/ITD.",
       "dependencies": [],
       "verification": "pytest tests/test_nda_crawler.py -x",
-      "state": "not_started",
-      "evidence": "PAUSED 2026-09-12 per WIP=1 enforcement: Paused behind F203 (critical-path scientific gate). Resume only after F203 reaches a logged DECISIONS.md resolution."
+      "state": "active",
+      "evidence": "Code + tests exist."
     },
     {
       "id": "F067",
@@ -334,8 +334,8 @@
       "behavior": "Fertilizer/agri-input/export policy affecting DPM/DCM/BFC/PAN/LTG/HAG/TAR.",
       "dependencies": [],
       "verification": "pytest tests/test_hoinongdan_crawler.py -x",
-      "state": "not_started",
-      "evidence": "PAUSED 2026-09-12 per WIP=1 enforcement: Paused behind F203 (critical-path scientific gate). Resume only after F203 reaches a logged DECISIONS.md resolution."
+      "state": "active",
+      "evidence": "Code + tests exist."
     },
     {
       "id": "F068",
@@ -343,8 +343,8 @@
       "behavior": "Fuel-price administration, power pricing, trade-defense policy affecting POW/GAS/PLX/OIL/BSR/HPG/HSG/PC1/GEG.",
       "dependencies": [],
       "verification": "pytest tests/test_moit_crawler.py -x",
-      "state": "not_started",
-      "evidence": "PAUSED 2026-09-12 per WIP=1 enforcement: Paused behind F203 (critical-path scientific gate). Resume only after F203 reaches a logged DECISIONS.md resolution."
+      "state": "active",
+      "evidence": "Code + tests exist."
     },
     {
       "id": "F069",
@@ -352,8 +352,8 @@
       "behavior": "Visa/tourism-recovery policy affecting HVN/VJC/SKG/DAH/VTD.",
       "dependencies": [],
       "verification": "pytest tests/test_vita_crawler.py -x",
-      "state": "not_started",
-      "evidence": "PAUSED 2026-09-12 per WIP=1 enforcement: Paused behind F203 (critical-path scientific gate). Resume only after F203 reaches a logged DECISIONS.md resolution."
+      "state": "active",
+      "evidence": "Code + tests exist."
     },
     {
       "id": "F070",
@@ -361,8 +361,8 @@
       "behavior": "Seafood export/tariff/IUU-yellow-card data.",
       "dependencies": [],
       "verification": "pytest tests/test_vasep_crawler.py -x",
-      "state": "not_started",
-      "evidence": "PAUSED 2026-09-12 per WIP=1 enforcement: Paused behind F203 (critical-path scientific gate). Resume only after F203 reaches a logged DECISIONS.md resolution."
+      "state": "active",
+      "evidence": "Code + tests exist."
     },
     {
       "id": "F071",
@@ -370,8 +370,8 @@
       "behavior": "Land-law/housing-law reform petitions affecting real-estate tickers.",
       "dependencies": [],
       "verification": "pytest tests/test_horea_crawler.py -x",
-      "state": "not_started",
-      "evidence": "PAUSED 2026-09-12 per WIP=1 enforcement: Paused behind F203 (critical-path scientific gate). Resume only after F203 reaches a logged DECISIONS.md resolution."
+      "state": "active",
+      "evidence": "Code + tests exist."
     },
     {
       "id": "F072",
@@ -381,11 +381,29 @@
         "F050",
         "F051",
         "F052",
-        "F053"
+        "F053",
+        "F054",
+        "F055",
+        "F056",
+        "F057",
+        "F058",
+        "F059",
+        "F060",
+        "F061",
+        "F062",
+        "F063",
+        "F064",
+        "F065",
+        "F066",
+        "F067",
+        "F068",
+        "F069",
+        "F070",
+        "F071"
       ],
       "verification": "Individual live-evidence pass per feature, not just aggregate pytest -- see AGENTS.md Session Lifecycle and this project's 'confirmed means pasted stdout' standard.",
       "state": "not_started",
-      "evidence": "Pending F203 completion and live audit of F050-F053."
+      "evidence": null
     },
     {
       "id": "F101",
@@ -472,7 +490,7 @@
         "F202"
       ],
       "verification": "python -m pipeline.f203_regime_audit --report out/f203_regime_report.json && pytest tests/test_f203_regime_audit.py -x -- report contains per-regime n/mean_diff/cluster-robust CI for every regime with sufficient data (n>=30 per prior insufficient_data convention), and a DECISIONS.md entry stating the chosen resolution (pool vs exclude vs regime-feature) with justification.",
-      "state": "active",
+      "state": "not_started",
       "evidence": null
     },
     {

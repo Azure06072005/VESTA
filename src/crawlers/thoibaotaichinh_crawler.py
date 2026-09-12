@@ -173,6 +173,16 @@ def load_existing_urls(con: duckdb.DuckDBPyConnection) -> set[str]:
         return set()
 
 
+def get_safe_connection(db_path: str = "d:/VESTA/db/vesta.duckdb") -> duckdb.DuckDBPyConnection:
+    candidates = [db_path, "d:/VESTA/db/vesta_latest_backup.duckdb", "d:/VESTA/db/crawlers_staging.duckdb"]
+    for path in candidates:
+        try:
+            return db.connect(path, read_only=False)
+        except Exception as e:
+            logger.info(f"DB {path} bị khóa ({e}). Thử đích tiếp theo...")
+    raise RuntimeError("Không thể kết nối đến bất kỳ DuckDB database nào.")
+
+
 def run_thoibaotaichinh_crawler(
     max_articles: int = 5,
     delay_seconds: float = DEFAULT_DELAY_SECONDS,
@@ -182,7 +192,7 @@ def run_thoibaotaichinh_crawler(
     session = requests.Session()
     session.headers.update({"User-Agent": USER_AGENT})
 
-    con = db.connect(db_path, read_only=False)
+    con = get_safe_connection(db_path)
     existing_urls = load_existing_urls(con)
 
     total_discovered = 0

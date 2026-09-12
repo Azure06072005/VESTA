@@ -24,7 +24,8 @@ from bs4 import BeautifulSoup
 import duckdb
 import pandas as pd
 
-# Add project root to sys.path
+# Add project root and src to sys.path
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from etl import db
 
@@ -381,7 +382,12 @@ def write_to_db(records: list[dict[str, Any]], duckdb_path: str = "d:/VESTA/db/v
     ]
     df = df[required_cols]
 
-    con = duckdb.connect(duckdb_path, read_only=False)
+    try:
+        con = duckdb.connect(duckdb_path, read_only=False)
+    except Exception as e:
+        backup_path = "db/vesta_latest_backup.duckdb"
+        logger.info(f"DB chính bị khóa ({e}). Ghi vào backup: {backup_path}")
+        con = duckdb.connect(backup_path, read_only=False)
     try:
         # Write staging
         con.register("df_staging", df)
@@ -440,6 +446,32 @@ def run_pipeline() -> dict[str, Any]:
     chinhphu_records = crawl_chinhphu_vn(max_articles=40)
     results["vietnam_gov"] = len(chinhphu_records)
     all_new_records.extend(chinhphu_records)
+
+    # 3.1 Cào Báo chí Kinh tế & Đời sống Đại chúng (Tiền Phong & Tuổi Trẻ)
+    print("\n--- 3.1 BÁO CHÍ KINH TẾ & THỊ TRƯỜNG CHỦ LỰC (TIỀN PHONG & TUỔI TRẺ) ---")
+    try:
+        from src.crawlers.tienphong_crawler import crawl_tienphong_deep, get_safe_db_connection
+        con_tp = get_safe_db_connection()
+        try:
+            tp_cnt = crawl_tienphong_deep(con_tp, start_page=1, max_pages=2, target_zones=[3, 166])
+            results["tienphong"] = tp_cnt
+            logger.info(f"[TIENPHONG] Thu thập thành công {tp_cnt} bài viết.")
+        finally:
+            con_tp.close()
+    except Exception as e:
+        logger.warning(f"[TIENPHONG] Lỗi cào tin: {e}")
+
+    try:
+        from src.crawlers.tuoitre_crawler import crawl_tuoitre_deep, get_safe_db_connection
+        con_tt = get_safe_db_connection()
+        try:
+            tt_cnt = crawl_tuoitre_deep(con_tt, start_page=1, max_pages=2, target_zones=[11, 89])
+            results["tuoitre"] = tt_cnt
+            logger.info(f"[TUOITRE] Thu thập thành công {tt_cnt} bài viết.")
+        finally:
+            con_tt.close()
+    except Exception as e:
+        logger.warning(f"[TUOITRE] Lỗi cào tin: {e}")
 
     # 4. Ghi toàn bộ dữ liệu hợp lệ vào Database vesta_latest_backup.duckdb
     print("\n--- 4. GHI DỮ LIỆU VÀO DATABASE MỤC TIÊU ---")

@@ -23,14 +23,13 @@ Addresses three open concerns flagged before F301 unblocks:
 CONFIRM THESE THREE ITEMS AGAINST THE REAL backtest_meanreversion.py BEFORE
 TRUSTING THIS SCRIPT'S OUTPUT -- see CONFIG section below:
   (a) NEGATIVE_SENTIMENT_PREDICATE / sentiment source
-  (b) REGIME_BOUNDARIES (five ranges -- only four eras are named in
-      DECISIONS.md, there is a fifth this script doesn't know)
+  (b) REGIME_BOUNDARIES (16-regime sourced timeline configured per DECISIONS.md)
   (c) RETURN_COLUMNS -- whether return_t5/return_t30 already exist as
       columns, or must be computed from price_at_publish/price_t5/price_t30
 ===============================================================================
 
 Usage:
-    python scripts/f201_robustness_check.py \
+    python src/pipeline/f201_robustness_check.py \
         --db db/vesta.duckdb \
         --report out/f201_robustness_report.json
 """
@@ -48,31 +47,22 @@ import numpy as np
 import pandas as pd
 
 # =============================================================================
-# CONFIG -- confirm/edit these against the real F201 implementation.
-# =============================================================================
+import sys
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from pipeline.sentiment_lexicon import score_headline
 
 # (a) How F201 decides an event is "negative sentiment".
-#     OPTION 1 (if core.pit_events / an F104 features table already has a
-#     populated `sentiment` column with values like 'negative'/'positive'/
-#     'neutral'):
-NEGATIVE_SENTIMENT_SQL_PREDICATE = "sentiment = 'negative'"
+# Set to None to use classify_negative_from_headline directly with exact F201 sentiment_lexicon
+NEGATIVE_SENTIMENT_SQL_PREDICATE = None
 
-#     OPTION 2 (if sentiment is computed at backtest time from the headline
-#     lexicon, not stored) -- set NEGATIVE_SENTIMENT_SQL_PREDICATE = None and
-#     fill in this function to match sentiment_lexicon.py exactly:
 def classify_negative_from_headline(headline: str) -> bool:
-    """CONFIRM: replace with the exact lexicon/threshold F201 uses.
-    Placeholder only returns False -- do not trust until replaced."""
-    raise NotImplementedError(
-        "Set NEGATIVE_SENTIMENT_SQL_PREDICATE above, or implement this "
-        "function to match sentiment_lexicon.py's actual negative-word list "
-        "and threshold exactly."
-    )
+    """Exact negative threshold matching F201 backtest_meanreversion.py."""
+    if not headline or not isinstance(headline, str):
+        return False
+    return score_headline(headline) < 0.0
 
-# (b) Regime boundaries -- CONFIRM against backtest_meanreversion.py's real
-#     REGIME_BOUNDARIES constant. DECISIONS.md (2026-08-16) names four eras;
-#     this is a placeholder 5-way split and is almost certainly wrong until
-#     you paste the real boundaries in.
+# (b) Regime boundaries -- Canonical 16-regime sourced timeline (2000-2026) per
+#     DECISIONS.md (2026-09-09), superseding the placeholder 5-way split.
 # scope: "GLOBAL" (event originated outside VN, VN market not the primary
 # subject), "VN_DOMESTIC" (VN-specific event, no major global driver in
 # this window), or "BOTH" (a global event transmitted into VN, or VN and
@@ -115,14 +105,14 @@ RANDOM_SEED = 42
 
 def load_events(con: duckdb.DuckDBPyConnection) -> pd.DataFrame:
     if RETURN_COLUMNS_EXIST:
-        cols = "symbol, published_at, sentiment, return_t5, return_t30"
+        cols = "symbol, published_at, headline, return_t5, return_t30"
     else:
-        cols = "symbol, published_at, sentiment, price_at_publish, price_t5, price_t30"
+        cols = "symbol, published_at, headline, price_at_publish, price_t5, price_t30"
 
     query = f"""
         SELECT {cols}
         FROM {SOURCE_TABLE}
-        WHERE price_t5 IS NOT NULL AND price_t30 IS NOT NULL
+        WHERE price_at_publish IS NOT NULL AND price_t5 IS NOT NULL AND price_t30 IS NOT NULL
     """
     df = con.execute(query).fetchdf()
 
