@@ -90,6 +90,13 @@ def merge_into_db(target_path: Path, staging_paths: list[Path] | None = None) ->
         conn.close()
 
 
+def merge_staging_to_main(staging_path: Path | None = None, target_path: Path | None = None) -> int:
+    """Nạp dữ liệu từ staging_db vào main_db (hàm tương thích ngược)."""
+    s_path = staging_path or STAGING_DB_PATH
+    t_path = target_path or MAIN_DB_PATH
+    return merge_into_db(t_path, staging_paths=[s_path])
+
+
 def apply_consolidated_snapshot() -> bool:
     """Sao chép bản snapshot hợp nhất toàn diện vesta_consolidated.duckdb sang main và backup."""
     if not CONSOLIDATED_DB_PATH.exists():

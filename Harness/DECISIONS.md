@@ -1576,3 +1576,18 @@ Newest at the top. Don't reverse any of these without a new, stated reason.
   5. **CSCV PBO**: Evaluated across S=16 quantile-based equal-event blocks (~942 events/block) and 1,000 combinatorial splits. Resulted in empirical PBO = 0.007 (0.7% << 50%, PASS) and mean logit = +6.14.
   6. **Methodological Note for Thesis**: The formal mapping of Cohen's d -> SR_hat and symbol cluster count (1,437) -> T is documented as an event-study adaptation in `out/f202b_dsr_pbo_report.json` and thesis draft.
 - Status: F202b code, audit report, and unit tests (`tests/test_f202b_dsr.py`, 4/4 passing) fully verified with calibrated academic thesis conclusion.
+
+## 2026-09-12: F203 2D Regime-Conditional Validity Audit & Downstream SLM Modeling Resolution
+- Reason: Rule B2 & B5 scientific gate: rigorously evaluate whether the post-negative-sentiment mean reversion effect (+1.87% arithmetic mean, Cohen's d=0.0557) is a pervasive structural alpha or an artifact of bull-market liquidity bubbles, and establish binding architectural guardrails before fine-tuning PhoBERT (F301/F302).
+- Empirical Findings across 16 Regimes x 3 Exchanges (out/f203_regime_report.json, 15,081 sanitized negative events):
+  1. **Systemic Regime Heterogeneity & Sign-Flips (29/60 cells flip negative)**: The mean-reversion effect is NOT a general market invariant. It is powerfully positive in retail liquidity expansion regimes (e.g. `2020-2021-Bull` on HOSE: mean diff = +7.46%, median diff = +4.45%, win-rate = 65.06%, Wilcoxon p < 0.001), but FLIPS NEGATIVE across all systemic bear markets and liquidity crunches:
+     - `2007-GFC` (HOSE): mean = -3.30%, median = -6.91%, win-rate = 33.33%, loss-rate = 66.67% (flip = true)
+     - `2022-BondCrisis` (HOSE): mean = -4.66%, median = -3.75%, win-rate = 35.76%, loss-rate = 64.24% (flip = true)
+     - `2026-Present` (HOSE): mean = -3.26%, median = -3.24%, win-rate = 27.26%, loss-rate = 72.74% (flip = true)
+  2. **Non-Parametric Reality**: Pooled median diff on HOSE is negative (-0.14%), proving that the positive arithmetic mean is sustained by positive right-tail skewness in UPCOM/HNX small caps rather than a uniform edge.
+  3. **Macro Factor Interaction**: Sign-flips strictly align with global liquidity contractions and elevated risk premiums (^VIX > 25, DX-Y tightening).
+- Binding Architectural Decisions for F301 / F302 / Downstream Strategy:
+  1. **No Unconditional Dip-Buying**: F301/F302 modeling and downstream inference (F401) MUST NOT assume unconditional mean-reversion. Negative sentiment in bear/liquidity-tight regimes is an accelerator of downward momentum, not a reversal signal.
+  2. **Regime-Conditioned Interaction Features**: The ML feature pipeline (F104) and sentiment strategy must condition on market state (HOSE vs UPCOM exchange indicator + 16-regime / macro liquidity state gate).
+  3. **Risk Rails (Fail-Closed)**: Any execution layer strategy must enforce a hard regime circuit breaker: dip-buying on negative headlines is halted when market index is below 200-day EMA or during identified liquidity-crisis regimes.
+- Status: F203 passing (reproducible live report at `out/f203_regime_report.json`, unit tests passing). F301 officially unblocked under regime-conditional architecture.
