@@ -187,6 +187,43 @@ def migrate_fundamentals_add_source_column(con: duckdb.DuckDBPyConnection) -> bo
     return ran_any
 
 
+def migrate_add_sector_news_signal(con: duckdb.DuckDBPyConnection) -> bool:
+    """F004d: Creates core.dim_sector, core.dim_symbol_sector, and core.sector_news_signal
+    for sector-level news-to-symbol matching. Idempotent.
+    """
+    con.execute("""
+    CREATE TABLE IF NOT EXISTS core.dim_sector (
+        sector_id        INTEGER NOT NULL PRIMARY KEY,
+        sector_name      VARCHAR NOT NULL,
+        english_name     VARCHAR,
+        gics_sector_code VARCHAR,
+        url_slug         VARCHAR,
+        keywords_json    VARCHAR NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS core.dim_symbol_sector (
+        symbol           VARCHAR NOT NULL PRIMARY KEY,
+        sector_id        INTEGER NOT NULL,
+        sector_name      VARCHAR NOT NULL,
+        source           VARCHAR NOT NULL,
+        updated_at       TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS core.sector_news_signal (
+        source_url       VARCHAR NOT NULL,
+        sector_id        INTEGER NOT NULL,
+        sector_name      VARCHAR NOT NULL,
+        matched_keyword  VARCHAR NOT NULL,
+        match_tier       VARCHAR NOT NULL,
+        market_anchor    VARCHAR NOT NULL,
+        fetched_at       TIMESTAMP NOT NULL,
+        PRIMARY KEY (source_url, sector_id)
+    );
+    """)
+    print("[migration] sector news tables (dim_sector, dim_symbol_sector, sector_news_signal) verified/created")
+    return True
+
+
 def run_all_migrations(con: "duckdb.DuckDBPyConnection | None" = None) -> duckdb.DuckDBPyConnection:
     """Entry point: run every migration in order. Safe to call every time
     init.sh runs -- each migration is idempotent and a no-op if already
@@ -198,6 +235,7 @@ def run_all_migrations(con: "duckdb.DuckDBPyConnection | None" = None) -> duckdb
     migrate_news_add_duplicate_of_column(con)
     migrate_dim_symbol_add_is_delisted_column(con)
     migrate_fundamentals_add_source_column(con)
+    migrate_add_sector_news_signal(con)
     return con
 
 

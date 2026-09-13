@@ -36,6 +36,11 @@ def test_extract_symbol_from_url_slug(valid_symbols):
         ("Khối ngoại gom mạnh mã chứng khoán FPT trong phiên ATC", "FPT"),
         ("Chứng khoán SSI (mã CK: SSI) thông qua kế hoạch tăng vốn", "SSI"),
         ("Chứng khoán Smart Invest (mã: AAS) báo lãi lớn quý 3", "AAS"),
+        ("Cổ phiếu của VIC tiếp tục dò đáy", "VIC"),
+        ("Cổ phiếu hãng FPT đạt đỉnh lịch sử", "FPT"),
+        ("Cổ phiếu tập đoàn VIC bứt phá", "VIC"),
+        ("Cổ phiếu ngân hàng TCB dẫn dắt sóng", "TCB"),
+        ("Cổ phiếu nhóm VNM thu hút dòng tiền", "VNM"),
     ],
 )
 def test_extract_symbol_positive_syntactic_matches(title, expected, valid_symbols):
