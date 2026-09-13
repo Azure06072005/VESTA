@@ -88,6 +88,18 @@
       "evidence": "41 passed across tests/test_cafef_category_news.py and tests/test_cafef_category_orchestrator.py (including 32 dedicated orchestrator unit tests with 20+ negative cases: CEO, TP.HCM, USD, SJC, CIA, SME, ABS, VIP, TST:, CNN:, mã QR, OTP, lowercase). Full suite: 224 passed, 1 xfailed. Live polite crawl across 100 pages (50 thi-truong-chung-khoan + 50 doanh-nghiep) evaluated 1,541 candidate articles, matched and persisted 35 verified editorial rows in core.news with 1,500-4,000 char Vietnamese bodies (MWG, PNJ, KBC, VIC, FPT, HDC, PC1, TCB, TCM, DXG, NKG, SAM, BCM, VSC). Audit confirmed 100% precision with zero false-positive acronyms or VNINDEX fallbacks. See DECISIONS.md 2026-09-03 entry."
     },
     {
+      "id": "F004d",
+      "name": "Sector-level news-to-symbol matcher & taxonomy engine",
+      "behavior": "Synthesizes 25-sector market index taxonomy (Vietstock, vnstock Reference.industry.sectors(), and Anfin UPCOM coverage) into core.dim_sector (25 official sectors) and core.dim_symbol_sector (930 stocks). Implements 2-tier fail-closed matching engine (src/pipeline/sector_news_matcher.py): Tier A requires market context anchors ('cổ phiếu', 'nhóm ngành', 'dòng tiền', 'rổ chỉ số') before sector keywords, rejecting 100% of administrative/civil policy traps; Tier B triggers on multi-symbol co-occurrence from the same sector in headlines. Enforces zero raw fan-out by persisting signals to core.sector_news_signal instead of duplicating rows in core.news. Binds downstream statistical evaluations (F201/F203/F104) to clustered bootstrap by (published_at_date, sector_id).",
+      "dependencies": [
+        "F004c",
+        "F001"
+      ],
+      "verification": "pytest tests/test_sector_news_matcher.py -v (21/21 passed); empirical scan of 1,139,301 articles in DuckDB extracts 15,531 sector signals across 930 tickers with zero raw fan-out into core.news.",
+      "state": "passing",
+      "evidence": "21 passed (pytest tests/test_sector_news_matcher.py -v in 1.19s). Populated core.dim_sector (25 rows), core.dim_symbol_sector (930 rows), and core.sector_news_signal (15,531 rows from 1,139,301 scanned articles; hit rate 1.363%) in db/staging_sync.duckdb. Full 2-tier fail-closed rules and clustered bootstrap constraints documented in DECISIONS.md 2026-09-13."
+    },
+    {
       "id": "F005",
       "name": "Fundamental crawler suite (balance sheet, income statement, cash flow, ratio, financial health score)",
       "behavior": "5 quarterly sub-datasets keyed by (symbol, period), each with available_at = actual public disclosure date (NOT period_end) captured at crawl time. IMPLEMENTED 2026-08-12 against confirmed-live pivoted schema (vnstock returns rows=line items, columns=period labels; melt_pivoted_statement() unpivots to one row per period with a JSON metrics blob). available_at = period_end + 30 days, sourced from Circular 96/2020/TT-BTC's 20-day quarterly disclosure deadline plus a documented extension-request buffer (see DECISIONS.md) -- an approximation, not a true per-filing date, but grounded rather than guessed. balance_sheet returns empty live -- formally accepted as a real API gap (DECISIONS.md), fails loudly by design. income_statement/cash_flow/ratio unaffected. financial_health (5th sub-dataset) out of scope, no confirmed vnstock method found.",
