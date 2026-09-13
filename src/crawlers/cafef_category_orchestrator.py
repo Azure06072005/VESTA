@@ -31,8 +31,10 @@ logger = logging.getLogger(__name__)
 
 # Scoped (?i:...) applies case-insensitivity ONLY to the Vietnamese keywords.
 # ([A-Z0-9]{3,4}) is strictly uppercase ASCII.
-CO_PHIEU_PATTERN = re.compile(r"\b(?i:cổ\s+phiếu)\s+([A-Z0-9]{3,4})\b")
-MA_CHUNG_KHOAN_PATTERN = re.compile(r"\b(?i:mã\s+(?:chứng\s+khoán|CK))\s+([A-Z0-9]{3,4})\b")
+# SAFE_BUFFER_WORDS allows 1-2 common Vietnamese bridging words without risking false positives.
+SAFE_BUFFER_WORDS = r"(?:của|hãng|nhóm|cp|tập\s+đoàn|ngân\s+hàng)"
+CO_PHIEU_PATTERN = re.compile(rf"\b(?i:cổ\s+phiếu)(?:\s+{SAFE_BUFFER_WORDS})?\s+([A-Z0-9]{{3,4}})\b")
+MA_CHUNG_KHOAN_PATTERN = re.compile(rf"\b(?i:mã\s+(?:chứng\s+khoán|CK))(?:\s+{SAFE_BUFFER_WORDS})?\s+([A-Z0-9]{{3,4}})\b")
 PARENTHESIS_MA_PATTERN = re.compile(r"\((?i:mã(?:\s+CK)?|CK):\s*([A-Z0-9]{3,4})\)")
 SLUG_TICKER_PATTERN = re.compile(r"^https?://cafef\.vn/([A-Z0-9]{3,4})-\d+/")
 

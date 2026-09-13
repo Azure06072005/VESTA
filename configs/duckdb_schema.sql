@@ -53,6 +53,35 @@ CREATE TABLE IF NOT EXISTS core.dim_symbol_cafef (
     raw_json     VARCHAR NOT NULL
 );
 
+-- F004d: Sector master & news signal tables
+CREATE TABLE IF NOT EXISTS core.dim_sector (
+    sector_id        INTEGER NOT NULL PRIMARY KEY,
+    sector_name      VARCHAR NOT NULL,
+    english_name     VARCHAR,
+    gics_sector_code VARCHAR,
+    url_slug         VARCHAR,
+    keywords_json    VARCHAR NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS core.dim_symbol_sector (
+    symbol           VARCHAR NOT NULL PRIMARY KEY,
+    sector_id        INTEGER NOT NULL,
+    sector_name      VARCHAR NOT NULL,
+    source           VARCHAR NOT NULL,
+    updated_at       TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS core.sector_news_signal (
+    source_url       VARCHAR NOT NULL,
+    sector_id        INTEGER NOT NULL,
+    sector_name      VARCHAR NOT NULL,
+    matched_keyword  VARCHAR NOT NULL,
+    match_tier       VARCHAR NOT NULL,
+    market_anchor    VARCHAR NOT NULL,
+    fetched_at       TIMESTAMP NOT NULL,
+    PRIMARY KEY (source_url, sector_id)
+);
+
 -- staging/core.market_ohlcv_daily (F002): daily OHLCV per symbol.
 -- staging holds raw fetched rows pre-validation; core is validated +
 -- promoted, deduped on (symbol, date). Column names for the source fetch

@@ -1591,3 +1591,18 @@ Newest at the top. Don't reverse any of these without a new, stated reason.
   2. **Regime-Conditioned Interaction Features**: The ML feature pipeline (F104) and sentiment strategy must condition on market state (HOSE vs UPCOM exchange indicator + 16-regime / macro liquidity state gate).
   3. **Risk Rails (Fail-Closed)**: Any execution layer strategy must enforce a hard regime circuit breaker: dip-buying on negative headlines is halted when market index is below 200-day EMA or during identified liquidity-crisis regimes.
 - Status: F203 passing (reproducible live report at `out/f203_regime_report.json`, unit tests passing). F301 officially unblocked under regime-conditional architecture.
+
+## 2026-09-13: F202b / F203 Synthesis & Methodological Consensus Gate
+- Context: Independent empirical verification confirmed exact match of reproducible JSON reports (`out/f202b_dsr_pbo_report.json` Kurtosis=4315.77, `out/f203_regime_report.json` HOSE Bull=+7.46%, HOSE Crisis=-4.66%). Formal audit established two critical methodological principles governing downstream F301/F302 modeling:
+- Binding Architectural & Statistical Decisions:
+  1. **Formal Rejection of `raw_unadjusted` DSR as Official Baseline**:
+     - Rationale: The extreme Kurtosis ($4,315.77$) is conclusively verified as a data distortion caused by unadjusted split/delisting price multiples in unconstrained UPCOM penny stocks (specifically `XDC` 32x price spike from 31.3k to 999.9k VND; and secondary penny stocks `PTM`, `VIM`, `SHN`, `BTH`). This directly confirms F009's stated caution that `src/etl/adjustments.py` remains UNVALIDATED against external adjusted series.
+     - Binding Rule: No official backtest report or thesis submission may claim `raw_unadjusted` metrics as proof of edge. The only methodologically valid DSR/PBO benchmarks are Winsorized [0.5%, 99.5%] (Kurtosis = 10.84, DSR(N=1)=0.9981, DSR(N=2)=0.9914, DSR(N=3)=0.9767) or trimmed series. Validating `adjustments.py` remains an open prerequisite before raw corporate action adjustments can be trusted unconditionally.
+  2. **Statistical Independence & Validity of HOSE Regime Finding**:
+     - The HOSE evaluation in F203 operates under a strict exchange partition (`exchange == 'HOSE'`), completely isolating it from UPCOM/DELISTED penny stock anomalies (`XDC`, `PTM`, `VIM` are 100% excluded).
+     - On the liquid HOSE main board, the sign-flip is structurally real: Bull regime (+7.46%, win-rate 65.06%, n=807) vs 2022 Crisis regime (-4.66%, win-rate 35.76%, loss-rate 64.24%, n=467).
+     - Binding Rule for F301: This regime heterogeneity is clean of penny stock artifacts and constitutes a verified market property. PhoBERT (F301) and trading logic must fail-closed (halt negative-sentiment dip buying) during bear/liquidity-tight regimes.
+  3. **Methodology & Terminology Governance**:
+     - "FinDPO" (using market regime return realizations as preference feedback for Direct Preference Optimization) is formally recorded as VESTA's novel thesis adaptation/proposal, not cited as a pre-existing third-party library.
+     - `news_dedup.py` upgrade from `difflib` to `MinHash` (datasketch) is scheduled as an operational maintenance improvement.
+- Status: Consensus fully reached; F201-F203 empirical foundations locked; unblocks F301 under strict regime-conditional governance.
