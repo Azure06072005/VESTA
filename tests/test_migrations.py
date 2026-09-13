@@ -113,6 +113,9 @@ def test_migrate_fundamentals_row_count_guard_exists_in_source():
 def test_migrate_news_add_duplicate_of_column_is_additive_and_idempotent(tmp_path):
     db_path = tmp_path / "test.duckdb"
     con = db.bootstrap_schema(db_path)
+    # Ensure starting from legacy table state before duplicate_of was added
+    con.execute("ALTER TABLE core.news DROP COLUMN duplicate_of")
+    con.execute("ALTER TABLE staging.news DROP COLUMN duplicate_of")
 
     ran1 = migrations.migrate_news_add_duplicate_of_column(con)
     assert ran1 is True

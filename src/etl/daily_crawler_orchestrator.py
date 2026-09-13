@@ -55,7 +55,14 @@ class DailyCrawlerOrchestrator:
         
         self.config: Dict[str, Any] = self._load_config()
         db_cfg = self.config.get("global_settings", {}).get("database", {})
-        self.db_path = db_cfg.get("target_path", "d:/VESTA/db/vesta.duckdb")
+        target_str = db_cfg.get("target_path", "d:/VESTA/db/vesta_backup.duckdb")
+        target_path = Path(target_str)
+        if not target_path.exists():
+            if (PROJECT_ROOT / "db" / "vesta_backup.duckdb").exists():
+                target_path = PROJECT_ROOT / "db" / "vesta_backup.duckdb"
+            elif (PROJECT_ROOT / "db" / "vesta.duckdb").exists():
+                target_path = PROJECT_ROOT / "db" / "vesta.duckdb"
+        self.db_path = str(target_path)
         self.run_summary: Dict[str, Any] = {
             "started_at": dt.datetime.now().isoformat(),
             "config_path": str(self.config_path),

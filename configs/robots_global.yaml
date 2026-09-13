@@ -3,7 +3,7 @@ global_settings:
   version: 2.1.0
   timezone: Asia/Ho_Chi_Minh
   database:
-    target_path: d:/VESTA/db/vesta_latest_backup.duckdb
+    target_path: d:/VESTA/db/vesta_backup.duckdb
     staging_schema: staging
     core_schema: core
     meta_schema: meta
