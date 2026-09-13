@@ -55,6 +55,18 @@ ADMIN_POLICY_PATTERNS = re.compile(
     r")\b"
 )
 
+# BUGFIX (2026-09-13): the admin-policy override used to hardcode a check
+# for the single literal substring "cổ phiếu", but MARKET_ANCHOR_PATTERN
+# accepts several other anchors ("nhóm ngành", "dòng tiền", "rổ cổ phiếu",
+# "sóng ngành", "các mã", "mã chứng khoán"). A real headline like "Nhóm
+# ngành bất động sản hưởng lợi từ nghị định gỡ vướng pháp lý" passed the
+# market-anchor gate but was then incorrectly dropped by the admin-override
+# check -- a false negative (recall loss), not a false positive, but real.
+MARKET_ANCHOR_OVERRIDE_KEYWORDS: tuple[str, ...] = (
+    "cổ phiếu", "nhóm ngành", "dòng tiền", "rổ cổ phiếu",
+    "sóng ngành", "các mã", "mã chứng khoán",
+)
+
 # =====================================================================
 # SECTOR TAXONOMY & KEYWORD PATTERNS (Derived from Vietstock 25 Sectors)
 # =====================================================================
@@ -172,7 +184,10 @@ def match_sector_tier_a(title: str, url: str = "") -> List[Dict[str, Any]]:
         return []
     
     # Check if this is administrative news without explicit stock context
-    if ADMIN_POLICY_PATTERNS.search(title) and "cổ phiếu" not in title.lower():
+    title_lower = title.lower()
+    if ADMIN_POLICY_PATTERNS.search(title) and not any(
+        kw in title_lower for kw in MARKET_ANCHOR_OVERRIDE_KEYWORDS
+    ):
         return []
 
     anchor_text = m_anchor.group(0)

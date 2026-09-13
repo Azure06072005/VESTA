@@ -92,6 +92,29 @@ def test_tier_a_negative_traps_fail_closed(headline):
     assert matches == []
 
 
+@pytest.mark.parametrize(
+    "title,expected_sector_id,expected_sector_name",
+    [
+        ("Nhóm ngành bất động sản hưởng lợi từ nghị định gỡ vướng pháp lý", 3, "Bất động sản"),
+        ("Dòng tiền đổ vào nhóm ngân hàng sau thông tư mới về room tín dụng", 11, "Ngân hàng"),
+        ("Rổ cổ phiếu xây dựng hưởng lợi từ nghị định đẩy nhanh đầu tư công", 24, "Xây dựng"),
+    ],
+)
+def test_tier_a_admin_override_recognizes_all_market_anchors(title, expected_sector_id, expected_sector_name):
+    matches = match_sector_tier_a(title, url="https://cafef.vn/art-anchor-fix.chn")
+    assert len(matches) >= 1
+    assert expected_sector_id in [m["sector_id"] for m in matches]
+    assert expected_sector_name in [m["sector_name"] for m in matches]
+
+
+def test_tier_a_admin_override_still_fails_closed_without_any_anchor():
+    matches = match_sector_tier_a(
+        "Bộ Xây dựng ban hành nghị định mới về quản lý bất động sản",
+        url="https://cafef.vn/art-admin-only.chn",
+    )
+    assert matches == []
+
+
 # ====================================================================
 # TEST TIER B: MULTI-SYMBOL COMPANY CO-OCCURRENCE
 # ====================================================================

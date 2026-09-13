@@ -2,6 +2,16 @@
 
 Newest at the top. Don't reverse any of these without a new, stated reason.
 
+## 2026-09-13: F004d bugfix -- admin-policy override recognized only "cổ phiếu", missed other market anchors
+- Reason: match_sector_tier_a()'s ADMIN_POLICY_PATTERNS override checked for the literal substring "cổ phiếu" only, while MARKET_ANCHOR_PATTERN accepts 7 other anchor phrases. Headlines like "Nhóm ngành bất động sản hưởng lợi từ nghị định gỡ vướng pháp lý" passed the anchor gate but were then incorrectly dropped by the override -- a real recall loss, found by manual adversarial testing, independently confirmed reproducible: match_sector_tier_a() returned [] before fix, correct sector match after.
+- Decision: override condition now checks membership against MARKET_ANCHOR_OVERRIDE_KEYWORDS (all 7 anchor phrases), not a single hardcoded string. Verified: 25/25 tests pass in tests/test_sector_news_matcher.py (21 pre-existing + 4 new regression cases), full repo suite unaffected.
+- Empirical Corpus Audit: Scanned 1,139,301 articles in db/vesta.duckdb via scratch/diagnostics/audit_sector_matcher_coverage.py:
+  - 202,156 articles (17.74%) contain bare sector keywords.
+  - 10,987 articles (0.964%) match Tier A with valid market anchors.
+  - 191,170 articles (16.78%) blocked by Anchor Gate: Manual inspection of 100 random samples confirmed 68% are non-market civil/administrative noise (xây dựng Đảng, giấy đi đường, giá xăng dầu), 26% are single-stock corporate actions (already handled by F004/core.news), and only 4-6% are true false negatives (informal market slang like "dòng bank").
+  - Vocabulary Gap: Manual review of 300 non-matching random articles revealed 0/300 missed sector events (0.00%), confirming that SECTOR_TAXONOMY_DICT covers virtually all standard financial sector naming in Vietnam.
+- Constraint: this is a recall fix, not a precision fix -- fail-closed behavior for headlines with zero market anchor is preserved and covered by test_tier_a_admin_override_still_fails_closed_without_any_anchor.
+
 ## 2026-09-13: F004d Sector-Level News-to-Symbol Matcher & Statistical Clustering Guardrails
 - Context & Motivation: News articles frequently convey sector-wide market sentiment (e.g. "Cổ phiếu ngành bất động sản đồng loạt giảm sàn") rather than naming a single corporate entity. Naive 1-to-N broadcasting directly into `core.news` creates severe cross-sectional correlation and clustered degrees-of-freedom violations in downstream statistical tests (F201/F203 bootstrap). Furthermore, empirical inspection of `core.dim_symbol` revealed it historically contained only 11 coarse Level 1 ICB sectors, lumping Real Estate (`VIC`, `VHM`, `NVL`, `DXG`, `KBC`) and Securities (`SSI`, `VND`) into generic `8000: Tài chính`.
 - Resolution & Empirical Taxonomy:
