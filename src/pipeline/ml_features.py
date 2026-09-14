@@ -22,7 +22,6 @@ import sys
 from typing import Any
 
 import duckdb
-import numpy as np
 import pandas as pd
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
@@ -403,19 +402,26 @@ def split_temporal_dataset(
     df: pd.DataFrame,
     train_end: dt.date = dt.date(2023, 12, 31),
     val_end: dt.date = dt.date(2024, 12, 31),
+    embargo_days: int = 0,
 ) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     """Partitions dataset temporally into Train, Validation, and Test sets.
 
     Guarantees zero future look-ahead data leakage across set splits:
-    - Train: effective_date <= train_end
-    - Validation: train_end < effective_date <= val_end
+    - Train: effective_date <= train_end (or train_end - timedelta(days=embargo_days) if embargo_days > 0)
+    - Validation: train_end < effective_date <= val_end (or val_end - timedelta(days=embargo_days) if embargo_days > 0)
     - Test: effective_date > val_end
+
+    When embargo_days > 0, events within the embargo window (e.g. 45 days) preceding the set boundaries
+    are purged to eliminate forward label overlap (e.g. T+30 look-ahead bleed).
     """
     if df.empty:
         return df.copy(), df.copy(), df.copy()
 
-    train_mask = df["effective_date"] <= train_end
-    val_mask = (df["effective_date"] > train_end) & (df["effective_date"] <= val_end)
+    effective_train_end = train_end - dt.timedelta(days=embargo_days) if embargo_days > 0 else train_end
+    effective_val_end = val_end - dt.timedelta(days=embargo_days) if embargo_days > 0 else val_end
+
+    train_mask = df["effective_date"] <= effective_train_end
+    val_mask = (df["effective_date"] > train_end) & (df["effective_date"] <= effective_val_end)
     test_mask = df["effective_date"] > val_end
 
     train_df = df[train_mask].reset_index(drop=True)

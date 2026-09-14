@@ -1,0 +1,69 @@
+# =============================================================================
+# VESTA: PhoBERT-base Fine-Tuning & FinDPO Market Alignment Configuration
+# Hardware Budget Constraint: RTX 3060 6GB VRAM, 16GB System RAM
+# Max Peak VRAM Target: <= 5.2 GB (guarded against CUDA OOM)
+# =============================================================================
+
+model:
+  name: "vinai/phobert-base-v2"
+  tokenizer: "vinai/phobert-base-v2"
+  num_labels: 3
+  id2label:
+    0: "NEGATIVE"
+    1: "NEUTRAL"
+    2: "POSITIVE"
+  label2id:
+    "NEGATIVE": 0
+    "NEUTRAL": 1
+    "POSITIVE": 2
+  max_seq_length: 128
+  dropout_prob: 0.15
+
+data:
+  dataset_manifest: "data/processed/f104/dataset_manifest.json"
+  train_path: "data/processed/f104/f104_train.parquet"
+  val_path: "data/processed/f104/f104_val.parquet"
+  test_path: "data/processed/f104/f104_test.parquet"
+  text_column: "context_text"
+  raw_text_column: "text"
+  label_column: "sentiment_label"
+  findpo_chosen_column: "findpo_chosen"
+  findpo_rejected_column: "findpo_rejected"
+  market_regime_column: "market_regime"
+
+training:
+  output_dir: "out/models/phobert_base_findpo"
+  logging_dir: "out/models/logs"
+  per_device_train_batch_size: 16
+  per_device_eval_batch_size: 32
+  gradient_accumulation_steps: 2
+  effective_batch_size: 32  # 16 * 2
+  learning_rate: 2.0e-5
+  lr_scheduler_type: "cosine"
+  weight_decay: 0.01
+  num_train_epochs: 3
+  warmup_ratio: 0.1
+  fp16: true
+  bf16: false
+  dataloader_num_workers: 2
+  evaluation_strategy: "steps"
+  metric_for_best_model: "f1_macro"
+  greater_is_better: true
+  seed: 42
+  pre_tokenize: true
+  use_class_weights: true
+  eval_steps: 1500
+
+findpo:
+  enabled: true
+  beta: 0.1
+  loss_type: "sigmoid"
+  preference_weight: 0.4  # Multi-task loss: (1 - weight) * CE_Loss + weight * DPO_Loss
+  regime_conditioned: true
+
+hardware:
+  device: "cuda"
+  target_gpu: "NVIDIA GeForce RTX 3060 6GB"
+  max_vram_gb: 5.2
+  vram_budget_check: true
+  clean_cuda_cache_each_epoch: true
