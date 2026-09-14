@@ -489,8 +489,8 @@
     },
     {
       "id": "F301",
-      "name": "PhoBERT-base fine-tune for VN financial sentiment",
-      "behavior": "Fine-tune PhoBERT-base (VRAM budget: RTX 3060 6GB, fp16, gradient accumulation) on F003/F004/F055 news events. Solves the Sentiment-Return Divergence problem: decouples grammatical headline polarity (positive/neutral/negative) from market return expectation by training with a dual objective -- (1) Supervised sentiment classification; (2) FinDPO preference alignment (arXiv:2507.18417) where positive/negative return realizations conditioned on F203 market regimes serve as preferred vs dispreferred feedback, explicitly modeling market-contrarian fund forecasts vs realized order flow. Guarded by peak VRAM budget <= 5.5GB.",
+      "name": "PhoBERT-base fine-tune with FinDPO market alignment",
+      "behavior": "Fine-tune PhoBERT-base (VRAM budget: RTX 3060 6GB, fp16, gradient accumulation) on F003/F004/F055 news events. Solves the Sentiment-Return Divergence problem: decouples grammatical headline polarity (positive/neutral/negative) from market return expectation by training with a dual objective -- (1) Supervised sentiment classification on financial domain vocabulary; (2) FinDPO preference alignment (arXiv:2507.18417) where positive/negative return realizations conditioned on F203 market regimes serve as preferred vs dispreferred feedback, explicitly modeling market-contrarian fund forecasts vs realized order flow. Guarded by peak VRAM budget <= 5.2GB.",
       "dependencies": [
         "F202",
         "F202b",
@@ -502,23 +502,37 @@
     },
     {
       "id": "F302",
-      "name": "Re-run F201 backtest using fine-tuned SLM scores",
-      "behavior": "Same statistical test as F201, sentiment now from F301. Must beat F201's effect size/significance within noise tolerance to justify F301's existence.",
+      "name": "Multimodal Cross-Attention Fusion (PhoBERT + RankGauss Fundamentals + Macro Gray)",
+      "behavior": "Combines text embeddings from F301 (PhoBERT 768-dim [CLS]) with tabular 30-dim RankGauss normalized accounting ratios from core.fundamentals and 3-dim Gray Code 16-regime market state embeddings via a lightweight Cross-Attention fusion layer. Solves headline context-blindness: conditions news sentiment on firm financial strength (ROE, Net Margin, Debt/Equity) and liquidity regime, producing a dense 128-dim Multi-Modal Sentiment-Alpha vector.",
       "dependencies": [
-        "F301"
+        "F301",
+        "F104"
       ],
-      "verification": "python -m pipeline.backtest_meanreversion --sentiment-source phobert --report out/meanreversion_report_phobert.json  (programmatic comparison against F201's report; test asserts not worse within stated tolerance)",
+      "verification": "python -m models.train_multimodal_fusion --config configs/multimodal_fusion.yaml && pytest tests/test_multimodal_fusion.py -x",
       "state": "not_started",
       "evidence": null
     },
     {
       "id": "F303",
-      "name": "HybridACD consistency-check layer on F301/F302 sentiment outputs",
-      "behavior": "Apply HybridACD's Token-Constrained Decoding mechanism (Tran Anh, HybridACD report, 2026) as a post-processing consistency gate on F301's fine-tuned PhoBERT sentiment probabilities before they reach braintodo's planning layer. Concretely: for each news event scored by F301, generate the logically related counterpart (negation: 'sentiment is NOT positive' probability) and enforce p_positive + p_negative_negation = 1 via the [l,u] bound + logit-bias mechanism described in HybridACD Section 3.4-3.5 -- adapted from LLM API logit_bias to PhoBERT's softmax output layer (requires a translation step since PhoBERT is a classification head, not an autoregressive LLM token generator -- this translation itself is a novel contribution worth documenting explicitly in the khoa luan, not a direct reuse of the LLM-forecaster method). Must state explicitly whether this improves or degrades F302's backtest effect size vs F201/F301 alone -- per HybridACD's own Table 3 finding that TCD does NOT always avoid a Goodhart-like tradeoff (2 of 6 models showed increased Calibration Error), so VESTA's own application must be evaluated on its own merits, not assumed to inherit HybridACD's LLM-forecaster results.",
+      "name": "Re-run F201 backtest using fine-tuned SLM and multimodal scores",
+      "behavior": "Same statistical test as F201, sentiment now driven by F301/F302. Must beat F201's baseline effect size (Cohen's d = 0.0557) and Sharpe ratio within noise tolerance across regimes to justify the SLM layer's existence.",
       "dependencies": [
-        "F301"
+        "F301",
+        "F302"
       ],
-      "verification": "pytest tests/test_hybridacd_consistency_gate.py -x -- includes a test proving p_pos + p_neg_negation = 1 post-gate (mathematical guarantee), and a comparison test showing F302's backtest re-run WITH vs WITHOUT the gate, reporting both Brier-equivalent calibration metric and F201-style Cohen's d/p-value side by side.",
+      "verification": "python -m pipeline.backtest_meanreversion --sentiment-source multimodal --report out/meanreversion_report_multimodal.json",
+      "state": "not_started",
+      "evidence": null
+    },
+    {
+      "id": "F304",
+      "name": "HybridACD Token-Constrained Decoding consistency gate",
+      "behavior": "Apply HybridACD's Token-Constrained Decoding mechanism (Tran Anh, HybridACD report, 2026) as a post-processing consistency gate on F301/F302 sentiment probabilities before they reach execution planning. Concretely: for each scored event, generates the logically related negation counterpart and enforces axiomatic probabilistic consistency p_positive + p_negative_negation = 1 via logit-bias bounds, eliminating confidence hallucinations on uninformative headlines.",
+      "dependencies": [
+        "F302",
+        "F303"
+      ],
+      "verification": "pytest tests/test_hybridacd_consistency_gate.py -x -- includes a test proving p_pos + p_neg_negation = 1 post-gate (mathematical guarantee), and comparison reporting both Brier calibration and Cohen's d.",
       "state": "not_started",
       "evidence": null
     },

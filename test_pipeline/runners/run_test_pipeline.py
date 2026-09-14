@@ -29,6 +29,7 @@ from test_pipeline.f2xx_validation.test_f201_meanreversion_runner import run_f20
 from test_pipeline.f2xx_validation.test_f202_robustness_runner import run_f202_test
 from test_pipeline.f2xx_validation.test_f202b_dsr_pbo_runner import run_f202b_test
 from test_pipeline.f2xx_validation.test_f203_regime_audit_runner import run_f203_test
+from test_pipeline.f3xx_modeling.test_f301_phobert_runner import run_f301_test
 
 
 def find_test_db(preferred_path: str = "db/test_db/vesta_test.duckdb") -> str:
@@ -121,6 +122,15 @@ def run_test_pipeline(
             res_203 = run_f203_test(actual_db)
             benchmark["stages"]["F203"] = {"status": "PASS", "n_cells": len(res_203.get("regime_matrix", []))}
 
+    # Tier F3xx execution
+    if tier in ["all", "f3xx"]:
+        print("\n--- EXECUTING TIER F3XX (Deep NLP Modeling & FinDPO Market Alignment) ---")
+        if feature in [None, "f301", "F301"]:
+            res_301 = run_f301_test()
+            benchmark["stages"]["F301"] = res_301
+            if res_301.get("status") != "PASS":
+                all_passed = False
+
     duration = time.time() - t_start
     benchmark["total_duration_seconds"] = round(duration, 2)
     benchmark["overall_status"] = "PASS" if all_passed else "FAIL"
@@ -138,8 +148,8 @@ def run_test_pipeline(
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run VESTA test pipeline by tier or feature")
     parser.add_argument("--db-path", default=None, help="Path to test DuckDB database")
-    parser.add_argument("--tier", choices=["all", "f1xx", "f2xx"], default="all", help="Tier to execute")
-    parser.add_argument("--feature", default=None, help="Specific feature to run (e.g. f101, f203)")
+    parser.add_argument("--tier", choices=["all", "f1xx", "f2xx", "f3xx"], default="all", help="Tier to execute")
+    parser.add_argument("--feature", default=None, help="Specific feature to run (e.g. f101, f203, f301)")
     parser.add_argument("--out-dir", default="test_pipeline/out", help="Output directory")
     args = parser.parse_args()
 

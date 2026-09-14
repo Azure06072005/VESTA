@@ -18,9 +18,18 @@ from pipeline.f1xx_enrichment.ml_features import (
 )
 
 
-def run_f104_test(db_path: str = "db/vesta_test.duckdb", limit: int = 5000) -> dict[str, object]:
-    con = duckdb.connect(db_path, read_only=True)
-    print(f"[F104] Testing Vectorized ML Features on {db_path} (Sample: {limit:,} events)...")
+def resolve_db(preferred: str) -> str:
+    candidates = [preferred, "db/test_db/vesta_test.duckdb", "db/vesta_test.duckdb", "db/vesta.duckdb"]
+    for c in candidates:
+        if c and pathlib.Path(c).exists():
+            return c
+    return preferred
+
+
+def run_f104_test(db_path: str = "db/test_db/vesta_test.duckdb", limit: int = 5000) -> dict[str, object]:
+    actual_db = resolve_db(db_path)
+    con = duckdb.connect(actual_db, read_only=True)
+    print(f"[F104] Testing Vectorized ML Features on {actual_db} (Sample: {limit:,} events)...")
 
     df = build_feature_dataframe(con, limit=limit, vectorized=True)
     train_df, val_df, test_df = split_temporal_dataset(df)

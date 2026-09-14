@@ -298,4 +298,20 @@ Template for future entries:
 - Next Options:
   1. Resume crawls when commanded: Tin Nhanh CK (2021 down to 2000), Tuổi Trẻ (page 1,881+), or HAR offline parsing (6,293 pending articles).
   2. Transition to ML pipeline Stage 3 (Feature Engineering & Preprocessing) / Stage 4 (PhoBERT F301 / Baseline F201).
-
+
+## Session 10 — 2026-09-14 (F104 Official Dataset Export & F301 Configuration Milestone)
+- Completed: Comprehensive Data Preprocessing audit across `Harness/`, `test_pipeline/`, and `DATA_PREPROCESSING_FULL_REPORT.md` (synthesized completed, pending, and dropped techniques).
+- Completed: Implemented `src/pipeline/export_f104_dataset.py` with 45-day Purged & Embargo window (Marcos López de Prado AFML methodology), dual-target generation (3-class sentiment label + FinDPO chosen/rejected pairs conditioned on F203 market regimes), context-enriched prompt text formatting, and DuckDB native Snappy Parquet streaming export.
+- Dataset Execution & Materialization (`data/processed/f104/`):
+  - Processed 581,943 total valid preprocessed events.
+  - Purged 10,546 events (1.81%) across two 45-day embargo gaps to guarantee zero forward label bleed ($T+30$).
+  - **Train Set**: 384,431 events (60.3 MB, 2007-02-23 to 2023-11-16; SHA-256: `b328616f...`).
+  - **Validation Set**: 48,624 events (7.4 MB, 2024-01-02 to 2024-11-15; SHA-256: `205b1501...`).
+  - **Held-Out Test Set**: 138,342 events (18.2 MB, 2025-01-02 to 2026-07-21; SHA-256: `0d8c42c4...`).
+  - Generated `data/processed/f104/dataset_manifest.json` for Rule B4 Data Provenance.
+- Completed: Authored `configs/phobert_base.yaml` for F301 PhoBERT-base + FinDPO market alignment, strictly constrained to RTX 3060 6GB VRAM budget (max seq len 128, batch size 16, fp16 true, peak VRAM <= 5.2 GB).
+- Verification:
+  - 11/11 tests passed (`pytest tests/test_ml_features.py tests/test_f104_dataset_split.py -v`).
+  - Modular pipeline runner PASS (`python test_pipeline/runners/run_test_pipeline.py --feature f104`).
+  - Ruff and mypy clean.
+- Next Session Should: Implement `src/models/train_sentiment.py` and run F301 fine-tuning on PhoBERT-base using the generated Parquet datasets.
