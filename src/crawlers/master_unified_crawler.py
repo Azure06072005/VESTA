@@ -20,11 +20,17 @@ import sys
 import time
 import urllib.parse
 import urllib.request
-from typing import Any, Dict, List, Optional, Tuple
+from typing import List, Optional
 
-from bs4 import BeautifulSoup
-import duckdb
-import pandas as pd
+from pathlib import Path
+
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+from bs4 import BeautifulSoup  # noqa: E402
+import duckdb  # noqa: E402
+import pandas as pd  # noqa: E402
 
 sys.stdout.reconfigure(encoding="utf-8")
 
@@ -341,9 +347,6 @@ def run_live_category_news_crawler(con: duckdb.DuckDBPyConnection, zones: List[s
                         sapo_tag = it.find("p", class_=re.compile(r"sapo|knswli-sapo"))
                         summary = sapo_tag.get_text(strip=True) if sapo_tag else ""
                         
-                        time_tag = it.find(class_=re.compile(r"time|knswli-date"))
-                        time_str = time_tag.get_text(strip=True) if time_tag else ""
-                        
                         # Extract ticker if in title like "HPG: Lợi nhuận..."
                         ticker_match = re.match(r"^([A-Z0-9]{3,4}):", title)
                         symbol = ticker_match.group(1) if ticker_match else "MARKET"
@@ -436,31 +439,64 @@ def run_vnstock_market_crawler(con: duckdb.DuckDBPyConnection, symbols: List[str
 # =============================================================================
 # 6. MASTER ORCHESTRATOR & CLI ENTRYPOINT
 # =============================================================================
+def get_all_canonical_symbols(con: duckdb.DuckDBPyConnection) -> List[str]:
+    """Lấy toàn bộ mã cổ phiếu niêm yết trong cơ sở dữ liệu."""
+    try:
+        df = con.execute("""
+            SELECT symbol FROM core.dim_symbol 
+            WHERE is_delisted IS FALSE OR is_delisted IS NULL
+            ORDER BY symbol
+        """).df()
+        return df["symbol"].tolist()
+    except Exception:
+        return ["SSI", "VND", "VCI", "HCM", "SHS", "HPG", "FPT", "VCB", "MWG", "TCB"]
+
+
 def main():
     parser = argparse.ArgumentParser(description="VESTA Master Unified Crawler & Ingestion Pipeline")
     parser.add_argument("--all", action="store_true", help="Chạy toàn bộ quy trình: HAR + Live Disclosures + Live News")
+    parser.add_argument("--all-quant", action="store_true", help="Chạy toàn bộ 6 phân hệ định lượng vi mô (Sổ lệnh, Tự doanh, Khối ngoại, BCTC, Macro, Room)")
+    parser.add_argument("--all-symbols", action="store_true", help="Cào cho TOÀN BỘ mã cổ phiếu niêm yết trong CSDL")
     parser.add_argument("--har-only", action="store_true", help="Chỉ nạp offline từ các file HAR")
     parser.add_argument("--live-disclosures", action="store_true", help="Cào công bố thông tin & BCTC mới từ CafeF")
     parser.add_argument("--live-news", action="store_true", help="Cào tin tức chuyên mục tài chính từ CafeF")
     parser.add_argument("--vnstock", action="store_true", help="Cào nến 1 phút thị trường từ Vnstock")
+    parser.add_argument("--order-book", action="store_true", help="Cào sổ lệnh vi mô Level 2, Tick Data và tính chỉ số OFI")
+    parser.add_argument("--proprietary-flow", action="store_true", help="Cào dữ liệu khớp lệnh tự doanh chi tiết từng mã")
+    parser.add_argument("--foreign-intraday", action="store_true", help="Cào dòng tiền khối ngoại realtime và tỷ lệ hở room ngoại")
+    parser.add_argument("--financial-notes", action="store_true", help="Cào thuyết minh BCTC chuyên sâu (trái phiếu, nợ xấu 2-5, trích lập)")
+    parser.add_argument("--macro-rates", action="store_true", help="Cào lãi suất liên ngân hàng và lợi suất TPCP VN10Y")
+    parser.add_argument("--db-path", type=str, default=CANONICAL_DB_PATH, help="Đường dẫn file DuckDB")
     parser.add_argument("--pages", type=int, default=3, help="Số trang cào cho mỗi luồng (mặc định: 3)")
-    parser.add_argument("--symbols", type=str, default="FPT,HPG,VCB,MWG,SSI", help="Danh sách mã chứng khoán cào nến (cách nhau dấu phẩy)")
-    parser.add_argument("--delay", type=float, default=0.8, help="Thời gian nghỉ giữa các request (giây, mặc định: 0.8)")
+    parser.add_argument("--symbols", type=str, default="", help="Danh sách mã chứng khoán (cách nhau dấu phẩy)")
+    parser.add_argument("--delay", type=float, default=0.5, help="Thời gian nghỉ giữa các request (giây, mặc định: 0.5)")
     args = parser.parse_args()
 
-    # If no flags passed, run default demo (all modules with small pages for safety)
-    if not any([args.all, args.har_only, args.live_disclosures, args.live_news, args.vnstock]):
+    # If no flags passed, run default demo
+    if not any([args.all, args.all_quant, args.har_only, args.live_disclosures, args.live_news, 
+                args.vnstock, args.order_book, args.proprietary_flow, args.foreign_intraday,
+                args.financial_notes, args.macro_rates]):
         args.all = True
 
     start_time = time.time()
     print("\n" + "#" * 85)
-    print(" VESTA QUANTITATIVE TRADING — MASTER UNIFIED CRAWLER")
-    print(f" Cơ sở dữ liệu đích: {CANONICAL_DB_PATH}")
+    print(" VESTA QUANTITATIVE TRADING — MASTER UNIFIED CRAWLER & PIPELINE")
+    print(f" Cơ sở dữ liệu đích: {args.db_path}")
     print(f" Thời điểm kích hoạt : {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print("#" * 85)
 
-    con = duckdb.connect(CANONICAL_DB_PATH)
+    con = duckdb.connect(args.db_path)
     init_all_database_tables(con)
+
+    # Xác định tập mã cổ phiếu mục tiêu
+    if args.all_symbols:
+        target_symbols = get_all_canonical_symbols(con)
+        print(f" -> Chế độ Universe toàn thị trường: {len(target_symbols):,} mã cổ phiếu.")
+    elif args.symbols:
+        target_symbols = [s.strip().upper() for s in args.symbols.split(",") if s.strip()]
+        print(f" -> Chế độ danh sách chỉ định: {len(target_symbols)} mã: {','.join(target_symbols[:10])}...")
+    else:
+        target_symbols = ["SSI", "VND", "VCI", "HCM", "SHS", "HPG", "FPT", "VCB", "MWG", "TCB"]
 
     har_cnt = 0
     disc_cnt = 0
@@ -480,16 +516,43 @@ def main():
         target_zones = list(CAFEF_ZONES.keys())[:4] if args.all else list(CAFEF_ZONES.keys())
         news_cnt = run_live_category_news_crawler(con, zones=target_zones, pages_per_zone=max(1, args.pages // 2), delay=args.delay)
 
-    # 4. Vnstock Market Data
+    # 4. Vnstock Market Data (1m)
     if args.all or args.vnstock:
-        sym_list = [s.strip() for s in args.symbols.split(",") if s.strip()]
-        mkt_cnt = run_vnstock_market_crawler(con, symbols=sym_list, interval="1m", length="1M")
+        mkt_cnt = run_vnstock_market_crawler(con, symbols=target_symbols, interval="1m", length="1M")
 
-    # Print summary of database status
-    total_disc_db = con.execute("SELECT count(*) FROM core.cafef_disclosures").fetchone()[0]
-    total_events_db = con.execute("SELECT count(*) FROM core.corporate_events").fetchone()[0]
-    total_news_db = con.execute("SELECT count(*) FROM core.news").fetchone()[0]
     con.close()
+
+    # 5. Phân hệ Định lượng Vi mô (Quant Microstructure Pipeline)
+    from src.crawlers.order_book_depth import OrderBookDepthCrawler
+    from src.crawlers.proprietary_flow import ProprietaryFlowCrawler
+    from src.crawlers.foreign_flow_intraday import ForeignFlowIntradayCrawler
+    from src.crawlers.financial_notes import FinancialNotesCrawler
+    from src.crawlers.macro_rates import MacroRatesCrawler
+
+    if args.all_quant or args.order_book:
+        print("\n>>> [QUANT MODULE 1] KÍCH HOẠT CÀO SỔ LỆNH LEVEL 2 & OFI (ORDER FLOW IMBALANCE)...")
+        ob_crawler = OrderBookDepthCrawler(db_path=args.db_path)
+        ob_crawler.run(target_symbols, delay_sec=args.delay)
+
+    if args.all_quant or args.proprietary_flow:
+        print("\n>>> [QUANT MODULE 2] KÍCH HOẠT CÀO KHỚP LỆNH TỰ DOANH CHI TIẾT TỪNG MÃ...")
+        prop_crawler = ProprietaryFlowCrawler(db_path=args.db_path)
+        prop_crawler.run(target_symbols, delay_sec=args.delay)
+
+    if args.all_quant or args.foreign_intraday:
+        print("\n>>> [QUANT MODULE 3] KÍCH HOẠT CÀO KHỐI NGOẠI REALTIME & ROOM NGOẠI CÒN LẠI...")
+        ff_crawler = ForeignFlowIntradayCrawler(db_path=args.db_path)
+        ff_crawler.run(target_symbols, delay_sec=args.delay)
+
+    if args.all_quant or args.financial_notes:
+        print("\n>>> [QUANT MODULE 4] KÍCH HOẠT CÀO THUYẾT MINH BCTC CHUYÊN SÂU...")
+        notes_crawler = FinancialNotesCrawler(db_path=args.db_path)
+        notes_crawler.run(target_symbols, delay_sec=args.delay)
+
+    if args.all_quant or args.macro_rates:
+        print("\n>>> [QUANT MODULE 5] KÍCH HOẠT CÀO LÃI SUẤT LIÊN NGÂN HÀNG & VN10Y BOND YIELDS...")
+        rates_crawler = MacroRatesCrawler(db_path=args.db_path)
+        rates_crawler.run()
 
     elapsed = time.time() - start_time
     print("\n" + "=" * 85)
@@ -500,11 +563,6 @@ def main():
     print(f" - BCTC & Công bố cào trực tiếp  : {disc_cnt:,} bản ghi")
     print(f" - Tin tức chuyên mục cào mới    : {news_cnt:,} bài báo")
     print(f" - Nến thị trường 1m cào mới     : {mkt_cnt:,} thanh nến")
-    print("-" * 85)
-    print(f" HIỆN TRẠNG DATABASE CHÍNH (db/vesta.duckdb):")
-    print(f"  * Bảng core.cafef_disclosures  : {total_disc_db:,} bản ghi BCTC & Công bố")
-    print(f"  * Bảng core.corporate_events   : {total_events_db:,} sự kiện doanh nghiệp")
-    print(f"  * Bảng core.news               : {total_news_db:,} bài tin tức tài chính")
     print("=" * 85)
 
 

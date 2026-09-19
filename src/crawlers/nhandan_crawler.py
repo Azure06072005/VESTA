@@ -58,7 +58,11 @@ def parse_nhandan_date(soup: BeautifulSoup, text: str) -> dt.datetime:
         try:
             d, mth, y = int(m.group(1)), int(m.group(2)), int(m.group(3))
             if 1 <= mth <= 12 and 1 <= d <= 31:
-                return dt.datetime(y, mth, d, 8, 0, 0, tzinfo=dt.timezone.utc)
+                res_dt = dt.datetime(y, mth, d, 8, 0, 0, tzinfo=dt.timezone.utc)
+                now_utc = dt.datetime.now(dt.timezone.utc)
+                if res_dt > now_utc or y < 2000:
+                    return now_utc
+                return res_dt
         except Exception:
             pass
     return dt.datetime.now(dt.timezone.utc)
@@ -103,7 +107,7 @@ def parse_nhandan_article(html: str, url: str, fallback_title: str = "") -> dict
 
 
 def write_macro_policy(con: duckdb.DuckDBPyConnection, df: pd.DataFrame) -> int:
-    """Lưu bài viết vào staging và core theo chuẩn 11 cột."""
+    """Lưu bài viết vào staging.macro_policy, core.news_resources và core.macro_policy theo chuẩn 11 cột."""
     if df.empty:
         return 0
 
@@ -121,86 +125,150 @@ def write_macro_policy(con: duckdb.DuckDBPyConnection, df: pd.DataFrame) -> int:
     con.unregister("df_nd_staging")
 
     con.register("df_nd_core", df[required_cols])
+    # Ghi vào core.news_resources
     res = con.execute(
         """
-        INSERT INTO core.macro_policy
+        INSERT INTO core.news_resources
         SELECT * FROM df_nd_core
         ON CONFLICT (source_url) DO NOTHING
         """
     )
     n = res.fetchall()[0][0] if res else len(df)
+    # Đồng thời ghi vào core.macro_policy để duy trì tương thích ngược
+    try:
+        con.execute(
+            """
+            INSERT INTO core.macro_policy
+            SELECT * FROM df_nd_core
+            ON CONFLICT (source_url) DO NOTHING
+            """
+        )
+    except Exception:
+        pass
     con.unregister("df_nd_core")
     return n
 
 
 def load_existing_urls(con: duckdb.DuckDBPyConnection) -> set[str]:
     """Tải danh sách URL đã có để khử trùng lặp."""
-    try:
-        rows = con.execute("SELECT source_url FROM core.macro_policy WHERE source = 'nhandan'").fetchall()
-        return {r[0] for r in rows if r[0]}
-    except Exception:
-        return set()
+    urls = set()
+    for tbl in ["core.news_resources", "core.macro_policy"]:
+        try:
+            rows = con.execute(f"SELECT source_url FROM {tbl} WHERE source = 'nhandan'").fetchall()
+            urls.update(r[0] for r in rows if r[0])
+        except Exception:
+            pass
+    return urls
+
+
+def generate_sitemap_urls(start_year: int = 2026, end_year: int = 2000) -> list[tuple[int, int, str]]:
+    """Tạo danh sách URL sitemap hàng tháng duyệt ngược từ năm mới nhất về quá khứ."""
+    sitemaps = []
+    for y in range(start_year, end_year - 1, -1):
+        max_month = 9 if y == 2026 else 12
+        for m in range(max_month, 0, -1):
+            sitemaps.append((y, m, f"https://nhandan.vn/sitemaps/news-{y}-{m}.xml"))
+    return sitemaps
+
+
+from src.crawlers.db_writer import ResilientDuckDBWriter, DEFAULT_TARGET_DB
 
 
 def run_nhandan_crawler(
     max_articles: int = 50,
+    start_year: int = 2026,
+    end_year: int = 2000,
+    max_sitemaps: int = 50,
     delay_seconds: float = DEFAULT_DELAY_SECONDS,
-    db_path: str = "d:/VESTA/db/vesta.duckdb",
+    db_path: str = DEFAULT_TARGET_DB,
 ) -> dict[str, Any]:
-    """Chạy quy trình cào Báo Nhân Dân với Circuit Breaker."""
+    """Chạy quy trình cào Báo Nhân Dân với vòng lặp sitemap duyệt lùi về quá khứ."""
     session = requests.Session()
     session.headers.update(HEADERS)
 
-    con = db.connect(db_path, read_only=False)
-    existing_urls = load_existing_urls(con)
+    writer = ResilientDuckDBWriter(target_db=db_path)
+    existing_urls: set[str] = set()
 
-    try:
-        resp = session.get("https://nhandan.vn/sitemaps/news-2026-9.xml", timeout=12, verify=False)
-        if resp.status_code in (401, 403, 410, 429, 503):
-            logger.warning(f"[CIRCUIT BREAKER] nhandan.vn từ chối yêu cầu (HTTP {resp.status_code}).")
-            con.close()
-            return {"status": "rejected", "http_status": resp.status_code, "total_written": 0}
-        resp.raise_for_status()
-        urls = [
-            u for u in re.findall(r"<loc>(.*?)</loc>", resp.text)
-            if u not in existing_urls and any(cat in u for cat in ["/kinh-te/", "/chinh-tri/", "/xa-hoi/"])
-        ][:max_articles]
-        if not urls:
-            urls = [u for u in re.findall(r"<loc>(.*?)</loc>", resp.text) if u not in existing_urls][:max_articles]
-    except Exception as e:
-        logger.warning(f"[CIRCUIT BREAKER] Lỗi kết nối sitemap Báo Nhân Dân: {e}. Bỏ qua site.")
-        con.close()
-        return {"status": "rejected", "error": str(e), "total_written": 0}
+    def _load_urls(con: duckdb.DuckDBPyConnection) -> None:
+        existing_urls.update(load_existing_urls(con))
 
-    records = []
-    breaker_tripped = False
+    writer.execute_with_retry(_load_urls)
 
-    for url in urls:
-        time.sleep(delay_seconds)
-        try:
-            art_resp = session.get(url, timeout=12, verify=False)
-            if art_resp.status_code in (401, 403, 410, 429, 503):
-                logger.warning(f"[CIRCUIT BREAKER] nhandan từ chối bài viết (HTTP {art_resp.status_code}). Dừng.")
-                breaker_tripped = True
-                break
-            if art_resp.status_code == 200:
-                rec = parse_nhandan_article(art_resp.text, url)
-                if rec:
-                    records.append(rec)
-                    existing_urls.add(url)
-        except Exception as e:
-            logger.warning(f"[CIRCUIT BREAKER] Lỗi bài viết {url}: {e}")
-            breaker_tripped = True
-            break
+    sitemaps = generate_sitemap_urls(start_year=start_year, end_year=end_year)[:max_sitemaps]
+    logger.info(
+        "=== Bắt đầu cào Báo Nhân Dân: duyệt %d sitemaps (%d -> %d), tối đa %d bài ===",
+        len(sitemaps), start_year, end_year, max_articles
+    )
 
     total_written = 0
-    if records:
-        total_written = write_macro_policy(con, pd.DataFrame(records))
-        logger.info(f"-> [nhandan] Đã lưu +{total_written} bài viết Báo Nhân Dân.")
+    total_discovered = 0
+    breaker_tripped = False
 
-    con.close()
+    for year, month, sm_url in sitemaps:
+        if total_written >= max_articles or breaker_tripped:
+            break
+
+        logger.info("[nhandan] Đang quét sitemap %d-%02d: %s", year, month, sm_url)
+        try:
+            resp = session.get(sm_url, timeout=12, verify=False)
+            if resp.status_code in (401, 403, 410, 429, 503):
+                logger.warning("[CIRCUIT BREAKER] nhandan.vn từ chối yêu cầu (HTTP %d). Dừng.", resp.status_code)
+                breaker_tripped = True
+                break
+            if resp.status_code != 200:
+                continue
+
+            all_locs = re.findall(r"<loc>(.*?)</loc>", resp.text)
+            total_discovered += len(all_locs)
+
+            # Ưu tiên các bài viết kinh tế, chính trị, xã hội
+            urls = [
+                u for u in all_locs
+                if u not in existing_urls and any(cat in u for cat in ["/kinh-te/", "/chinh-tri/", "/xa-hoi/"])
+            ]
+            if not urls:
+                urls = [u for u in all_locs if u not in existing_urls]
+
+            # Giới hạn số lượng cần lấy
+            remaining = max_articles - total_written
+            urls = urls[:remaining]
+
+            if not urls:
+                logger.info("[nhandan] Sitemap %d-%02d: Tất cả bài viết đã có trong CSDL.", year, month)
+                continue
+
+            records = []
+            for url in urls:
+                time.sleep(delay_seconds)
+                try:
+                    art_resp = session.get(url, timeout=12, verify=False)
+                    if art_resp.status_code in (401, 403, 410, 429, 503):
+                        logger.warning("[CIRCUIT BREAKER] nhandan từ chối bài viết (HTTP %d). Dừng.", art_resp.status_code)
+                        breaker_tripped = True
+                        break
+                    if art_resp.status_code == 200:
+                        rec = parse_nhandan_article(art_resp.text, url)
+                        if rec:
+                            records.append(rec)
+                            existing_urls.add(url)
+                except Exception as e:
+                    logger.warning("[nhandan] Lỗi bài viết %s: %s", url, e)
+                    break
+
+            if records:
+                def _save_nd(con: duckdb.DuckDBPyConnection) -> int:
+                    return write_macro_policy(con, pd.DataFrame(records))
+
+                n = writer.execute_with_retry(_save_nd)
+                total_written += n
+                logger.info("[nhandan] Sitemap %d-%02d: Đã lưu +%d bài viết (Tổng: %d/%d).", year, month, n, total_written, max_articles)
+
+        except Exception as e:
+            logger.warning("[nhandan] Lỗi kết nối sitemap %s: %s. Chuyển sitemap tiếp theo.", sm_url, e)
+
     return {
         "status": "success" if not breaker_tripped else "partial_success",
+        "total_discovered": total_discovered,
         "total_written": total_written,
     }
 
@@ -209,12 +277,23 @@ def main() -> None:
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8")
     logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
-    parser = argparse.ArgumentParser(description="Bao Nhan Dan Crawler")
-    parser.add_argument("--db", default="d:/VESTA/db/vesta.duckdb", help="DuckDB path")
-    parser.add_argument("--max-articles", type=int, default=20, help="Số bài tối đa")
+    parser = argparse.ArgumentParser(description="Bao Nhan Dan Historical Crawler")
+    parser.add_argument("--db", default=DEFAULT_TARGET_DB, help="DuckDB path")
+    parser.add_argument("--max-articles", type=int, default=30, help="Số bài tối đa")
+    parser.add_argument("--start-year", type=int, default=2026, help="Năm bắt đầu (mặc định 2026)")
+    parser.add_argument("--end-year", type=int, default=2000, help="Năm kết thúc (mặc định 2000)")
+    parser.add_argument("--max-sitemaps", type=int, default=50, help="Số sitemaps tối đa duyệt")
+    parser.add_argument("--delay", type=float, default=0.5, help="Độ trễ giữa các request")
     args = parser.parse_args()
 
-    res = run_nhandan_crawler(db_path=args.db, max_articles=args.max_articles)
+    res = run_nhandan_crawler(
+        db_path=args.db,
+        max_articles=args.max_articles,
+        start_year=args.start_year,
+        end_year=args.end_year,
+        max_sitemaps=args.max_sitemaps,
+        delay_seconds=args.delay,
+    )
     print("\n=== Bao Nhan Dan Crawler Complete ===")
     for k, v in res.items():
         print(f"  {k:20s}: {v}")
@@ -222,3 +301,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+

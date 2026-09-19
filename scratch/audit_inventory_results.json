@@ -1,0 +1,1133 @@
+{
+  "inventory": [
+    {
+      "table": "core.cafef_disclosures",
+      "rows": 24600,
+      "date_col": "published_at",
+      "min_date": "2024-04-28 20:45:03",
+      "max_date": "2026-09-14 14:59:53",
+      "symbols_count": 1655,
+      "vn30_count": 30
+    },
+    {
+      "table": "core.company_overview",
+      "rows": 1522,
+      "date_col": "as_of_date",
+      "min_date": "2008-09-24T00:00:00",
+      "max_date": "2026-06-30T00:00:00",
+      "symbols_count": 1522,
+      "vn30_count": 30
+    },
+    {
+      "table": "core.company_shareholders",
+      "rows": 4268,
+      "date_col": null,
+      "min_date": null,
+      "max_date": null,
+      "symbols_count": 1513,
+      "vn30_count": 30
+    },
+    {
+      "table": "core.corporate_events",
+      "rows": 40277,
+      "date_col": "event_date",
+      "min_date": "2014-03-06",
+      "max_date": "2030-08-19",
+      "symbols_count": 1028,
+      "vn30_count": 30
+    },
+    {
+      "table": "core.dim_symbol",
+      "rows": 1751,
+      "date_col": null,
+      "min_date": null,
+      "max_date": null,
+      "symbols_count": 1751,
+      "vn30_count": 30
+    },
+    {
+      "table": "core.dim_symbol_cafef",
+      "rows": 984,
+      "date_col": null,
+      "min_date": null,
+      "max_date": null,
+      "symbols_count": 984,
+      "vn30_count": 0
+    },
+    {
+      "table": "core.financial_notes",
+      "rows": 7358616,
+      "date_col": null,
+      "min_date": null,
+      "max_date": null,
+      "symbols_count": 1496,
+      "vn30_count": 30
+    },
+    {
+      "table": "core.foreign_flow_intraday",
+      "rows": 2,
+      "date_col": null,
+      "min_date": null,
+      "max_date": null,
+      "symbols_count": 2,
+      "vn30_count": 1
+    },
+    {
+      "table": "core.foreign_ownership_room",
+      "rows": 2,
+      "date_col": "date",
+      "min_date": "2026-09-17",
+      "max_date": "2026-09-17",
+      "symbols_count": 2,
+      "vn30_count": 1
+    },
+    {
+      "table": "core.fundamentals",
+      "rows": 179159,
+      "date_col": null,
+      "min_date": null,
+      "max_date": null,
+      "symbols_count": 1743,
+      "vn30_count": 30
+    },
+    {
+      "table": "core.intraday_trades",
+      "rows": 31863,
+      "date_col": "time",
+      "min_date": "2026-09-17 09:00:00",
+      "max_date": "2026-09-17 10:40:51",
+      "symbols_count": 136,
+      "vn30_count": 6
+    },
+    {
+      "table": "core.macro_economic_series",
+      "rows": 13060,
+      "date_col": "report_period",
+      "min_date": "2014-01-31",
+      "max_date": "2026-09-17",
+      "symbols_count": null,
+      "vn30_count": null
+    },
+    {
+      "table": "core.macro_policy",
+      "rows": 478316,
+      "date_col": "published_at",
+      "min_date": "1204-04-09 14:42:04",
+      "max_date": "2027-03-01 15:00:00",
+      "symbols_count": null,
+      "vn30_count": null
+    },
+    {
+      "table": "core.macro_rates",
+      "rows": 8727,
+      "date_col": "date",
+      "min_date": "2009-08-16",
+      "max_date": "2026-09-17",
+      "symbols_count": null,
+      "vn30_count": null
+    },
+    {
+      "table": "core.market_foreign_flow_daily",
+      "rows": 4839720,
+      "date_col": "date",
+      "min_date": "2001-04-02",
+      "max_date": "2026-09-11",
+      "symbols_count": 3980,
+      "vn30_count": 30
+    },
+    {
+      "table": "core.market_global_equity_daily",
+      "rows": 40050,
+      "date_col": "date",
+      "min_date": "2000-01-03",
+      "max_date": "2026-09-04",
+      "symbols_count": 7,
+      "vn30_count": 0
+    },
+    {
+      "table": "core.market_index_daily",
+      "rows": 206313,
+      "date_col": "date",
+      "min_date": "2000-01-03",
+      "max_date": "2026-09-11",
+      "symbols_count": null,
+      "vn30_count": null
+    },
+    {
+      "table": "core.market_ohlcv_1m",
+      "rows": 22397,
+      "date_col": "time",
+      "min_date": "2026-08-17 09:01:00",
+      "max_date": "2026-09-14 14:40:00",
+      "symbols_count": 10,
+      "vn30_count": 5
+    },
+    {
+      "table": "core.market_ohlcv_daily",
+      "rows": 5178766,
+      "date_col": "date",
+      "min_date": "2000-07-28",
+      "max_date": "2026-09-11",
+      "symbols_count": 3928,
+      "vn30_count": 30
+    },
+    {
+      "table": "core.news",
+      "rows": 661627,
+      "date_col": "published_at",
+      "min_date": "2007-02-23 00:00:00",
+      "max_date": "2026-09-14 15:04:49",
+      "symbols_count": 1890,
+      "vn30_count": 30
+    },
+    {
+      "table": "core.news_resources",
+      "rows": 478316,
+      "date_col": "published_at",
+      "min_date": "1204-04-09 14:42:04",
+      "max_date": "2027-03-01 15:00:00",
+      "symbols_count": null,
+      "vn30_count": null
+    },
+    {
+      "table": "core.order_book_depth",
+      "rows": 311,
+      "date_col": null,
+      "min_date": null,
+      "max_date": null,
+      "symbols_count": 311,
+      "vn30_count": 6
+    },
+    {
+      "table": "core.pit_events",
+      "rows": 658182,
+      "date_col": "published_at",
+      "min_date": "2007-02-23 00:00:00",
+      "max_date": "2026-09-07 18:06:00",
+      "symbols_count": 1820,
+      "vn30_count": 30
+    },
+    {
+      "table": "core.price_adjustment_events",
+      "rows": 1596,
+      "date_col": null,
+      "min_date": null,
+      "max_date": null,
+      "symbols_count": 595,
+      "vn30_count": 24
+    },
+    {
+      "table": "core.proprietary_flow",
+      "rows": 36744,
+      "date_col": "date",
+      "min_date": "2019-01-02",
+      "max_date": "2026-09-16",
+      "symbols_count": 929,
+      "vn30_count": 30
+    },
+    {
+      "table": "core.realtime_quote_snapshot",
+      "rows": 1954,
+      "date_col": "snapshot_at",
+      "min_date": "2026-08-29 14:42:30",
+      "max_date": "2026-09-07 13:00:29",
+      "symbols_count": 1949,
+      "vn30_count": 30
+    },
+    {
+      "table": "core.stock_research_reports",
+      "rows": 777,
+      "date_col": null,
+      "min_date": null,
+      "max_date": null,
+      "symbols_count": 157,
+      "vn30_count": 29
+    },
+    {
+      "table": "meta.crawl_progress",
+      "rows": 22801,
+      "date_col": null,
+      "min_date": null,
+      "max_date": null,
+      "symbols_count": 3681,
+      "vn30_count": 30
+    },
+    {
+      "table": "preprocessed.events",
+      "rows": 581944,
+      "date_col": "published_at",
+      "min_date": "2007-02-23 00:00:00",
+      "max_date": "2026-07-21 14:59:47",
+      "symbols_count": 1775,
+      "vn30_count": 30
+    },
+    {
+      "table": "preprocessed.fundamentals_ratios",
+      "rows": 46337,
+      "date_col": null,
+      "min_date": null,
+      "max_date": null,
+      "symbols_count": 1736,
+      "vn30_count": 30
+    },
+    {
+      "table": "preprocessed.macro_policy",
+      "rows": 477733,
+      "date_col": "published_at",
+      "min_date": "1204-04-09 14:42:04",
+      "max_date": "2027-03-01 15:00:00",
+      "symbols_count": null,
+      "vn30_count": null
+    },
+    {
+      "table": "preprocessed.market_regimes",
+      "rows": 6357,
+      "date_col": "date",
+      "min_date": "2000-07-28",
+      "max_date": "2026-09-11",
+      "symbols_count": null,
+      "vn30_count": null
+    },
+    {
+      "table": "staging.cafef_disclosures",
+      "rows": 80,
+      "date_col": "published_at",
+      "min_date": "2026-09-09 15:16:51",
+      "max_date": "2026-09-14 14:31:22",
+      "symbols_count": 28,
+      "vn30_count": 12
+    },
+    {
+      "table": "staging.corporate_events",
+      "rows": 40217,
+      "date_col": "event_date",
+      "min_date": "2014-03-06",
+      "max_date": "2030-08-19",
+      "symbols_count": 1021,
+      "vn30_count": 30
+    },
+    {
+      "table": "staging.financial_notes",
+      "rows": 7141285,
+      "date_col": null,
+      "min_date": null,
+      "max_date": null,
+      "symbols_count": 1485,
+      "vn30_count": 26
+    },
+    {
+      "table": "staging.foreign_flow_intraday",
+      "rows": 2,
+      "date_col": null,
+      "min_date": null,
+      "max_date": null,
+      "symbols_count": 2,
+      "vn30_count": 1
+    },
+    {
+      "table": "staging.foreign_ownership_room",
+      "rows": 2,
+      "date_col": "date",
+      "min_date": "2026-09-17",
+      "max_date": "2026-09-17",
+      "symbols_count": 2,
+      "vn30_count": 1
+    },
+    {
+      "table": "staging.fundamentals",
+      "rows": 179599,
+      "date_col": null,
+      "min_date": null,
+      "max_date": null,
+      "symbols_count": 1743,
+      "vn30_count": 30
+    },
+    {
+      "table": "staging.intraday_trades",
+      "rows": 31868,
+      "date_col": "time",
+      "min_date": "2026-09-17 09:00:00",
+      "max_date": "2026-09-17 10:40:51",
+      "symbols_count": 137,
+      "vn30_count": 6
+    },
+    {
+      "table": "staging.macro_economic_series",
+      "rows": 39405,
+      "date_col": "report_period",
+      "min_date": "2014-01-31",
+      "max_date": "2026-09-17",
+      "symbols_count": null,
+      "vn30_count": null
+    },
+    {
+      "table": "staging.macro_policy",
+      "rows": 72759,
+      "date_col": "published_at",
+      "min_date": "1204-04-09 14:42:04",
+      "max_date": "2027-03-01 15:00:00",
+      "symbols_count": null,
+      "vn30_count": null
+    },
+    {
+      "table": "staging.macro_rates",
+      "rows": 26400,
+      "date_col": "date",
+      "min_date": "2009-08-16",
+      "max_date": "2026-09-17",
+      "symbols_count": null,
+      "vn30_count": null
+    },
+    {
+      "table": "staging.market_global_equity_daily",
+      "rows": 40050,
+      "date_col": "date",
+      "min_date": "2000-01-03",
+      "max_date": "2026-09-04",
+      "symbols_count": 7,
+      "vn30_count": 0
+    },
+    {
+      "table": "staging.market_ohlcv_daily",
+      "rows": 4831222,
+      "date_col": "date",
+      "min_date": "2000-07-28",
+      "max_date": "2026-08-28",
+      "symbols_count": 2017,
+      "vn30_count": 30
+    },
+    {
+      "table": "staging.news",
+      "rows": 661520,
+      "date_col": "published_at",
+      "min_date": "2007-02-23 00:00:00",
+      "max_date": "2026-08-30 10:38:00",
+      "symbols_count": 1889,
+      "vn30_count": 30
+    },
+    {
+      "table": "staging.order_book_depth",
+      "rows": 311,
+      "date_col": null,
+      "min_date": null,
+      "max_date": null,
+      "symbols_count": 311,
+      "vn30_count": 6
+    },
+    {
+      "table": "staging.pit_events",
+      "rows": 658182,
+      "date_col": "published_at",
+      "min_date": "2007-02-23 00:00:00",
+      "max_date": "2026-09-07 18:06:00",
+      "symbols_count": 1820,
+      "vn30_count": 30
+    },
+    {
+      "table": "staging.price_adjustment_events",
+      "rows": 0,
+      "date_col": null,
+      "min_date": null,
+      "max_date": null,
+      "symbols_count": null,
+      "vn30_count": null
+    },
+    {
+      "table": "staging.proprietary_flow",
+      "rows": 34177,
+      "date_col": "date",
+      "min_date": "2019-01-02",
+      "max_date": "2026-09-16",
+      "symbols_count": 896,
+      "vn30_count": 19
+    },
+    {
+      "table": "staging.realtime_quote_snapshot",
+      "rows": 1954,
+      "date_col": "snapshot_at",
+      "min_date": "2026-08-29 14:42:30",
+      "max_date": "2026-09-07 13:00:29",
+      "symbols_count": 1949,
+      "vn30_count": 30
+    }
+  ],
+  "F001_dim_symbol": {
+    "total_rows": 1751,
+    "distinct_symbols": 1751,
+    "delisted_count": 229
+  },
+  "F002_market_ohlcv": {
+    "all": {
+      "rows": 5178766,
+      "symbols": 3928,
+      "min_date": "2000-07-28",
+      "max_date": "2026-09-11",
+      "zero_volume": 1505406,
+      "zero_close": 13146
+    },
+    "vn30": {
+      "rows": 100824,
+      "symbols": 30,
+      "min_date": "2006-01-19",
+      "max_date": "2026-09-11"
+    }
+  },
+  "F003_F004_news": {
+    "rows": 661627,
+    "symbols": 1890,
+    "min_date": "2007-02-23 00:00:00",
+    "max_date": "2026-09-14 15:04:49.883773",
+    "null_body_count": 587957,
+    "null_body_pct": 88.87,
+    "duplicate_flagged": 0
+  },
+  "F005_fundamentals": [
+    {
+      "type": "cash_flow",
+      "count": 43789,
+      "symbols": 1459,
+      "min_period": "2008-09-30",
+      "max_period": "2026-12-31"
+    },
+    {
+      "type": "income_statement",
+      "count": 44512,
+      "symbols": 1464,
+      "min_period": "2008-09-30",
+      "max_period": "2026-12-31"
+    },
+    {
+      "type": "balance_sheet",
+      "count": 44521,
+      "symbols": 1497,
+      "min_period": "2008-09-30",
+      "max_period": "2026-12-31"
+    },
+    {
+      "type": "ratio",
+      "count": 46337,
+      "symbols": 1736,
+      "min_period": "2005-12-31",
+      "max_period": "2026-12-31"
+    }
+  ],
+  "F006_corporate_events": [
+    {
+      "type": "MAJOR_SHAREHOLDER_TRADING",
+      "count": 21047,
+      "symbols": 947
+    },
+    {
+      "type": "SHAREHOLDER_MEETING",
+      "count": 8049,
+      "symbols": 1012
+    },
+    {
+      "type": "DIVIDEND",
+      "count": 8046,
+      "symbols": 954
+    },
+    {
+      "type": "OTHER",
+      "count": 3075,
+      "symbols": 956
+    },
+    {
+      "type": "BCTC_DISCLOSURE",
+      "count": 60,
+      "symbols": 47
+    }
+  ],
+  "F009_price_adjustments": {
+    "count": 1596
+  },
+  "F050_market_index": [
+    {
+      "index_code": "DX-Y.NYB",
+      "count": 6739,
+      "min_date": "2000-01-03",
+      "max_date": "2026-09-08"
+    },
+    {
+      "index_code": "^VIX",
+      "count": 6711,
+      "min_date": "2000-01-03",
+      "max_date": "2026-09-07"
+    },
+    {
+      "index_code": "^IXIC",
+      "count": 6709,
+      "min_date": "2000-01-03",
+      "max_date": "2026-09-04"
+    },
+    {
+      "index_code": "^GSPC",
+      "count": 6709,
+      "min_date": "2000-01-03",
+      "max_date": "2026-09-04"
+    },
+    {
+      "index_code": "^DJI",
+      "count": 6709,
+      "min_date": "2000-01-03",
+      "max_date": "2026-09-04"
+    },
+    {
+      "index_code": "^RUT",
+      "count": 6709,
+      "min_date": "2000-01-03",
+      "max_date": "2026-09-04"
+    },
+    {
+      "index_code": "^TYX",
+      "count": 6703,
+      "min_date": "2000-01-03",
+      "max_date": "2026-09-04"
+    },
+    {
+      "index_code": "^TNX",
+      "count": 6703,
+      "min_date": "2000-01-03",
+      "max_date": "2026-09-04"
+    },
+    {
+      "index_code": "ZR=F",
+      "count": 6696,
+      "min_date": "2000-01-03",
+      "max_date": "2026-09-08"
+    },
+    {
+      "index_code": "CT=F",
+      "count": 6690,
+      "min_date": "2000-01-03",
+      "max_date": "2026-09-04"
+    },
+    {
+      "index_code": "KC=F",
+      "count": 6688,
+      "min_date": "2000-01-03",
+      "max_date": "2026-09-04"
+    },
+    {
+      "index_code": "^STI",
+      "count": 6680,
+      "min_date": "2000-01-03",
+      "max_date": "2026-09-08"
+    },
+    {
+      "index_code": "SB=F",
+      "count": 6651,
+      "min_date": "2000-03-01",
+      "max_date": "2026-09-04"
+    },
+    {
+      "index_code": "^HSI",
+      "count": 6574,
+      "min_date": "2000-01-03",
+      "max_date": "2026-09-08"
+    },
+    {
+      "index_code": "^KS11",
+      "count": 6571,
+      "min_date": "2000-01-04",
+      "max_date": "2026-09-08"
+    },
+    {
+      "index_code": "ZW=F",
+      "count": 6553,
+      "min_date": "2000-07-17",
+      "max_date": "2026-09-08"
+    },
+    {
+      "index_code": "^TWII",
+      "count": 6543,
+      "min_date": "2000-01-04",
+      "max_date": "2026-09-08"
+    },
+    {
+      "index_code": "ZC=F",
+      "count": 6541,
+      "min_date": "2000-07-17",
+      "max_date": "2026-09-08"
+    },
+    {
+      "index_code": "CL=F",
+      "count": 6538,
+      "min_date": "2000-08-23",
+      "max_date": "2026-09-08"
+    },
+    {
+      "index_code": "^N225",
+      "count": 6536,
+      "min_date": "2000-01-04",
+      "max_date": "2026-09-08"
+    },
+    {
+      "index_code": "HG=F",
+      "count": 6534,
+      "min_date": "2000-08-30",
+      "max_date": "2026-09-08"
+    },
+    {
+      "index_code": "ZS=F",
+      "count": 6533,
+      "min_date": "2000-09-15",
+      "max_date": "2026-09-08"
+    },
+    {
+      "index_code": "SI=F",
+      "count": 6531,
+      "min_date": "2000-08-30",
+      "max_date": "2026-09-08"
+    },
+    {
+      "index_code": "GC=F",
+      "count": 6529,
+      "min_date": "2000-08-30",
+      "max_date": "2026-09-08"
+    },
+    {
+      "index_code": "000001.SS",
+      "count": 6461,
+      "min_date": "2000-01-04",
+      "max_date": "2026-09-08"
+    },
+    {
+      "index_code": "VNINDEX",
+      "count": 6357,
+      "min_date": "2000-07-28",
+      "max_date": "2026-09-11"
+    },
+    {
+      "index_code": "USDVND=X",
+      "count": 5926,
+      "min_date": "2003-12-01",
+      "max_date": "2026-09-08"
+    },
+    {
+      "index_code": "EURUSD=X",
+      "count": 5908,
+      "min_date": "2003-12-01",
+      "max_date": "2026-09-08"
+    },
+    {
+      "index_code": "HNX-INDEX",
+      "count": 5091,
+      "min_date": "2005-11-02",
+      "max_date": "2026-09-11"
+    },
+    {
+      "index_code": "BZ=F",
+      "count": 4756,
+      "min_date": "2007-07-30",
+      "max_date": "2026-09-08"
+    },
+    {
+      "index_code": "HRC=F",
+      "count": 4459,
+      "min_date": "2008-10-20",
+      "max_date": "2026-09-08"
+    },
+    {
+      "index_code": "VNM",
+      "count": 4291,
+      "min_date": "2009-08-14",
+      "max_date": "2026-09-04"
+    },
+    {
+      "index_code": "TIO=F",
+      "count": 3984,
+      "min_date": "2010-10-14",
+      "max_date": "2026-09-04"
+    }
+  ],
+  "F051_foreign_flow": {
+    "count": 4839720,
+    "symbols": 3980,
+    "min_date": "2001-04-02",
+    "max_date": "2026-09-11"
+  },
+  "proprietary_flow": {
+    "count": 36744,
+    "symbols": 929,
+    "min_date": "2019-01-02",
+    "max_date": "2026-09-16"
+  },
+  "financial_notes": {
+    "count": 7358616,
+    "symbols": 1496
+  },
+  "F102_pit_events": {
+    "total_rows": 658182,
+    "symbols": 1820,
+    "min_date": "2007-02-23 00:00:00",
+    "max_date": "2026-09-07 18:06:00",
+    "zero_price_at_publish": 7307,
+    "null_t1": 10935,
+    "null_t5": 18328,
+    "null_t30": 51621,
+    "null_fundamentals": 658175
+  },
+  "vn30_matrix": [
+    {
+      "symbol": "ACB",
+      "ohlcv": 4933,
+      "news": 231,
+      "fundamentals": 151,
+      "events": 51,
+      "foreign_flow": 1047,
+      "proprietary_flow": 100,
+      "financial_notes": 8820,
+      "overview": 1,
+      "shareholders": 15
+    },
+    {
+      "symbol": "BCM",
+      "ohlcv": 2130,
+      "news": 388,
+      "fundamentals": 147,
+      "events": 35,
+      "foreign_flow": 1020,
+      "proprietary_flow": 100,
+      "financial_notes": 6552,
+      "overview": 1,
+      "shareholders": 1
+    },
+    {
+      "symbol": "BID",
+      "ohlcv": 3148,
+      "news": 1037,
+      "fundamentals": 151,
+      "events": 51,
+      "foreign_flow": 2821,
+      "proprietary_flow": 100,
+      "financial_notes": 8820,
+      "overview": 1,
+      "shareholders": 2
+    },
+    {
+      "symbol": "BVH",
+      "ohlcv": 4297,
+      "news": 597,
+      "fundamentals": 151,
+      "events": 50,
+      "foreign_flow": 3871,
+      "proprietary_flow": 100,
+      "financial_notes": 11214,
+      "overview": 1,
+      "shareholders": 2
+    },
+    {
+      "symbol": "CTG",
+      "ohlcv": 4282,
+      "news": 1020,
+      "fundamentals": 151,
+      "events": 43,
+      "foreign_flow": 4198,
+      "proprietary_flow": 100,
+      "financial_notes": 8820,
+      "overview": 1,
+      "shareholders": 4
+    },
+    {
+      "symbol": "FPT",
+      "ohlcv": 4919,
+      "news": 1228,
+      "fundamentals": 151,
+      "events": 50,
+      "foreign_flow": 4691,
+      "proprietary_flow": 100,
+      "financial_notes": 6552,
+      "overview": 1,
+      "shareholders": 2
+    },
+    {
+      "symbol": "GAS",
+      "ohlcv": 3573,
+      "news": 611,
+      "fundamentals": 151,
+      "events": 50,
+      "foreign_flow": 3251,
+      "proprietary_flow": 100,
+      "financial_notes": 6396,
+      "overview": 1,
+      "shareholders": 1
+    },
+    {
+      "symbol": "GVR",
+      "ohlcv": 2111,
+      "news": 314,
+      "fundamentals": 142,
+      "events": 50,
+      "foreign_flow": 1220,
+      "proprietary_flow": 100,
+      "financial_notes": 6240,
+      "overview": 1,
+      "shareholders": 1
+    },
+    {
+      "symbol": "HDB",
+      "ohlcv": 2165,
+      "news": 1195,
+      "fundamentals": 151,
+      "events": 53,
+      "foreign_flow": 2066,
+      "proprietary_flow": 100,
+      "financial_notes": 8820,
+      "overview": 1,
+      "shareholders": 8
+    },
+    {
+      "symbol": "HPG",
+      "ohlcv": 4690,
+      "news": 1141,
+      "fundamentals": 159,
+      "events": 50,
+      "foreign_flow": 4608,
+      "proprietary_flow": 100,
+      "financial_notes": 6552,
+      "overview": 1,
+      "shareholders": 2
+    },
+    {
+      "symbol": "MBB",
+      "ohlcv": 3708,
+      "news": 1702,
+      "fundamentals": 151,
+      "events": 51,
+      "foreign_flow": 3670,
+      "proprietary_flow": 100,
+      "financial_notes": 8820,
+      "overview": 1,
+      "shareholders": 9
+    },
+    {
+      "symbol": "MSN",
+      "ohlcv": 4203,
+      "news": 1258,
+      "fundamentals": 151,
+      "events": 50,
+      "foreign_flow": 4026,
+      "proprietary_flow": 100,
+      "financial_notes": 6552,
+      "overview": 1,
+      "shareholders": 2
+    },
+    {
+      "symbol": "MWG",
+      "ohlcv": 3038,
+      "news": 1246,
+      "fundamentals": 151,
+      "events": 50,
+      "foreign_flow": 2991,
+      "proprietary_flow": 100,
+      "financial_notes": 6552,
+      "overview": 1,
+      "shareholders": 4
+    },
+    {
+      "symbol": "PLX",
+      "ohlcv": 2346,
+      "news": 409,
+      "fundamentals": 151,
+      "events": 47,
+      "foreign_flow": 1932,
+      "proprietary_flow": 100,
+      "financial_notes": 6552,
+      "overview": 1,
+      "shareholders": 2
+    },
+    {
+      "symbol": "POW",
+      "ohlcv": 2119,
+      "news": 314,
+      "fundamentals": 151,
+      "events": 50,
+      "foreign_flow": 1701,
+      "proprietary_flow": 100,
+      "financial_notes": 6552,
+      "overview": 1,
+      "shareholders": 1
+    },
+    {
+      "symbol": "SAB",
+      "ohlcv": 2437,
+      "news": 481,
+      "fundamentals": 151,
+      "events": 50,
+      "foreign_flow": 2376,
+      "proprietary_flow": 100,
+      "financial_notes": 6552,
+      "overview": 1,
+      "shareholders": 2
+    },
+    {
+      "symbol": "SHB",
+      "ohlcv": 4340,
+      "news": 840,
+      "fundamentals": 151,
+      "events": 53,
+      "foreign_flow": 1204,
+      "proprietary_flow": 100,
+      "financial_notes": 8820,
+      "overview": 1,
+      "shareholders": 8
+    },
+    {
+      "symbol": "SSB",
+      "ohlcv": 1364,
+      "news": 945,
+      "fundamentals": 139,
+      "events": 51,
+      "foreign_flow": 1083,
+      "proprietary_flow": 100,
+      "financial_notes": 8820,
+      "overview": 1,
+      "shareholders": 15
+    },
+    {
+      "symbol": "SSI",
+      "ohlcv": 4907,
+      "news": 1503,
+      "fundamentals": 151,
+      "events": 50,
+      "foreign_flow": 4606,
+      "proprietary_flow": 100,
+      "financial_notes": 24234,
+      "overview": 1,
+      "shareholders": 2
+    },
+    {
+      "symbol": "STB",
+      "ohlcv": 5028,
+      "news": 1336,
+      "fundamentals": 151,
+      "events": 51,
+      "foreign_flow": 4645,
+      "proprietary_flow": 100,
+      "financial_notes": 8820,
+      "overview": 1,
+      "shareholders": 8
+    },
+    {
+      "symbol": "TCB",
+      "ohlcv": 2067,
+      "news": 1190,
+      "fundamentals": 150,
+      "events": 51,
+      "foreign_flow": 2038,
+      "proprietary_flow": 100,
+      "financial_notes": 8820,
+      "overview": 1,
+      "shareholders": 13
+    },
+    {
+      "symbol": "TPB",
+      "ohlcv": 2096,
+      "news": 604,
+      "fundamentals": 150,
+      "events": 50,
+      "foreign_flow": 1967,
+      "proprietary_flow": 100,
+      "financial_notes": 8820,
+      "overview": 1,
+      "shareholders": 19
+    },
+    {
+      "symbol": "VCB",
+      "ohlcv": 4294,
+      "news": 745,
+      "fundamentals": 159,
+      "events": 51,
+      "foreign_flow": 4215,
+      "proprietary_flow": 100,
+      "financial_notes": 8820,
+      "overview": 1,
+      "shareholders": 3
+    },
+    {
+      "symbol": "VHM",
+      "ohlcv": 3491,
+      "news": 634,
+      "fundamentals": 150,
+      "events": 42,
+      "foreign_flow": 1868,
+      "proprietary_flow": 100,
+      "financial_notes": 6396,
+      "overview": 1,
+      "shareholders": 1
+    },
+    {
+      "symbol": "VIB",
+      "ohlcv": 2407,
+      "news": 827,
+      "fundamentals": 151,
+      "events": 51,
+      "foreign_flow": 1335,
+      "proprietary_flow": 100,
+      "financial_notes": 8820,
+      "overview": 1,
+      "shareholders": 22
+    },
+    {
+      "symbol": "VIC",
+      "ohlcv": 4731,
+      "news": 1477,
+      "fundamentals": 151,
+      "events": 50,
+      "foreign_flow": 4568,
+      "proprietary_flow": 100,
+      "financial_notes": 6552,
+      "overview": 1,
+      "shareholders": 4
+    },
+    {
+      "symbol": "VJC",
+      "ohlcv": 2383,
+      "news": 597,
+      "fundamentals": 151,
+      "events": 50,
+      "foreign_flow": 2113,
+      "proprietary_flow": 100,
+      "financial_notes": 6552,
+      "overview": 1,
+      "shareholders": 4
+    },
+    {
+      "symbol": "VNM",
+      "ohlcv": 5145,
+      "news": 1527,
+      "fundamentals": 159,
+      "events": 50,
+      "foreign_flow": 4791,
+      "proprietary_flow": 100,
+      "financial_notes": 6552,
+      "overview": 1,
+      "shareholders": 3
+    },
+    {
+      "symbol": "VPB",
+      "ohlcv": 2264,
+      "news": 1122,
+      "fundamentals": 151,
+      "events": 51,
+      "foreign_flow": 2203,
+      "proprietary_flow": 100,
+      "financial_notes": 8820,
+      "overview": 1,
+      "shareholders": 13
+    },
+    {
+      "symbol": "VRE",
+      "ohlcv": 2208,
+      "news": 531,
+      "fundamentals": 151,
+      "events": 46,
+      "foreign_flow": 1930,
+      "proprietary_flow": 100,
+      "financial_notes": 6552,
+      "overview": 1,
+      "shareholders": 2
+    }
+  ]
+}

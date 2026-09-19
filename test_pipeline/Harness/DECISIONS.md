@@ -2,6 +2,56 @@
 
 Newest at the top. Don't reverse any of these without a new, stated reason.
 
+## 2026-09-17: Master Unified Pipeline Upgrade: Universe Mode & 6 Quantitative Modules Ingestion
+- Context & Motivation: User requested extending the data collection pipeline from hardcoded symbol subsets to supporting the entire market universe (`--all-symbols`), and formally integrating 6 advanced quantitative microstructure categories into the master crawler framework:
+  1. **Level 2 Order Book Depth & OFI (`src/crawlers/order_book_depth.py`)**: Captures 3-10 bid/ask levels (`bid_price_1..3, bid_vol_1..3, ask_price_1..3, ask_vol_1..3`), tick-by-tick trades from `Market.equity(s).intraday()`, and calculates instantaneous Order Flow Imbalance (OFI) and flags Shark Market Sweeps vs passive price walls.
+  2. **Proprietary Trading Flow (`src/crawlers/proprietary_flow.py`)**: Captures daily institutional proprietary trading volume and net value from `Market.equity(s).proprietary_flow()`, upgraded to support dynamic universe iteration across all 1,751 canonical symbols.
+  3. **Intraday Realtime Foreign Flow & Ownership Room (`src/crawlers/foreign_flow_intraday.py`)**: Ingests real-time in-session foreign buy/sell volume (`Market.equity(s).quote()`), foreign ownership percentage, and remaining room (`Market.equity(s).summary()`).
+  4. **Deep Financial Statement Footnotes (`src/crawlers/financial_notes.py`)**: Bypasses generic 4-statement limitations to extract granular footnote schedules (corporate bond debt maturity, NPL groups 2-5, real estate capex provisions) via `Fundamental.equity(s).note()`, upgraded to support full market universe mode.
+  5. **Macro Benchmark Rates & Bond Yield Curve (`src/crawlers/macro_rates.py`)**: Mines Point-in-Time interbank rates (ON, 1W, 1M) and VN10Y government bond yields to compute Equity Risk Premium.
+  6. **Master Pipeline Orchestration (`src/crawlers/master_unified_crawler.py`)**: Unified entrypoint supporting `--all-symbols`, `--all-quant`, and per-module flags (`--order-book`, `--proprietary-flow`, `--foreign-intraday`, `--financial-notes`, `--macro-rates`).
+- Testing & Verification: All 8 unit tests in `tests/test_order_book_depth.py`, `tests/test_foreign_flow_intraday.py`, `tests/test_proprietary_flow.py`, `tests/test_financial_notes.py`, `tests/test_macro_rates.py` passed with 100% success; ruff lint clean.
+
+## 2026-09-13: F004d bugfix -- admin-policy override recognized only "cổ phiếu", missed other market anchors
+- Reason: match_sector_tier_a()'s ADMIN_POLICY_PATTERNS override checked for the literal substring "cổ phiếu" only, while MARKET_ANCHOR_PATTERN accepts 7 other anchor phrases. Headlines like "Nhóm ngành bất động sản hưởng lợi từ nghị định gỡ vướng pháp lý" passed the anchor gate but were then incorrectly dropped by the override -- a real recall loss, found by manual adversarial testing, independently confirmed reproducible: match_sector_tier_a() returned [] before fix, correct sector match after.
+- Decision: override condition now checks membership against MARKET_ANCHOR_OVERRIDE_KEYWORDS (all 7 anchor phrases), not a single hardcoded string. Verified: 25/25 tests pass in tests/test_sector_news_matcher.py (21 pre-existing + 4 new regression cases), full repo suite unaffected.
+- Empirical Corpus Audit & Independent Manual Sample Review:
+  - Scanned 1,139,301 articles in db/vesta.duckdb via scratch/diagnostics/audit_sector_matcher_coverage.py: 202,156 articles (17.74%) contain bare sector keywords; 10,987 articles (0.964%) match Tier A.
+  - Anchor Gap Deep Audit (100 random sample headlines from 191,170 blocked articles): Line-by-line manual classification by independent audit revealed 11% (11/100) to 17% market-relevant headlines blocked by the anchor gate, structurally partitioned into two distinct categories:
+    1. True Sector Fundamentals (~6%): Specific industrial actions/regulations without literal stock keywords (e.g. #31 "Xuất khẩu thủy sản... Vasep", #49 "Ngân hàng nhỏ đua tăng vốn, chuyển sàn", #59 "Hàng không tấp nập chuẩn bị bay trở lại", #92 "Dòng bank giúp thị trường thoát hiểm", #93 "Thuế chống bán phá giá tôm VN"). These represent genuine recall loss caused by strict fail-closed anchor gating.
+    2. Broad Market / Index Digests (~5%): Periodic market wraps (#67 "Chứng khoán Tuần: Cung cầu cân bằng...", #53 "Giao dịch chứng khoán khối ngoại bán ròng...", #87 "Sự kiện chứng khoán đáng chú ý...", #52/#95 "Thị phần môi giới chứng khoán"). CRITICAL ARCHITECTURAL DISTINCTION: In Vietnamese financial media, "Chứng khoán" in these headlines denotes the *entire stock market / VN-Index*, NOT the securities brokerage sector (Sector 5). Matching these to Sector 5 would severely pollute brokerage tickers (SSI, VND) with market-wide noise. Failing closed on market digests in F004d is ARCHITECTURALLY CORRECT; broad market digests belong to macro/index sentiment (F05x/F104), not sector fan-out.
+    3. Noise/Individual Filings (83-89%): 68% non-market civil/administrative/polysemy noise (xây dựng Đảng, giấy đi đường, giá xăng dầu), 26% single-stock corporate actions (already captured in core.news).
+  - Vocabulary Gap: Manual review of 300 non-matching random articles revealed 0/300 missed sector events (0.00%), confirming that SECTOR_TAXONOMY_DICT covers virtually all standard financial sector naming in Vietnam.
+- Constraint: this is a recall fix, not a precision fix -- fail-closed behavior for headlines with zero market anchor is preserved and covered by test_tier_a_admin_override_still_fails_closed_without_any_anchor.
+
+## 2026-09-13: F004d Sector-Level News-to-Symbol Matcher & Statistical Clustering Guardrails
+- Context & Motivation: News articles frequently convey sector-wide market sentiment (e.g. "Cổ phiếu ngành bất động sản đồng loạt giảm sàn") rather than naming a single corporate entity. Naive 1-to-N broadcasting directly into `core.news` creates severe cross-sectional correlation and clustered degrees-of-freedom violations in downstream statistical tests (F201/F203 bootstrap). Furthermore, empirical inspection of `core.dim_symbol` revealed it historically contained only 11 coarse Level 1 ICB sectors, lumping Real Estate (`VIC`, `VHM`, `NVL`, `DXG`, `KBC`) and Securities (`SSI`, `VND`) into generic `8000: Tài chính`.
+- Resolution & Empirical Taxonomy:
+  1. **Harmonized 25-Sector Taxonomy**: Synthesized Vietstock 25-sector market index (`finance.vietstock.vn/data/sectionindex` SectionID 1 to 29), vnstock live `Reference().industry.sectors()` (697 listed symbols on HOSE/HNX), and Anfin sector tables (233 UPCOM stocks), establishing 930 validated stock-to-sector mappings. Populated `core.dim_sector` (25 official sectors with GICS codes) and `core.dim_symbol_sector` (930 stocks).
+  2. **2-Tier Fail-Closed Matcher (`src/pipeline/sector_news_matcher.py`)**:
+     - Tier A (`explicit_sector_trigger`): Strict gating requiring market context anchors (`cổ phiếu`, `nhóm ngành`, `rổ chỉ số`, `dòng tiền`) before checking sector keywords. Rejects 100% of administrative/civil policy traps (`Bộ Xây dựng ban hành thông tư...`, `Giá thuê văn phòng...`).
+     - Tier B (`company_list_mention`): Triggers if and only if $\ge 2$ symbols from the same sector co-occur in the same headline.
+     - Verified by unit tests: `tests/test_sector_news_matcher.py` 21/21 passed.
+  3. **Zero Raw Fan-Out & Schema Isolation**: Sector signals are stored exclusively in dedicated audit table `core.sector_news_signal` (15,531 signals extracted across 1,139,301 articles; hit rate 1.363%). Preserves `core.news`'s 1-to-1 ticker integrity and avoids exploding database rows.
+  4. **Binding Downstream Constraints for F201/F203/F104/F301**:
+     - *Clustered Bootstrap*: Any statistical verification using sector signals MUST cluster by `(published_at_date, sector_id)`. Sector signals cannot be treated as $N$ independent observations.
+     - *Factor Modeling (F104/F301)*: Sector sentiment must be ingested as a sector-level regime factor $S_{\text{sector}}(t)$, with weights optimized via ML/FinDPO rather than hardcoded broadcasts.
+
+## 2026-09-13: F202b / F203 Synthesis & Methodological Consensus Gate
+- Context: Independent empirical verification confirmed exact match of reproducible JSON reports (`out/f202b_dsr_pbo_report.json` Kurtosis=4315.77, `out/f203_regime_report.json` HOSE Bull=+7.46%, HOSE Crisis=-4.66%). Formal audit established two critical methodological principles governing downstream F301/F302 modeling:
+- Binding Architectural & Statistical Decisions:
+  1. **Formal Rejection of `raw_unadjusted` DSR as Official Baseline**:
+     - Rationale: The extreme Kurtosis ($4,315.77$) is conclusively verified as a data distortion caused by unadjusted split/delisting price multiples in unconstrained UPCOM penny stocks (specifically `XDC` 32x price spike from 31.3k to 999.9k VND; and secondary penny stocks `PTM`, `VIM`, `SHN`, `BTH`). This directly confirms F009's stated caution that `src/etl/adjustments.py` remains UNVALIDATED against external adjusted series.
+     - Binding Rule: No official backtest report or thesis submission may claim `raw_unadjusted` metrics as proof of edge. The only methodologically valid DSR/PBO benchmarks are Winsorized [0.5%, 99.5%] (Kurtosis = 10.84, DSR(N=1)=0.9981, DSR(N=2)=0.9914, DSR(N=3)=0.9767) or trimmed series. Validating `adjustments.py` remains an open prerequisite before raw corporate action adjustments can be trusted unconditionally.
+  2. **Statistical Independence & Validity of HOSE Regime Finding**:
+     - The HOSE evaluation in F203 operates under a strict exchange partition (`exchange == 'HOSE'`), completely isolating it from UPCOM/DELISTED penny stock anomalies (`XDC`, `PTM`, `VIM` are 100% excluded).
+     - On the liquid HOSE main board, the sign-flip is structurally real: Bull regime (+7.46%, win-rate 65.06%, n=807) vs 2022 Crisis regime (-4.66%, win-rate 35.76%, loss-rate 64.24%, n=467).
+     - Binding Rule for F301: This regime heterogeneity is clean of penny stock artifacts and constitutes a verified market property. PhoBERT (F301) and trading logic must fail-closed (halt negative-sentiment dip buying) during bear/liquidity-tight regimes.
+  3. **Methodology & Terminology Governance**:
+     - "FinDPO" (using market regime return realizations as preference feedback for Direct Preference Optimization) is formally recorded as VESTA's novel thesis adaptation/proposal, not cited as a pre-existing third-party library.
+     - `news_dedup.py` upgrade from `difflib` to `MinHash` (datasketch) is scheduled as an operational maintenance improvement.
+- Status: Consensus fully reached; F201-F203 empirical foundations locked; unblocks F301 under strict regime-conditional governance.
+
 ## 2026-09-11: Master Crawlers Stopped & Dual-Database Synchronization (939,732 Total Articles)
 - Reason: User requested terminating active background crawling processes, updating and merging the newly collected 152,945 staged articles into both the main database (`db/vesta.duckdb`) and the backup database (`db/vesta_latest_backup.duckdb`).
 - Decision & Evidence:
@@ -1576,3 +1626,36 @@ Newest at the top. Don't reverse any of these without a new, stated reason.
   5. **CSCV PBO**: Evaluated across S=16 quantile-based equal-event blocks (~942 events/block) and 1,000 combinatorial splits. Resulted in empirical PBO = 0.007 (0.7% << 50%, PASS) and mean logit = +6.14.
   6. **Methodological Note for Thesis**: The formal mapping of Cohen's d -> SR_hat and symbol cluster count (1,437) -> T is documented as an event-study adaptation in `out/f202b_dsr_pbo_report.json` and thesis draft.
 - Status: F202b code, audit report, and unit tests (`tests/test_f202b_dsr.py`, 4/4 passing) fully verified with calibrated academic thesis conclusion.
+
+## 2026-09-12: F203 2D Regime-Conditional Validity Audit & Downstream SLM Modeling Resolution
+- Reason: Rule B2 & B5 scientific gate: rigorously evaluate whether the post-negative-sentiment mean reversion effect (+1.87% arithmetic mean, Cohen's d=0.0557) is a pervasive structural alpha or an artifact of bull-market liquidity bubbles, and establish binding architectural guardrails before fine-tuning PhoBERT (F301/F302).
+- Empirical Findings across 16 Regimes x 3 Exchanges (out/f203_regime_report.json, 15,081 sanitized negative events):
+  1. **Systemic Regime Heterogeneity & Sign-Flips (29/60 cells flip negative)**: The mean-reversion effect is NOT a general market invariant. It is powerfully positive in retail liquidity expansion regimes (e.g. `2020-2021-Bull` on HOSE: mean diff = +7.46%, median diff = +4.45%, win-rate = 65.06%, Wilcoxon p < 0.001), but FLIPS NEGATIVE across all systemic bear markets and liquidity crunches:
+     - `2007-GFC` (HOSE): mean = -3.30%, median = -6.91%, win-rate = 33.33%, loss-rate = 66.67% (flip = true)
+     - `2022-BondCrisis` (HOSE): mean = -4.66%, median = -3.75%, win-rate = 35.76%, loss-rate = 64.24% (flip = true)
+     - `2026-Present` (HOSE): mean = -3.26%, median = -3.24%, win-rate = 27.26%, loss-rate = 72.74% (flip = true)
+  2. **Non-Parametric Reality**: Pooled median diff on HOSE is negative (-0.14%), proving that the positive arithmetic mean is sustained by positive right-tail skewness in UPCOM/HNX small caps rather than a uniform edge.
+  3. **Macro Factor Interaction**: Sign-flips strictly align with global liquidity contractions and elevated risk premiums (^VIX > 25, DX-Y tightening).
+- Binding Architectural Decisions for F301 / F302 / Downstream Strategy:
+  1. **No Unconditional Dip-Buying**: F301/F302 modeling and downstream inference (F401) MUST NOT assume unconditional mean-reversion. Negative sentiment in bear/liquidity-tight regimes is an accelerator of downward momentum, not a reversal signal.
+  2. **Regime-Conditioned Interaction Features**: The ML feature pipeline (F104) and sentiment strategy must condition on market state (HOSE vs UPCOM exchange indicator + 16-regime / macro liquidity state gate).
+  3. **Risk Rails (Fail-Closed)**: Any execution layer strategy must enforce a hard regime circuit breaker: dip-buying on negative headlines is halted when market index is below 200-day EMA or during identified liquidity-crisis regimes.
+- Status: F203 passing (reproducible live report at `out/f203_regime_report.json`, unit tests passing). F301 officially unblocked under regime-conditional architecture.
+
+## 2026-09-17: F303 Multimodal Edge Validation, Macro Policy Context Framework & Quantitative Enrichment Pipeline
+- Reason: Quant trading edge validation (Rule B2) and structural gap remediation in response to institutional Vietnamese market microstructure needs.
+- Empirical Findings (out/meanreversion_report_multimodal.json, 48,624 holdout events):
+  1. **Multimodal Super-Baseline Outperformance**: Continuous Alpha Score ($S \in [0, 100]$) from F302 Multimodal Cross-Attention Fusion achieved Cohen's $d = \mathbf{0.0840}$ on negative-sentiment events ($S < 45$, $n = 18,912$, $t = 11.55$, $p = 9.66 \times 10^{-31}$), beating the unconditioned F201 baseline ($d = 0.0557$) by **$+50.8\%$ ($1.51\times$)**.
+  2. **Convex Edge at High Conviction**: Tightening the threshold to $S < 35$ escalates Cohen's $d$ to **$0.1736$** ($t = 18.00$, $p = 2.18 \times 10^{-71}$, $3.12\times$ baseline), proving that multimodal conditioning filters out low-signal false reversals.
+- Architectural Decisions:
+  1. **Macro Policy Context Framework (`src/pipeline/macro_context_detector.py`)**:
+     - Enforces multi-tier sentiment separation: Surface Sentiment (literal syntactic tone) vs Latent Market Sentiment (institutional capital flow reaction).
+     - Models three Vietnamese policy inversion paradoxes: `RATE_CUT_CAPITAL_FLIGHT_RISK` (rate cuts under DXY pressure induce foreign selling), `SBV_BILL_MOP_UP_DIP_REVERSAL` (interbank bill mop-up causes transient panic dip followed by recovery), and `DEBT_EVERGREENING_SHIELD` (Circular 02 debt roll-over delays NPL without restoring real cash flow).
+     - Resolves Vietnamese linguistic corner cases: Unicode `đ`/`Đ` normalization prior to diacritic stripping; negative lookbehind/lookahead disambiguation for `song` (conjunction) vs `làn sóng` (wave); and flexible adverb infix matching (`FLEXIBLE_CATEGORY_REGEX`).
+  2. **Vnstock 3.3.0 Silver Sponsor Upgrade & 3 Quantitative Crawlers**:
+     - Verified official Silver Sponsor License (`vnstock_f84ed9f3014e77c53a88e3eae1bc1be8`, valid through 2026-10-20) and upgraded `vnstock_data` to 3.3.0.
+     - Provisioned `core.proprietary_flow` and built `src/crawlers/proprietary_flow.py`: Ingested 1,000 sessions across 10 VN30 tickers.
+     - Provisioned `core.financial_notes` and built `src/crawlers/financial_notes.py`: Ingested 24,036 accounting note records across 40+ quarters for VCB, TCB, VHM.
+     - Provisioned `core.macro_rates` and built `src/crawlers/macro_rates.py`: Ingested 84 interbank interest rate fixings (ON, 1W, 1M) and VN10Y bond yields.
+     - Provided atomic cross-database promotion helper `src/etl/sync_enrichment_data.py`.
+- Status: F303 PASSING. All 10 crawler and context unit tests passing. Ready to advance to F304 (HybridACD Token-Constrained Decoding consistency gate).

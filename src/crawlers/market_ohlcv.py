@@ -61,29 +61,34 @@ def _authenticate() -> None:
 def fetch_raw(symbol: str, start: str, end: str) -> pd.DataFrame:
     """Live network call. Requires VNSTOCK_API_KEY to be set.
 
-    Fetches full history (back to 2000) via VCI source, falling back to
-    vnstock_data.Market().equity().ohlcv() if unavailable.
+    Fetches OHLCV using modern vnstock_data Unified API (Sponsor Tier),
+    falling back to modern vnstock.api.quote.Quote without deprecated methods.
     Normalization happens in normalize_ohlcv() so that logic stays
     testable without network access.
     """
     _authenticate()
+
+    # 1. Ưu tiên hàng đầu: vnstock_data Sponsor Tier (Unified API)
     try:
-        from vnstock import Vnstock  # type: ignore[import-untyped]
-        stock = Vnstock().stock(symbol=symbol, source="VCI")
-        result: pd.DataFrame = stock.quote.history(start=start, end=end)
+        from vnstock_data import Market
+        eq = Market().equity(symbol)
+        result: pd.DataFrame = eq.ohlcv(start=start, end=end)
         if result is not None and not result.empty:
             return result
     except Exception:
         pass
 
+    # 2. Fallback: vnstock.api.quote.Quote (chuẩn API mới thay thế cho Vnstock().stock())
     try:
-        import vnstock_data as vs
-    except ImportError:
-        import vnstock as vs  # type: ignore[no-redef]
+        from vnstock.api.quote import Quote
+        q = Quote(symbol=symbol, source="VCI")
+        result_quote: pd.DataFrame = q.history(start=start, end=end)
+        if result_quote is not None and not result_quote.empty:
+            return result_quote
+    except Exception:
+        pass
 
-    eq = vs.Market().equity(symbol)
-    result_fallback: pd.DataFrame = eq.ohlcv(start=start, end=end)
-    return result_fallback
+    return pd.DataFrame()
 
 
 def _find_column(df: pd.DataFrame, field: str) -> str:

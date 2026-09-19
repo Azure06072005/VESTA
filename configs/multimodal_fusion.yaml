@@ -1,0 +1,79 @@
+# =============================================================================
+# VESTA: F302 Multimodal Cross-Attention Fusion Configuration
+# Hardware Budget Constraint: RTX 3060 6GB VRAM, 16GB System RAM
+# Max Peak VRAM Target: <= 5.2 GB (guarded against CUDA OOM)
+# =============================================================================
+
+model:
+  name: "multimodal_cross_attention_fusion"
+  phobert_backbone: "vinai/phobert-base-v2"
+  phobert_checkpoint: "out/models/phobert_base_findpo/best_model.pt"
+  freeze_phobert_layers: 8  # Freezes embeddings + lower 8 layers to respect 6GB VRAM budget
+  hidden_dim: 128
+  num_heads: 4
+  num_fusion_layers: 2
+  dropout_prob: 0.15
+  max_seq_length: 128
+  loss_weights:
+    sentiment: 0.35
+    direction: 0.45   # Heavy emphasis on real forward market direction (T+5)
+    return: 0.20
+
+data:
+  dataset_manifest: "data/processed/f104/dataset_manifest.json"
+  train_path: "data/processed/f104/f104_train.parquet"
+  val_path: "data/processed/f104/f104_val.parquet"
+  test_path: "data/processed/f104/f104_test.parquet"
+  text_column: "context_text"
+  sentiment_label_column: "sentiment_label"
+  direction_label_column: "target_dir_t5"
+  return_target_column: "ret_t5_pct"
+  market_regime_column: "market_regime"
+  fundamental_features:
+    - "vni_fracdiff_d020"
+    - "rankgauss_volume_z"
+    - "pe_ratio"
+    - "pb_ratio"
+    - "ps_ratio"
+    - "p_cf_ratio"
+    - "ev_ebitda"
+    - "dividend_yield"
+    - "market_cap"
+    - "roe"
+    - "roa"
+    - "roic"
+    - "gross_margin"
+    - "net_margin"
+    - "current_ratio"
+    - "quick_ratio"
+    - "debt_to_equity"
+    - "financial_leverage"
+    - "bank_nim"
+    - "bank_cir"
+    - "bank_ldr"
+    - "bank_npl"
+    - "bank_car"
+    - "bank_casa"
+
+training:
+  output_dir: "out/models/multimodal_fusion"
+  logging_dir: "out/models/logs/multimodal"
+  per_device_train_batch_size: 64
+  per_device_eval_batch_size: 128
+  gradient_accumulation_steps: 1
+  effective_batch_size: 64
+  learning_rate: 3.0e-5
+  weight_decay: 0.01
+  num_train_epochs: 3
+  warmup_ratio: 0.1
+  fp16: true
+  eval_steps: 1000
+  eval_subset_samples: 4000
+  checkpoint_steps: 1000
+  metric_for_best_model: "val_direction_acc"
+  greater_is_better: true
+  seed: 42
+
+hardware:
+  device: "cuda"
+  max_vram_gb: 5.2

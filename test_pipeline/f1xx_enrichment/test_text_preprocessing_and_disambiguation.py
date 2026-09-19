@@ -159,6 +159,20 @@ def disambiguate_banking_entities(headline: str, body: str) -> Tuple[bool, bool]
     return has_sbv, is_sector_11
 
 
+def resolve_shareholder_entity(headline: str, body: str = "") -> Optional[str]:
+    """Resolves ticker symbol if article mentions a key shareholder or executive
+    from core.company_shareholders (vesta_snapshot.duckdb).
+    """
+    try:
+        from pipeline.shareholder_entity_matcher import shareholder_registry
+        if not shareholder_registry._is_loaded:
+            shareholder_registry.load_registry()
+        return shareholder_registry.resolve_symbol_from_news(headline, body)
+    except Exception:
+        return None
+
+
+
 # =====================================================================
 # 4. MINHASH LSH DEDUPLICATION ENGINE
 # =====================================================================
