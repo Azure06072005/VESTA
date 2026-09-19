@@ -126,7 +126,7 @@ Dưới đây là bảng tổng hợp tình trạng nghiệm thu của toàn b�
 | **F302** | F3xx | Multimodal Cross-Attention Fusion | `passing` | Hợp nhất PhoBERT CLS (768) + 24 RankGauss Features (128) + Macro Regime (128). | Multi-Head Cross-Attention |
 | **F303** | F3xx | Multimodal Edge Validation Backtest | `passing` | Cohen's $d$ tăng từ $0.0557 \to 0.0840$ ($+50.8\%$), đạt $0.1736$ ($3.12\times$) ở $S < 35$. | Paired Reversion Benchmark |
 | **F304** | F3xx | HybridACD Simplex-TCD Consistency Gate | `passing` | Kolmogorov error $= 0.00$; V-FAN latency $= 0.0197$ ms; Brier giảm $-29.51\%$; Cohen's $d = \mathbf{0.0852}$. | Simplex Projection, V-FAN |
-| **F401** | F4xx | Streaming FastAPI Inference Service | `not_started` | Thiết kế engine trực tiếp dưới 50ms, SimHash dedup 6h, trọng số nguồn $W_{\text{source}}$. | FastAPI, SimHash, ONNX INT8 |
+| **F401** | F4xx | Streaming FastAPI Inference Service | `passing` | Độ trễ thực tế 8.99ms (<50ms SLA), SimHash dedup 6h, phân giải cổ đông lớn, cổng HybridACD, Rào chắn an toàn F203. | FastAPI, SimHash, PhoBERT FP16 |
 | **F402** | F4xx | Feedback Drift Log for Realized Returns | `not_started` | Ghi log suy luận kèm đầu vào, tự động fill giá thực tế $T+5, T+30$ để giám sát trôi dạt. | SQLite/DuckDB Audit Log |
 | **F901** | F9xx | Broker Compliance Confirmation | `blocked` | Công văn UBCKNN 09/2023 cấm đặt lệnh robot tần suất lớn; khóa cứng tầng thực thi. | Legal & Compliance Gate |
 | **F902** | F9xx | Paper Trading Against Broker Sandbox | `blocked` | Bị khóa bởi F901; chuẩn bị stub OAuth2+PKCE cho SSI/DNSE sandbox. | Sandbox Order Router |

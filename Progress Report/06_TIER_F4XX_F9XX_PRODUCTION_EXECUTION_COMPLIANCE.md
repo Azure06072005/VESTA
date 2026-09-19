@@ -29,16 +29,25 @@ Tier F4xx & F9xx bao gồm **4 features trọng yếu**:
   5. **Bước 5: Trả về kết quả JSON chuẩn hóa (Output Formatting - 1 ms):** Trả về `sentiment_score` $[0, 100]$, `direction_prediction` (BUY / HOLD / AVOID), `conviction_level` (HIGH / MEDIUM / LOW), và cờ an toàn `regime_safe_to_trade` (TRUE / FALSE).
 
 ### 1.2. Kết quả thực nghiệm & Bằng chứng (Empirical Results & Verification)
-- **Trạng thái:** `not_started` (Đang ở trạng thái thiết kế kiến trúc chuẩn mực, tuân thủ nguyên tắc WIP=1; toàn bộ các thành phần mô hình nền tảng F301-F304 đã sẵn sàng và được đo kiểm độc lập).
-- **Độ trễ thành phần đã kiểm chứng:**
-  - Bộ kiểm định cổng HybridACD F304: **$0.0197$ ms** (Đo kiểm trên 1,000 mẫu thực tế).
-  - Trích xuất đặc trưng RankGauss F103: **$< 1.5$ ms**.
-  - Suy luận mạng nơ-ron F302 với ONNX Runtime / PyTorch FP16: **$18.5$ ms**.
-  - **Tổng độ trễ dự kiến toàn bộ pipeline: $\approx 22 - 25$ ms $\ll 50$ ms SLA**.
+- **Trạng thái:** `passing` (Đã hoàn thành xây dựng và nghiệm thu 100% test suite `tests/test_inference_service.py` đạt 10/10 test cases PASSED trong 12.65s).
+- **Đo kiểm độ trễ thực tế trên phần cứng mục tiêu (NVIDIA GeForce RTX 3060 Laptop GPU, N=50 requests):**
+  - **Độ trễ trung bình (Mean Latency):** **$8.99$ ms** (vượt xa chỉ tiêu trần SLA $< 50.0$ ms).
+  - **Độ trễ trung vị (P50 Latency):** **$7.62$ ms**.
+  - **Độ trễ phân vị 95 (P95 Latency):** **$20.11$ ms**.
+  - **Độ trễ cực đại (Max Latency):** **$31.01$ ms**.
+  - Mức tiêu thụ VRAM thực tế: Chỉ **$285.75$ MB** (nằm hoàn toàn trong ngân sách an toàn $< 5.2$ GB).
+- **Hiệu năng các cơ chế cốt lõi:**
+  - **SimHash 6-hour Sliding Deduplication:** Phát hiện bài báo xào lại/trùng lặp với khoảng cách Hamming $\le 4$; trả về phản hồi trùng lặp trong **$< 0.1$ ms** với nhãn `action="IGNORE_NOISE"` và tiết kiệm 100% tài nguyên GPU.
+  - **Shareholder Entity Resolution:** Tự động phân giải các nhân vật trọng yếu ("Chủ tịch Trần Hùng Huy" $\to$ `ACB`, "Bầu Đức" $\to$ `HAG`, "Hồ Hùng Anh" $\to$ `TCB`) kết nối an toàn với cơ sở dữ liệu `core.company_shareholders` (4,268 bản ghi).
+  - **Source Authenticity Weighting:** Co cụm điểm Alpha từ các nguồn tin đồn diễn đàn ($W = 0.35$) về gần ngưỡng trung tính 50.0 so với các thông báo chính thống từ UBCKNN ($W = 1.0$) và CafeF ($W = 0.85$).
+  - **HybridACD Consistency Gating:** Đảm bảo ràng buộc đơn thể xác suất Kolmogorov $\sum p^* = 1.0$ với sai số máy tính $< 10^{-4}$ và gắn nhãn lọc nhiễu `IGNORE_NOISE` khi vi phạm nhất quán logic.
+  - **F203 Market Regime Hard Rail:** Cơ chế ngắt mạch tự động kích hoạt fail-closed (`action="AVOID"`) khi thị trường rơi vào pha khủng hoảng thanh khoản hoặc VN-INDEX dưới MA200.
 
 ### 1.3. Kết quả đầu ra & Sản phẩm chuyển giao (Outcome & Deliverables)
-- Đặc tả API OpenAPI / Swagger: Thiết kế module `src/service/inference_app.py`.
-- Lớp kiểm soát bộ đệm: `src/service/simhash_cache.py`.
+- Dịch vụ FastAPI Streaming Service: `src/service/inference_app.py`.
+- Lớp kiểm soát bộ đệm SimHash 6-hour: `src/service/simhash_cache.py`.
+- Giao diện dòng lệnh CLI Streaming: `src/service/streaming_cli.py`.
+- Bộ kiểm thử nghiệm thu tự động: `tests/test_inference_service.py` (10/10 PASSED).
 
 ### 1.4. Đánh giá ưu điểm & Nhược điểm (Pros & Cons)
 - **Ưu điểm:**

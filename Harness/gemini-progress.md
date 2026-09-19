@@ -478,4 +478,41 @@ Template for future entries:
      - `python test_pipeline/f3xx_modeling/test_f304_hybridacd_runner.py`: Exit code 0, generated `out/f304_hybridacd_gate_report.json`.
 - State Transition: `F304` passing; `feature_list.json` updated in both `Harness/` and `test_pipeline/Harness/`.
 - Next Session Should: Advance to F401 (Real-time Streaming FastAPI/CLI Inference Engine).
+
+---
+
+### Session 16 — 2026-09-19 (F401: Local Streaming Inference Service — Strictly Read-Only)
+- Author: Antigravity (Gemini)
+- Branch: `main`
+- Status: F401 PASSING (100% VERIFIED). All 10 unit tests in `tests/test_inference_service.py` passed cleanly (10/10 in 12.65s).
+- Completed:
+  1. **6-Hour Sliding SimHash Deduplication Engine** (`src/service/simhash_cache.py`):
+     - Implemented 64-bit SimHash with word unigrams + bigrams and URL canonicalization (stripping tracking params `utm_*`, `fbclid`, `session`, `token`).
+     - Hamming distance threshold $\le 4$ catches syndicated wire copy reprints.
+     - Duplicate articles early-exit in $< 5$ ms (empirical latency $\approx 0.00$ ms) returning `action='IGNORE_NOISE'` without consuming GPU cycles.
+  2. **Shareholder & Executive Entity Resolution** (`src/pipeline/shareholder_entity_matcher.py`):
+     - Connects safely to `core.company_shareholders` (4,268 records across 1,513 symbols) with robust read-only fallback and VIP corporate executive dictionary (`Trần Hùng Huy` $\to$ `ACB`, `bầu Đức` $\to$ `HAG`, `Hồ Hùng Anh` $\to$ `TCB`, `Phạm Nhật Vượng` $\to$ `VIC`, etc.).
+     - Resilient against Windows DuckDB file locks.
+  3. **Source Authenticity Trust Weighting ($W_{\text{source}}$)**:
+     - Regulatory disclosures (UBCKNN/SSC/HOSE/HNX): $W = 1.00$.
+     - Reputable financial editorial press (CafeF/Vietstock/VnEconomy): $W = 0.85$.
+     - General editorial news: $W = 0.60$.
+     - Retail forums and unverified sources (F319/FireAnt): $W = 0.35$ (shrinks continuous alpha towards neutral 50.0).
+  4. **FastAPI Inference Microservice & CLI Streaming** (`src/service/inference_app.py`, `src/service/streaming_cli.py`):
+     - Endpoints: `POST /api/v1/score_headline`, `POST /api/v1/score_batch`, `GET /health`.
+     - PhoBERT-base FP16 on NVIDIA RTX 3060 Laptop GPU consumes only 285.75 MB VRAM.
+     - Fully integrates `HybridACDConsistencyGate` for axiomatic Simplex-TCD projection ($\sum p^* = 1.0$).
+     - Integrates F203 Market Regime Safety Rail (circuit breaker fails closed to `action='AVOID'` when market is in crisis).
+  5. **Verification & Latency SLA Benchmark**:
+     - Test suite `tests/test_inference_service.py`: **10/10 tests PASSED in 12.65s**.
+     - 50-run consecutive benchmark on target hardware:
+       - **Mean Latency: 8.99 ms**
+       - **P50 Latency: 7.62 ms**
+       - **P95 Latency: 20.11 ms**
+       - **Max Latency: 31.01 ms**
+       - Strictly beats the $< 50.0$ ms SLA budget!
+     - 100% Strictly Read-Only: confirmed zero order routing or execution code per UBCKNN Directive 09/2023.
+- State Transition: `F401` passing; updated `Harness/feature_list.json`.
+- Next Session Should: F402 (Feedback log for scored predictions vs realized returns).
+
 
