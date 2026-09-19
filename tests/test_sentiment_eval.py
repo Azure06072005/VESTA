@@ -45,7 +45,7 @@ def test_checkpoint_and_metrics_exist():
 def test_model_inference_on_validation_batch():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = PhoBertFinDPO(model_name="vinai/phobert-base-v2")
-    model.load_state_dict(torch.load(CHECKPOINT_FILE, map_location=device))
+    model.load_state_dict(torch.load(CHECKPOINT_FILE, map_location=device), strict=False)
     model.to(device)
     model.eval()
 

@@ -33,15 +33,18 @@ loudly (see parse_articles) rather than silently returning nothing.
 from __future__ import annotations
 
 import datetime as dt
+import os
+import pathlib
 import re
 import sys
 import time
-import pathlib
 import urllib.robotparser
 
 import pandas as pd
 import requests
 from bs4 import BeautifulSoup
+
+PROJECT_ROOT = pathlib.Path(__file__).resolve().parents[2]
 
 import duckdb
 
@@ -165,7 +168,13 @@ def parse_articles(html: str, symbol: str) -> pd.DataFrame:
             continue
 
         date_str, time_str = date_match.group(1), date_match.group(2)
-        published_at = dt.datetime.strptime(f"{date_str} {time_str}", "%d/%m/%Y %H:%M")
+        try:
+            published_at = dt.datetime.strptime(f"{date_str} {time_str}", "%d/%m/%Y %H:%M")
+            now_local = dt.datetime.now()
+            if published_at > now_local or published_at.year < 2000:
+                published_at = now_local
+        except Exception:
+            published_at = dt.datetime.now()
 
         rows.append({"headline": headline, "source_url": href, "published_at": published_at})
 
@@ -203,6 +212,9 @@ def write_news(df: pd.DataFrame, con: "duckdb.DuckDBPyConnection | None" = None)
     (DECISIONS.md 'Dual news source' entry), same idempotent dedup-by-
     source_url write pattern.
     """
+    if df.empty:
+        return 0
+
     missing = set(NEWS_COLUMNS) - set(df.columns)
     if missing:
         raise ValueError(f"News DataFrame missing columns: {missing}")
@@ -222,15 +234,44 @@ def write_news(df: pd.DataFrame, con: "duckdb.DuckDBPyConnection | None" = None)
     return len(df)
 
 
-def run(symbol: str) -> int:
+def get_existing_urls(symbol: str, con: "duckdb.DuckDBPyConnection | None" = None) -> set[str]:
+    """Lấy danh sách URL đã có trong core.news để nhận diện đường biên dữ liệu cũ."""
+    if con is not None:
+        try:
+            rows = con.execute("SELECT source_url FROM core.news WHERE upper(symbol) = ?", [symbol.strip().upper()]).fetchall()
+            return {r[0] for r in rows if r[0]}
+        except Exception:
+            pass
+
+    # Fallback kết nối read_only an toàn
+    for db_path_str in [os.environ.get("VESTA_DB_PATH"), str(PROJECT_ROOT / "db" / "vesta_snapshot.duckdb"), str(PROJECT_ROOT / "db" / "vesta.duckdb")]:
+        if db_path_str and os.path.exists(db_path_str):
+            try:
+                con_ro = duckdb.connect(db_path_str, read_only=True)
+                rows = con_ro.execute("SELECT source_url FROM core.news WHERE upper(symbol) = ?", [symbol.strip().upper()]).fetchall()
+                con_ro.close()
+                return {r[0] for r in rows if r[0]}
+            except Exception:
+                pass
+    return set()
+
+
+def run(symbol: str, incremental: bool = True, force: bool = False, max_pages: int = 100) -> int:
     """Entry point: fetch paginated history, parse, and write. Returns total rows written.
     
-    Loops until a page returns 0 articles.
+    Nếu incremental=True (mặc định) và force=False:
+        - Tải các URL đã có trong core.news của mã này.
+        - Khi gặp bài viết đã tồn tại (chạm đường biên dữ liệu cũ < 2026-09-14),
+          chỉ lưu các bài mới của 4 ngày gần nhất và DỪNG NGAY LẬP TỨC (không cào lại lịch sử 2007).
     """
+    symbol = symbol.strip().upper()
+    con = db.bootstrap_schema()
+    existing_urls = get_existing_urls(symbol, con) if (incremental and not force) else set()
+    
     page_index = 1
     total_written = 0
     
-    while True:
+    while page_index <= max_pages:
         html = fetch_page(symbol, page_index)
         
         try:
@@ -247,11 +288,23 @@ def run(symbol: str) -> int:
             else:
                 raise
 
-        written = write_news(parsed)
-        total_written += written
-        
-        # We can stop if the page didn't have a full batch (PageSize=30)
-        # Though Cafef sometimes returns slightly less, safely terminating on 0 is best.
+        # Kiểm tra trùng lặp với dữ liệu đã có
+        if existing_urls:
+            new_df = parsed[~parsed["source_url"].isin(existing_urls)]
+            if len(new_df) < len(parsed):
+                # Đã chạm vào đường biên dữ liệu cũ (ví dụ trước 2026-09-14)
+                if not new_df.empty:
+                    written = write_news(new_df, con=con)
+                    total_written += written
+                # DỪNG LẠI NGAY LẬP TỨC: Toàn bộ các trang sau đều là tin cũ hơn!
+                break
+            else:
+                written = write_news(new_df, con=con)
+                total_written += written
+        else:
+            written = write_news(parsed, con=con)
+            total_written += written
+
         page_index += 1
 
     return total_written

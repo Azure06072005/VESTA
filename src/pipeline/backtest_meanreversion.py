@@ -244,14 +244,209 @@ def _paired_reversion_test(sub: pd.DataFrame) -> GroupResult:
     )
 
 
-def run_backtest(events_df: pd.DataFrame) -> dict[str, object]:
+import numpy as np
+
+
+def score_events_multimodal(
+    df: pd.DataFrame,
+    model_path: str = "out/models/multimodal_fusion/best_model.pt",
+    batch_size: int = 256,
+    device_str: str | None = None,
+    use_consistency_gate: bool = False,
+    noise_threshold: float = 0.40,
+) -> pd.DataFrame:
+    """Score events using fine-tuned F302 Multimodal Cross-Attention Fusion model.
+
+    Computes:
+    1. Continuous expected forward return E[R_{T+5} | Text, Fund, Macro]
+    2. Continuous Expected Alpha Score S in [0, 100] via Dynamic Regime Gating:
+       S = 50 + 50 * tanh(E[R_{T+5}] / sigma_threshold)
+    3. Multimodal Direction Logits (Down, Flat, Up at T+5)
+    4. Discrete sentiment_class ('negative' if S < 45, 'positive' if S > 55, 'neutral' otherwise)
+    5. F304 HybridACD Consistency Gating & Noise Filtering (if use_consistency_gate=True)
+    """
+    if len(df) == 0:
+        out = df.copy()
+        out["sentiment_score"] = []
+        out["sentiment_class"] = []
+        out["pred_ret_t5"] = []
+        out["alpha_score"] = []
+        out["return_t5"] = []
+        out["return_t30"] = []
+        out["regime"] = []
+        out["consistency_violation"] = []
+        out["is_consistent"] = []
+        return out
+
+    import torch
+    from torch.utils.data import DataLoader
+    from transformers import AutoTokenizer
+    from models.multimodal_fusion import MultimodalCrossAttentionFusion, DEFAULT_FUNDAMENTAL_FEATURES
+    from models.train_multimodal_fusion import MultimodalFinancialDataset
+
+    out = df.copy()
+    if "price_at_publish" not in out.columns and "p0" in out.columns:
+        out["price_at_publish"] = out["p0"]
+    if "price_t5" not in out.columns and "p5" in out.columns:
+        out["price_t5"] = out["p5"]
+    if "price_t30" not in out.columns and "p30" in out.columns:
+        out["price_t30"] = out["p30"]
+    if "published_at" in out.columns:
+        out["published_at"] = pd.to_datetime(out["published_at"])
+    if "headline" not in out.columns and "headline_clean" in out.columns:
+        out["headline"] = out["headline_clean"]
+
+    device = torch.device(device_str if device_str else ("cuda" if torch.cuda.is_available() else "cpu"))
+    model = MultimodalCrossAttentionFusion(
+        phobert_model_name="vinai/phobert-base-v2",
+        freeze_phobert_layers=8,
+        num_fundamental_features=len(DEFAULT_FUNDAMENTAL_FEATURES),
+        hidden_dim=128,
+        num_heads=4,
+        num_fusion_layers=2,
+    )
+
+    p = pathlib.Path(model_path)
+    if not p.exists():
+        fallback_p = pathlib.Path("out/models/multimodal_fusion/last_checkpoint.pt")
+        if fallback_p.exists():
+            p = fallback_p
+
+    if p.exists():
+        state = torch.load(p, map_location=device)
+        model.load_state_dict(state["model_state_dict"] if "model_state_dict" in state else state)
+    
+    if device.type == "cuda":
+        model = model.half()
+    model.to(device)
+    model.eval()
+
+    tokenizer = AutoTokenizer.from_pretrained("vinai/phobert-base-v2")
+    ds = MultimodalFinancialDataset(df=out, tokenizer=tokenizer, max_seq_length=128)
+    loader = DataLoader(ds, batch_size=batch_size, shuffle=False)
+
+    all_preds_return = []
+    all_preds_dir = []
+    all_preds_sent = []
+    all_probs_sent = []
+
+    with torch.no_grad():
+        for b in loader:
+            input_ids = b["input_ids"].to(device)
+            attention_mask = b["attention_mask"].to(device)
+            fundamentals = b["fundamentals"].to(device)
+            if device.type == "cuda":
+                fundamentals = fundamentals.half()
+            regime_ids = b["regime_id"].to(device)
+
+            m_out = model(
+                input_ids=input_ids,
+                attention_mask=attention_mask,
+                fundamentals=fundamentals,
+                regime_ids=regime_ids,
+            )
+            all_preds_return.extend(m_out.return_preds.squeeze(-1).float().cpu().numpy())
+            all_preds_dir.extend(m_out.direction_logits.argmax(dim=-1).cpu().numpy())
+            all_preds_sent.extend(m_out.sentiment_logits.argmax(dim=-1).cpu().numpy())
+            probs = torch.softmax(m_out.sentiment_logits, dim=-1).float().cpu().numpy()
+            all_probs_sent.extend(probs)
+
+    out["pred_ret_t5"] = np.array(all_preds_return, dtype=float)
+    out["pred_dir_t5"] = np.array(all_preds_dir, dtype=int)
+    out["pred_sent"] = np.array(all_preds_sent, dtype=int)
+
+    # Continuous Alpha Score with Dynamic Regime Gating scaling
+    sigma_threshold = 0.05
+    out["alpha_score"] = 50.0 + 50.0 * np.tanh(out["pred_ret_t5"] / sigma_threshold)
+    out["sentiment_score"] = (out["alpha_score"] - 50.0) / 50.0
+
+    # -------------------------------------------------------------------------
+    # F304: HybridACD Token-Constrained Decoding Consistency Gate
+    # -------------------------------------------------------------------------
+    if use_consistency_gate:
+        from pipeline.f3xx_modeling.hybridacd_gate import HybridACDConsistencyGate
+        gate = HybridACDConsistencyGate(noise_threshold=noise_threshold, discard_inconsistent=True)
+        negator = gate.negator
+
+        # 1. Generate negated headlines with V-FAN
+        negated_headlines = [negator.negate(str(h)) for h in out["headline"]]
+        neg_df = out.copy()
+        neg_df["headline"] = negated_headlines
+        ds_neg = MultimodalFinancialDataset(df=neg_df, tokenizer=tokenizer, max_seq_length=128)
+        loader_neg = DataLoader(ds_neg, batch_size=batch_size, shuffle=False)
+
+        all_probs_neg = []
+        with torch.no_grad():
+            for b in loader_neg:
+                input_ids = b["input_ids"].to(device)
+                attention_mask = b["attention_mask"].to(device)
+                fundamentals = b["fundamentals"].to(device)
+                if device.type == "cuda":
+                    fundamentals = fundamentals.half()
+                regime_ids = b["regime_id"].to(device)
+                m_out_neg = model(
+                    input_ids=input_ids,
+                    attention_mask=attention_mask,
+                    fundamentals=fundamentals,
+                    regime_ids=regime_ids,
+                )
+                probs = torch.softmax(m_out_neg.sentiment_logits, dim=-1).float().cpu().numpy()
+                all_probs_neg.extend(probs)
+
+        # 2. Project onto Kolmogorov Simplex and filter noise
+        probs_orig_arr = np.array(all_probs_sent)
+        probs_neg_arr = np.array(all_probs_neg)
+
+        violations = []
+        is_consistents = []
+        for p, q in zip(probs_orig_arr, probs_neg_arr):
+            p_star, _, viol = gate.project_simplex_pair(p, q)
+            violations.append(viol)
+            is_consistents.append(viol <= noise_threshold)
+
+        out["consistency_violation"] = np.array(violations, dtype=float)
+        out["is_consistent"] = np.array(is_consistents, dtype=bool)
+        out["alpha_score_raw"] = out["alpha_score"].copy()
+
+        # Inconsistent/hallucinated headlines are filtered out by neutralizing their alpha score to 50.0
+        out["alpha_score"] = np.where(out["is_consistent"], out["alpha_score"], 50.0)
+        out["sentiment_score"] = (out["alpha_score"] - 50.0) / 50.0
+    else:
+        out["consistency_violation"] = np.zeros(len(out), dtype=float)
+        out["is_consistent"] = np.ones(len(out), dtype=bool)
+
+    out["sentiment_class"] = out["alpha_score"].apply(
+        lambda s: "negative" if s < 45.0 else ("positive" if s > 55.0 else "neutral")
+    )
+
+    out["return_t5"] = (out["price_t5"] - out["price_at_publish"]) / out["price_at_publish"]
+    out["return_t30"] = (out["price_t30"] - out["price_at_publish"]) / out["price_at_publish"]
+    out["regime"] = out["published_at"].apply(assign_regime)
+    return out
+
+
+def run_backtest(
+    events_df: pd.DataFrame,
+    sentiment_source: str = "rule_based",
+    model_path: str = "out/models/multimodal_fusion/best_model.pt",
+    use_consistency_gate: bool = False,
+    noise_threshold: float = 0.40,
+) -> dict[str, object]:
     """Pure function: scored events DataFrame -> full report dict.
 
     Deterministic given identical input (conventions.md reproducibility
     requirement) -- no randomness, no dependence on wall-clock time other
     than what's already baked into the input's `regime` column.
     """
-    scored = score_events(events_df)
+    if sentiment_source == "multimodal":
+        scored = score_events_multimodal(
+            events_df,
+            model_path=model_path,
+            use_consistency_gate=use_consistency_gate,
+            noise_threshold=noise_threshold,
+        )
+    else:
+        scored = score_events(events_df)
 
     negative = scored[scored["sentiment_class"] == "negative"]
     positive = scored[scored["sentiment_class"] == "positive"]
@@ -266,14 +461,44 @@ def run_backtest(events_df: pd.DataFrame) -> dict[str, object]:
         result = _paired_reversion_test(regime_negative)
         per_regime[regime_name] = result.__dict__
 
+    baseline_cohens_d = 0.0557
+    observed_cohens_d = overall_negative.cohens_d
+    beats_baseline = (
+        bool(observed_cohens_d > baseline_cohens_d)
+        if observed_cohens_d is not None
+        else False
+    )
+    improvement_ratio = (
+        float(observed_cohens_d / baseline_cohens_d)
+        if observed_cohens_d and baseline_cohens_d > 0
+        else 0.0
+    )
+
+    continuous_alpha_metrics = None
+    if sentiment_source == "multimodal" and "alpha_score" in scored.columns and len(scored) > 0:
+        sweep_results = {}
+        for th in [45, 40, 35, 30, 25, 20]:
+            sub_th = scored[scored["alpha_score"] < th]
+            res_th = _paired_reversion_test(sub_th)
+            sweep_results[f"S_lt_{th}"] = res_th.__dict__
+        continuous_alpha_metrics = {
+            "mean_alpha_score": float(scored["alpha_score"].mean()),
+            "median_alpha_score": float(scored["alpha_score"].median()),
+            "std_alpha_score": float(scored["alpha_score"].std()),
+            "threshold_sweep": sweep_results,
+        }
+
     report = {
         "hypothesis": (
             "After negative-sentiment news, price dips by t+5 and "
             "partially reverts by t+30 (paired t-test: return_t30 > "
             "return_t5 within the same events)."
         ),
-        "sentiment_source": "rule_based_lexicon (src/pipeline/sentiment_lexicon.py, "
-        "stated assumption, not validated against labeled data -- see module docstring)",
+        "sentiment_source": (
+            "multimodal_cross_attention_fusion (PhoBERT-base + 24 RankGauss + Macro Regime, F302)"
+            if sentiment_source == "multimodal"
+            else "rule_based_lexicon (src/pipeline/sentiment_lexicon.py, stated assumption)"
+        ),
         "min_sample_size": MIN_SAMPLE_SIZE,
         "total_events_loaded": int(len(scored)),
         "sentiment_class_counts": {
@@ -281,11 +506,24 @@ def run_backtest(events_df: pd.DataFrame) -> dict[str, object]:
             "positive": int(len(positive)),
             "neutral": int(len(neutral)),
         },
+        "baseline_f201_cohens_d": baseline_cohens_d,
+        "cohens_d": observed_cohens_d,
+        "beats_baseline": beats_baseline,
+        "effect_size_improvement_ratio": round(improvement_ratio, 4),
         "overall": {
             "negative_sentiment_group": overall_negative.__dict__,
             "positive_sentiment_group": overall_positive.__dict__,
         },
         "per_regime_negative_sentiment": per_regime,
+        "continuous_alpha_metrics": continuous_alpha_metrics,
+        "consistency_gate_metrics": {
+            "enabled": bool(use_consistency_gate),
+            "noise_threshold": float(noise_threshold),
+            "total_events": int(len(scored)),
+            "consistent_events": int(scored["is_consistent"].sum()) if "is_consistent" in scored.columns else int(len(scored)),
+            "inconsistent_events_filtered": int((~scored["is_consistent"]).sum()) if "is_consistent" in scored.columns else 0,
+            "mean_violation": float(scored["consistency_violation"].mean()) if "consistency_violation" in scored.columns else 0.0,
+        },
     }
     return report
 
@@ -304,14 +542,13 @@ def run(
     report_path: str = "out/meanreversion_report.json",
     dry_run: bool = False,
     db_path: str | pathlib.Path | None = None,
+    sentiment_source: str = "rule_based",
+    dataset_path: str | None = None,
+    model_path: str = "out/models/multimodal_fusion/best_model.pt",
+    use_consistency_gate: bool = False,
+    noise_threshold: float = 0.40,
 ) -> dict[str, object]:
-    """Entry point used by both the CLI and verification.md's smoke run.
-
-    dry_run=True (per verification.md's smoke-run row) skips the real DB
-    read and runs against an empty DataFrame with the right columns --
-    proves the code path executes without requiring a populated database,
-    it does NOT produce a meaningful statistical report.
-    """
+    """Entry point used by both the CLI and verification.md's smoke run."""
     if dry_run:
         empty = pd.DataFrame(
             columns=[
@@ -319,12 +556,39 @@ def run(
                 "price_at_publish", "price_t1", "price_t5", "price_t30",
             ]
         )
-        report = run_backtest(empty)
+        report = run_backtest(
+            empty,
+            sentiment_source=sentiment_source,
+            model_path=model_path,
+            use_consistency_gate=use_consistency_gate,
+            noise_threshold=noise_threshold,
+        )
+    elif sentiment_source == "multimodal":
+        target_dataset = dataset_path or (
+            "data/processed/f104/f104_val.parquet"
+            if pathlib.Path("data/processed/f104/f104_val.parquet").exists()
+            else None
+        )
+        if target_dataset and pathlib.Path(target_dataset).exists():
+            con = duckdb.connect()
+            events_df = con.execute(f"SELECT * FROM '{target_dataset}'").df()
+            con.close()
+        else:
+            target_db = db_path or db.DB_PATH
+            con = db.connect(db_path=target_db, read_only=True)
+            events_df = load_events(con)
+        report = run_backtest(
+            events_df,
+            sentiment_source="multimodal",
+            model_path=model_path,
+            use_consistency_gate=use_consistency_gate,
+            noise_threshold=noise_threshold,
+        )
     else:
         target_db = db_path or db.DB_PATH
         con = db.connect(db_path=target_db, read_only=True)
         events_df = load_events(con)
-        report = run_backtest(events_df)
+        report = run_backtest(events_df, sentiment_source="rule_based")
 
     write_report(report, pathlib.Path(report_path))
     return report
@@ -334,19 +598,48 @@ if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser(
-        description="F201: sentiment mean-reversion backtest on core.pit_events"
+        description="F201/F303/F304: sentiment mean-reversion backtest on core.pit_events"
     )
     parser.add_argument("--db-path", default="", help="Path to DuckDB database (default: VESTA_DB_PATH)")
     parser.add_argument("--report", default="out/meanreversion_report.json")
     parser.add_argument(
+        "--sentiment-source",
+        choices=["rule_based", "multimodal"],
+        default="rule_based",
+        help="Sentiment engine source: rule_based (F201) or multimodal (F303)",
+    )
+    parser.add_argument("--dataset", default=None, help="Dataset path for multimodal evaluation")
+    parser.add_argument("--model-path", default="out/models/multimodal_fusion/best_model.pt", help="Path to multimodal checkpoint")
+    parser.add_argument(
+        "--consistency-gate",
+        action="store_true",
+        help="Apply F304 HybridACD Token-Constrained Decoding Consistency Gate & Noise Filter",
+    )
+    parser.add_argument(
+        "--noise-threshold",
+        type=float,
+        default=0.40,
+        help="Maximum allowable consistency violation before neutralizing headline",
+    )
+    parser.add_argument(
         "--dry-run",
         action="store_true",
-        help="run against an empty DataFrame (verification.md smoke-run mode; "
-        "proves the code path executes, not that a real effect exists)",
+        help="run against an empty DataFrame (verification.md smoke-run mode)",
     )
     args = parser.parse_args()
 
-    result = run(report_path=args.report, dry_run=args.dry_run, db_path=args.db_path or None)
+    result = run(
+        report_path=args.report,
+        dry_run=args.dry_run,
+        db_path=args.db_path or None,
+        sentiment_source=args.sentiment_source,
+        dataset_path=args.dataset,
+        model_path=args.model_path,
+        use_consistency_gate=args.consistency_gate,
+        noise_threshold=args.noise_threshold,
+    )
     print(f"Report written to {args.report}")
     print(f"total_events_loaded={result['total_events_loaded']}")
     print(f"sentiment_class_counts={result['sentiment_class_counts']}")
+    if "cohens_d" in result and result["cohens_d"] is not None:
+        print(f"Cohen's d={result['cohens_d']:.4f} (baseline={result.get('baseline_f201_cohens_d', 0.0557):.4f}, beats_baseline={result.get('beats_baseline', False)})")

@@ -2,6 +2,16 @@
 
 Newest at the top. Don't reverse any of these without a new, stated reason.
 
+## 2026-09-17: Master Unified Pipeline Upgrade: Universe Mode & 6 Quantitative Modules Ingestion
+- Context & Motivation: User requested extending the data collection pipeline from hardcoded symbol subsets to supporting the entire market universe (`--all-symbols`), and formally integrating 6 advanced quantitative microstructure categories into the master crawler framework:
+  1. **Level 2 Order Book Depth & OFI (`src/crawlers/order_book_depth.py`)**: Captures 3-10 bid/ask levels (`bid_price_1..3, bid_vol_1..3, ask_price_1..3, ask_vol_1..3`), tick-by-tick trades from `Market.equity(s).intraday()`, and calculates instantaneous Order Flow Imbalance (OFI) and flags Shark Market Sweeps vs passive price walls.
+  2. **Proprietary Trading Flow (`src/crawlers/proprietary_flow.py`)**: Captures daily institutional proprietary trading volume and net value from `Market.equity(s).proprietary_flow()`, upgraded to support dynamic universe iteration across all 1,751 canonical symbols.
+  3. **Intraday Realtime Foreign Flow & Ownership Room (`src/crawlers/foreign_flow_intraday.py`)**: Ingests real-time in-session foreign buy/sell volume (`Market.equity(s).quote()`), foreign ownership percentage, and remaining room (`Market.equity(s).summary()`).
+  4. **Deep Financial Statement Footnotes (`src/crawlers/financial_notes.py`)**: Bypasses generic 4-statement limitations to extract granular footnote schedules (corporate bond debt maturity, NPL groups 2-5, real estate capex provisions) via `Fundamental.equity(s).note()`, upgraded to support full market universe mode.
+  5. **Macro Benchmark Rates & Bond Yield Curve (`src/crawlers/macro_rates.py`)**: Mines Point-in-Time interbank rates (ON, 1W, 1M) and VN10Y government bond yields to compute Equity Risk Premium.
+  6. **Master Pipeline Orchestration (`src/crawlers/master_unified_crawler.py`)**: Unified entrypoint supporting `--all-symbols`, `--all-quant`, and per-module flags (`--order-book`, `--proprietary-flow`, `--foreign-intraday`, `--financial-notes`, `--macro-rates`).
+- Testing & Verification: All 8 unit tests in `tests/test_order_book_depth.py`, `tests/test_foreign_flow_intraday.py`, `tests/test_proprietary_flow.py`, `tests/test_financial_notes.py`, `tests/test_macro_rates.py` passed with 100% success; ruff lint clean.
+
 ## 2026-09-13: F004d bugfix -- admin-policy override recognized only "cổ phiếu", missed other market anchors
 - Reason: match_sector_tier_a()'s ADMIN_POLICY_PATTERNS override checked for the literal substring "cổ phiếu" only, while MARKET_ANCHOR_PATTERN accepts 7 other anchor phrases. Headlines like "Nhóm ngành bất động sản hưởng lợi từ nghị định gỡ vướng pháp lý" passed the anchor gate but were then incorrectly dropped by the override -- a real recall loss, found by manual adversarial testing, independently confirmed reproducible: match_sector_tier_a() returned [] before fix, correct sector match after.
 - Decision: override condition now checks membership against MARKET_ANCHOR_OVERRIDE_KEYWORDS (all 7 anchor phrases), not a single hardcoded string. Verified: 25/25 tests pass in tests/test_sector_news_matcher.py (21 pre-existing + 4 new regression cases), full repo suite unaffected.
@@ -1630,4 +1640,43 @@ Newest at the top. Don't reverse any of these without a new, stated reason.
   1. **No Unconditional Dip-Buying**: F301/F302 modeling and downstream inference (F401) MUST NOT assume unconditional mean-reversion. Negative sentiment in bear/liquidity-tight regimes is an accelerator of downward momentum, not a reversal signal.
   2. **Regime-Conditioned Interaction Features**: The ML feature pipeline (F104) and sentiment strategy must condition on market state (HOSE vs UPCOM exchange indicator + 16-regime / macro liquidity state gate).
   3. **Risk Rails (Fail-Closed)**: Any execution layer strategy must enforce a hard regime circuit breaker: dip-buying on negative headlines is halted when market index is below 200-day EMA or during identified liquidity-crisis regimes.
-- Status: F203 passing (reproducible live report at `out/f203_regime_report.json`, unit tests passing). F301 officially unblocked under regime-conditional architecture.
+- Status: F203 passing (reproducible live report at `out/f203_regime_report.json`, unit tests passing). F301 officially unblocked under regime-conditional architecture.
+
+## 2026-09-17: F303 Multimodal Edge Validation, Macro Policy Context Framework & Quantitative Enrichment Pipeline
+- Reason: Quant trading edge validation (Rule B2) and structural gap remediation in response to institutional Vietnamese market microstructure needs.
+- Empirical Findings (out/meanreversion_report_multimodal.json, 48,624 holdout events):
+  1. **Multimodal Super-Baseline Outperformance**: Continuous Alpha Score ($S \in [0, 100]$) from F302 Multimodal Cross-Attention Fusion achieved Cohen's $d = \mathbf{0.0840}$ on negative-sentiment events ($S < 45$, $n = 18,912$, $t = 11.55$, $p = 9.66 \times 10^{-31}$), beating the unconditioned F201 baseline ($d = 0.0557$) by **$+50.8\%$ ($1.51\times$)**.
+  2. **Convex Edge at High Conviction**: Tightening the threshold to $S < 35$ escalates Cohen's $d$ to **$0.1736$** ($t = 18.00$, $p = 2.18 \times 10^{-71}$, $3.12\times$ baseline), proving that multimodal conditioning filters out low-signal false reversals.
+- Architectural Decisions:
+  1. **Macro Policy Context Framework (`src/pipeline/macro_context_detector.py`)**:
+     - Enforces multi-tier sentiment separation: Surface Sentiment (literal syntactic tone) vs Latent Market Sentiment (institutional capital flow reaction).
+     - Models three Vietnamese policy inversion paradoxes: `RATE_CUT_CAPITAL_FLIGHT_RISK` (rate cuts under DXY pressure induce foreign selling), `SBV_BILL_MOP_UP_DIP_REVERSAL` (interbank bill mop-up causes transient panic dip followed by recovery), and `DEBT_EVERGREENING_SHIELD` (Circular 02 debt roll-over delays NPL without restoring real cash flow).
+     - Resolves Vietnamese linguistic corner cases: Unicode `đ`/`Đ` normalization prior to diacritic stripping; negative lookbehind/lookahead disambiguation for `song` (conjunction) vs `làn sóng` (wave); and flexible adverb infix matching (`FLEXIBLE_CATEGORY_REGEX`).
+  2. **Vnstock 3.3.0 Silver Sponsor Upgrade & 3 Quantitative Crawlers**:
+     - Verified official Silver Sponsor License (`vnstock_f84ed9f3014e77c53a88e3eae1bc1be8`, valid through 2026-10-20) and upgraded `vnstock_data` to 3.3.0.
+     - Provisioned `core.proprietary_flow` and built `src/crawlers/proprietary_flow.py`: Ingested 1,000 sessions across 10 VN30 tickers.
+     - Provisioned `core.financial_notes` and built `src/crawlers/financial_notes.py`: Ingested 24,036 accounting note records across 40+ quarters for VCB, TCB, VHM.
+     - Provisioned `core.macro_rates` and built `src/crawlers/macro_rates.py`: Ingested 84 interbank interest rate fixings (ON, 1W, 1M) and VN10Y bond yields.
+     - Provided atomic cross-database promotion helper `src/etl/sync_enrichment_data.py`.
+- Status: F303 PASSING. All 10 crawler and context unit tests passing. Ready to advance to F304 (HybridACD Token-Constrained Decoding consistency gate).
+
+## 2026-09-17: F304 HybridACD Token-Constrained Decoding (TCD) Consistency Gate Integration
+- Reason: Rule B2 (Signal Before Infrastructure), Rule B5 (Deterministic Risk Rails), and addressing the core methodological gap of LLM forecasting consistency (Dutch Book arbitrage vulnerability, Paleka et al. ICLR 2025, and Tran Anh Kiet HybridACD 2026).
+- Architectural Innovation & Implementation:
+  1. **Simplex-TCD Closed-Form Projection (`src/pipeline/f3xx_modeling/hybridacd_gate.py`)**:
+     - Solved the fundamental architectural mismatch between Autoregressive LLM token-level logit bias and Encoder-only / Multimodal Softmax probability simplices.
+     - Derived exact closed-form solution on the 3-class probability simplex $\Delta^2$ satisfying Kolmogorov axioms:
+       $\hat{p}_{\text{pos}} = \frac{p_{\text{pos}} + q_{\text{neg}}}{2}, \quad \hat{p}_{\text{neg}} = \frac{p_{\text{neg}} + q_{\text{pos}}}{2}, \quad \hat{p}_{\text{neu}} = \frac{p_{\text{neu}} + q_{\text{neu}}}{2}$, with $p^*_k = \frac{\hat{p}_k}{\sum \hat{p}_j}$.
+     - Strict mathematical guarantee: $p^*_{\text{pos}} = q^*_{\text{neg}}$ verified with $0.00\times 10^0$ error and $\sum p^* = 1.0$ at machine precision ($2.22\times 10^{-16}$).
+  2. **Vietnamese Financial Fast Adversarial Negator (V-FAN)**:
+     - Replaced slow, expensive autoregressive LLM counterfactual generation with a micro-latency ($0.0197$ ms/headline) rule-and-lexicon inverter.
+     - Implemented domain-tailored financial antonym substitutions (`lỗ kỷ lục` $\leftrightarrow$ `lãi kỷ lục`, `bán ròng` $\leftrightarrow$ `mua ròng`, `tăng trưởng âm` $\leftrightarrow$ `tăng trưởng bứt phá`, `hạ trần lãi suất` $\leftrightarrow$ `nâng trần lãi suất`) and denial prefixes.
+     - Easily satisfies F401's streaming SLA budget ($< 50$ ms per headline).
+  3. **Consistency Noise Filter & Brier Calibration Boost**:
+     - Quantifies consistency violation $\Delta = |p_{\text{pos}} - q_{\text{neg}}| + |p_{\text{neg}} - q_{\text{pos}}|$.
+     - Headlines exceeding $\tau = 0.40$ are flagged as hallucinatory/uninformative and neutralized, eliminating false dip-buying signals.
+- Empirical Findings (`out/f304_hybridacd_gate_report.json` across 48,624 holdout events):
+  1. **Brier Calibration**: Reduced Brier score from $0.0439 \to 0.0310$ (**$+29.51\%$ calibration improvement**).
+  2. **Noise Reduction**: Successfully pruned **4,715 uninformative / contradictory headlines** ($9.7\%$ of total volume).
+  3. **Alpha Preservation & Boost**: Gated negative sentiment sample ($n = 18,243$) achieved Cohen's $d = \mathbf{0.0852}$ ($t = 11.51, p = 1.56\times 10^{-30}$), outperforming un-gated F303 ($d = 0.0840$) and strictly beating baseline F201 ($d = 0.0557$) by **$+53.0\%$ ($1.53\times$)**.
+- Status: F304 PASSING. All unit tests (`tests/test_hybridacd_consistency_gate.py`, 5/5 passing) and full pipeline runner (`test_pipeline/f3xx_modeling/test_f304_hybridacd_runner.py`, exit code 0) verified. Ready to advance to F401 (Streaming Inference Engine).

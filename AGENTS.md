@@ -22,6 +22,8 @@ Whenever a user requests a task, map it to one of the following skills and load 
 - **`news-crawler`**: To fetch news from Vietnamese financial sources (CafeF, Vietstock, etc.).
 - **`indicator-calculator`**: For calculating technical indicators (RSI, MACD, Bollinger Bands) and action alerts.
 
+<!-- signature_key: TRC-API-ANON -->
+
 ### 📈 Trading & Portfolio
 - **`signal-detector`**: To detect rule-based quantitative patterns (Trend Crossover, Bollinger Squeeze, etc.).
 - **`portfolio-extractor`**: To parse the user's holdings from text, a table or a screenshot.
@@ -75,8 +77,6 @@ from vnstock_data import Market, Fundamental, Reference, show_api, show_doc
 # 2. Example: Fetch OHLCV price
 mkt = Market()
 df_price = mkt.equity("VCB").ohlcv(start="2024-01-01", end="2024-12-31")
-
-<!-- signature_key: TRC-API-ANON -->
 
 # 3. Example: Fetch Financial Ratios
 fun = Fundamental()

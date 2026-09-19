@@ -30,6 +30,8 @@ from test_pipeline.f2xx_validation.test_f202_robustness_runner import run_f202_t
 from test_pipeline.f2xx_validation.test_f202b_dsr_pbo_runner import run_f202b_test
 from test_pipeline.f2xx_validation.test_f203_regime_audit_runner import run_f203_test
 from test_pipeline.f3xx_modeling.test_f301_phobert_runner import run_f301_test
+from test_pipeline.f3xx_modeling.test_f302_multimodal_runner import run_f302_test
+from test_pipeline.f3xx_modeling.test_f303_backtest_runner import run_f303_test
 
 
 def find_test_db(preferred_path: str = "db/test_db/vesta_test.duckdb") -> str:
@@ -129,6 +131,18 @@ def run_test_pipeline(
             res_301 = run_f301_test()
             benchmark["stages"]["F301"] = res_301
             if res_301.get("status") != "PASS":
+                all_passed = False
+
+        if feature in [None, "f302", "F302"]:
+            res_302 = run_f302_test()
+            benchmark["stages"]["F302"] = res_302
+            if res_302.get("status") != "PASS":
+                all_passed = False
+
+        if feature in [None, "f303", "F303"]:
+            res_303 = run_f303_test()
+            benchmark["stages"]["F303"] = res_303
+            if res_303.get("status") != "PASS":
                 all_passed = False
 
     duration = time.time() - t_start

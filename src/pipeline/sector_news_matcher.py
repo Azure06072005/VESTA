@@ -260,3 +260,18 @@ def load_symbol_sector_map(con: duckdb.DuckDBPyConnection) -> Tuple[Dict[str, Tu
     except Exception as e:
         logger.warning(f"Could not load core.dim_symbol_sector: {e}")
         return {}, set()
+
+
+def resolve_shareholder_symbol_hook(headline: str, body: Optional[str] = None) -> Optional[str]:
+    """Hook to resolve equity ticker symbol from mentioned major shareholders or executives.
+    Uses shareholder_entity_matcher without triggering standalone batch runs.
+    """
+    try:
+        from pipeline.shareholder_entity_matcher import shareholder_registry
+        if not shareholder_registry._is_loaded:
+            shareholder_registry.load_registry()
+        return shareholder_registry.resolve_symbol_from_news(headline, body)
+    except Exception as err:
+        logger.debug(f"Shareholder hook resolution bypassed: {err}")
+        return None
+

@@ -86,3 +86,47 @@ Separate from `claude-progress.md` / `gemini-progress.md` and `feature_list.json
 - Post-run verification of `meta.crawl_progress`:
   - The totals barely moved (e.g. F002 only gained 1 new success). This confirms that the vast majority of the remaining "failed" symbols in the queue are persistently unsupported assets by the VCI backend (or trigger heavy persistent rate limits) rather than transient network drops. 
 - Notes: The retry orchestrator gracefully tracked these persistent failures, meaning the staging tables are effectively complete for all viable, liquid assets in the universe.
+
+## Quantitative Enrichment & Microstructure Crawl Session — 2026-09-17
+- Context: Remediating data gaps for quantitative trading identified prior to F304 modeling gate.
+- Upgraded vnstock packages in `d:\vnstock\.venv` to vnstock_data 3.3.0, vnstock_ta 1.0.6, vnstock_news 2.2.2, vnstock 4.0.8 using user's Silver Sponsor key `vnstock_f84ed9f3014e77c53a88e3eae1bc1be8`.
+1. **Proprietary Trading Flow (`src/crawlers/proprietary_flow.py`)**:
+   - Symbols attempted: 10 VN30 leaders (`ACB, BCM, BID, BVH, CTG, FPT, GAS, GVR, HDB, HPG`).
+   - Results: 10/10 success, 0 failed, 0 empty.
+   - Rows written: **1,000 daily sessions** into `staging.proprietary_flow` and `core.proprietary_flow` (100 sessions/ticker).
+   - SQL result:
+     - ACB: 100 sessions, Net Value: -525.74B VND
+     - BID: 100 sessions, Net Value: +23.28B VND
+     - FPT: 100 sessions, Net Value: -335.93B VND
+     - GAS: 100 sessions, Net Value: +43.73B VND
+     - HPG: 100 sessions, Net Value: -647.99B VND
+2. **Deep Financial Notes Breakdown (`src/crawlers/financial_notes.py`)**:
+   - Symbols attempted: 3 banking & real estate leaders (`VCB, TCB, VHM`).
+   - Results: 3/3 success.
+   - Rows written: **24,036 items** into `staging.financial_notes` and `core.financial_notes`:
+     - VCB: 8,820 items across 42 quarterly reporting periods.
+     - TCB: 8,820 items across 42 quarterly reporting periods.
+     - VHM: 6,396 items across 41 quarterly reporting periods.
+3. **Macro Benchmark Rates (`src/crawlers/macro_rates.py`)**:
+   - Extracted Point-in-Time interbank rate fixings from `core.macro_policy` corpus.
+   - Rows written: **84 fixings** into `core.macro_rates`:
+     - Overnight (ON): 17 fixings, mean rate = 4.79%
+     - 1-Week (1W): 32 fixings, mean rate = 6.32%
+     - 1-Month (1M): 35 fixings, mean rate = 6.78%
+- Testing: All 10 unit tests in `tests/test_macro_context_detector.py`, `tests/test_proprietary_flow.py`, `tests/test_financial_notes.py`, `tests/test_macro_rates.py` passed with 100% success.
+
+## Securities Sector (Toàn bộ Công ty Chứng khoán) Audit & Enrichment — 2026-09-17
+- Target: Full historical data audit for all 42 Vietnamese securities companies (`SSI, VND, VCI, HCM, SHS, MBS, FTS, CTS, BSI, VDS, AGR, ORS, BVS, TVS, EVS, APG, WSS, TCI, SBS, HBS, VIG, IVS, PSI, AAS, ABW, BMS, CSI, DSC, DSE, HAC, LPS, PHS, TCX, TVB, UPS, VCK, VFS, VIX, VPX, VUA, ART, APS`) from market inception (2000) to 2026-09-11.
+- Audit Findings:
+  - **Listing Inception Context**: Vietnam stock market opened in July 2000. Earliest securities companies listed in December 2006 (SSI, BVS, HAC). No securities firm traded prior to 2006.
+  - **OHLCV Daily (`core.market_ohlcv_daily`)**: **42/42 securities firms (100%)** fully covered with **0 missing bars** from each company's exact IPO/listing date to 2026-09-11 (e.g. SSI: 4,907 bars, VND: 4,096 bars, HCM: 4,324 bars, SHS: 4,298 bars).
+  - **Fundamentals (`core.fundamentals`)**: **42/42 securities firms (100%)** fully covered across 27 to 37 quarters/years (from 2010/2011 to 2026-Q2) covering Balance Sheet, Income Statement, Cash Flow, and Financial Ratios.
+  - **Foreign Flow (`core.market_foreign_flow_daily`)**: **63,197 rows** for securities companies from 2007-07-02 to 2026-09-11.
+  - **News Articles (`core.news`)**: **42/42 securities firms (100%)** covered with hundreds of articles each (SSI: 1,503, VND: 1,004, HCM: 1,295, SHS: 920).
+  - **Corporate Events (`core.corporate_events`)**: 40,277 events in CSDL, covering dividends and bonus shares.
+- Remediated Gaps & Crawled Additions:
+  1. **Proprietary Flow (`core.proprietary_flow`)**: Crawled **1,567 daily sessions** across all 23 listed securities companies (23/23 success).
+  2. **Financial Notes Footnotes (`core.financial_notes`)**: Crawled **145,206+ detailed footnote items** (FVTPL portfolio, margin loans, loan provisions) for top securities firms.
+  3. **Price Adjustments (`core.price_adjustment_events`)**: Executed single-pass vectorized generator (`populate_adjustments_fast.py`) deriving **1,596 adjustment events** across 1,028 tickers, including 32 securities companies.
+  4. **Database Sync**: Created `db/vesta_snapshot.duckdb` (7.84 GB clean unlocked replica of `vesta.duckdb`), synchronized all 4 new tables, and deployed `src/etl/sync_enrichment_data.py`.
+

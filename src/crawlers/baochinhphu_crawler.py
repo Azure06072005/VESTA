@@ -179,6 +179,9 @@ def parse_article_record(html: str, url: str, fallback_title: str = "") -> dict[
         raw_time = pub_meta["content"].strip()
         try:
             published_at = dt.datetime.fromisoformat(raw_time)
+            now_utc = dt.datetime.now(dt.timezone.utc)
+            if published_at > now_utc or (hasattr(published_at, "year") and published_at.year < 2000):
+                published_at = now_utc
         except Exception:
             published_at = dt.datetime.now(dt.timezone.utc)
     else:

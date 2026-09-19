@@ -178,6 +178,7 @@ def melt_pivoted_statement(raw_df: pd.DataFrame, symbol: str, report_type: str) 
                     "available_at": period_end + dt.timedelta(days=DISCLOSURE_LAG_DAYS),
                     "data_json": json.dumps(metrics, default=str, ensure_ascii=False),
                     "fetched_at": dt.datetime.now(dt.timezone.utc).replace(tzinfo=None),
+                    "source": "vnstock_data",
                 }
             )
         out = pd.DataFrame(rows)

@@ -313,10 +313,39 @@ CREATE TABLE IF NOT EXISTS core.pit_events (
     PRIMARY KEY (symbol, source_url)
 );
 
--- staging/core.macro_policy: Official regulatory, government decrees,
--- and industry association dispatches (Báo Chính phủ, SBV, HoREA, etc.).
--- Preserves full policy text, circular/decree numbers, and issuing bodies
--- without forcing an equity ticker constraint.
+-- staging/core.news_resources: Dành cho toàn bộ tin tức vĩ mô, báo chí tài chính,
+-- chỉ đạo điều hành chính phủ, thông tư bộ ngành và hiệp hội ngành nghề
+-- (phân biệt với core.news chuyên về tin tức gắn với từng mã cổ phiếu cụ thể).
+CREATE TABLE IF NOT EXISTS staging.news_resources (
+    source        VARCHAR NOT NULL,
+    issuing_body  VARCHAR NOT NULL,
+    doc_type      VARCHAR,
+    doc_number    VARCHAR,
+    published_at  TIMESTAMP NOT NULL,
+    available_at  TIMESTAMP NOT NULL,
+    headline      VARCHAR NOT NULL,
+    summary       VARCHAR,
+    body          VARCHAR,
+    source_url    VARCHAR NOT NULL,
+    fetched_at    TIMESTAMP NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS core.news_resources (
+    source        VARCHAR NOT NULL,
+    issuing_body  VARCHAR NOT NULL,
+    doc_type      VARCHAR,
+    doc_number    VARCHAR,
+    published_at  TIMESTAMP NOT NULL,
+    available_at  TIMESTAMP NOT NULL,
+    headline      VARCHAR NOT NULL,
+    summary       VARCHAR,
+    body          VARCHAR,
+    source_url    VARCHAR NOT NULL,
+    fetched_at    TIMESTAMP NOT NULL,
+    PRIMARY KEY (source_url)
+);
+
+-- staging/core.macro_policy: Duy trì tương thích ngược với các pipeline cũ
 CREATE TABLE IF NOT EXISTS staging.macro_policy (
     source        VARCHAR NOT NULL,
     issuing_body  VARCHAR NOT NULL,
@@ -393,4 +422,156 @@ CREATE TABLE IF NOT EXISTS core.market_global_equity_daily (
     volume        BIGINT,
     fetched_at    TIMESTAMP NOT NULL,
     PRIMARY KEY (symbol, date)
-);
+);
+
+-- =============================================================================
+-- QUANTITATIVE ENRICHMENT SCHEMAS (F009a, F009b, F009c)
+-- =============================================================================
+
+-- staging/core.proprietary_flow: Daily proprietary trading desk flows per symbol
+CREATE TABLE IF NOT EXISTS staging.proprietary_flow (
+    symbol        VARCHAR NOT NULL,
+    date          DATE NOT NULL,
+    buy_vol       DOUBLE,
+    buy_val       DOUBLE,
+    sell_vol      DOUBLE,
+    sell_val      DOUBLE,
+    net_vol       DOUBLE,
+    net_val       DOUBLE,
+    fetched_at    TIMESTAMP NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS core.proprietary_flow (
+    symbol        VARCHAR NOT NULL,
+    date          DATE NOT NULL,
+    buy_vol       DOUBLE,
+    buy_val       DOUBLE,
+    sell_vol      DOUBLE,
+    sell_val      DOUBLE,
+    net_vol       DOUBLE,
+    net_val       DOUBLE,
+    fetched_at    TIMESTAMP NOT NULL,
+    PRIMARY KEY (symbol, date)
+);
+
+-- staging/core.financial_notes: Deep financial statement notes breakdown (debt, provisions, NPLs)
+CREATE TABLE IF NOT EXISTS staging.financial_notes (
+    symbol        VARCHAR NOT NULL,
+    period        VARCHAR NOT NULL,
+    note_id       VARCHAR NOT NULL,
+    note_name     VARCHAR,
+    item_order    INTEGER,
+    item_level    INTEGER,
+    unit          VARCHAR,
+    value         DOUBLE,
+    fetched_at    TIMESTAMP NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS core.financial_notes (
+    symbol        VARCHAR NOT NULL,
+    period        VARCHAR NOT NULL,
+    note_id       VARCHAR NOT NULL,
+    note_name     VARCHAR,
+    item_order    INTEGER,
+    item_level    INTEGER,
+    unit          VARCHAR,
+    value         DOUBLE,
+    fetched_at    TIMESTAMP NOT NULL,
+    PRIMARY KEY (symbol, period, note_id)
+);
+
+-- staging/core.macro_rates: Interbank interest rates (ON, 1W, 1M) & Gov bond yield (VN10Y)
+CREATE TABLE IF NOT EXISTS staging.macro_rates (
+    rate_type     VARCHAR NOT NULL, -- 'INTERBANK' | 'GOV_BOND_YIELD'
+    term          VARCHAR NOT NULL, -- 'ON', '1W', '2W', '1M', '3M', '6M', '1Y', '5Y', '10Y'
+    date          DATE NOT NULL,
+    rate_value    DOUBLE NOT NULL,  -- in %/year
+    source        VARCHAR NOT NULL,
+    fetched_at    TIMESTAMP NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS core.macro_rates (
+    rate_type     VARCHAR NOT NULL,
+    term          VARCHAR NOT NULL,
+    date          DATE NOT NULL,
+    rate_value    DOUBLE NOT NULL,
+    source        VARCHAR NOT NULL,
+    fetched_at    TIMESTAMP NOT NULL,
+    PRIMARY KEY (rate_type, term, date)
+);
+
+-- staging/core.macro_economic_series: Long-term macroeconomic indicators (gdp, cpi, fdi, trade, money supply, retail, iip)
+CREATE TABLE IF NOT EXISTS staging.macro_economic_series (
+    indicator     VARCHAR NOT NULL,
+    sub_indicator VARCHAR NOT NULL,
+    report_period VARCHAR NOT NULL,
+    period_date   DATE,
+    numeric_value DOUBLE,
+    unit          VARCHAR,
+    meta_json     VARCHAR,
+    source        VARCHAR NOT NULL DEFAULT 'vnstock',
+    fetched_at    TIMESTAMP NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS core.macro_economic_series (
+    indicator     VARCHAR NOT NULL,
+    sub_indicator VARCHAR NOT NULL,
+    report_period VARCHAR NOT NULL,
+    period_date   DATE,
+    numeric_value DOUBLE,
+    unit          VARCHAR,
+    meta_json     VARCHAR,
+    source        VARCHAR NOT NULL DEFAULT 'vnstock',
+    fetched_at    TIMESTAMP NOT NULL,
+    PRIMARY KEY (indicator, sub_indicator, report_period)
+);
+
+-- core.company_overview: Detailed corporate profile & governance (VN30 & market leaders)
+CREATE TABLE IF NOT EXISTS core.company_overview (
+    symbol                 VARCHAR NOT NULL PRIMARY KEY,
+    business_model         VARCHAR,
+    founded_date           VARCHAR,
+    charter_capital        DOUBLE,
+    number_of_employees    INTEGER,
+    listing_date           VARCHAR,
+    par_value              DOUBLE,
+    exchange               VARCHAR,
+    listing_price          DOUBLE,
+    listed_volume          BIGINT,
+    ceo_name               VARCHAR,
+    ceo_position           VARCHAR,
+    inspector_name         VARCHAR,
+    inspector_position     VARCHAR,
+    establishment_license  VARCHAR,
+    business_code          VARCHAR,
+    tax_id                 VARCHAR,
+    auditor                VARCHAR,
+    company_type           VARCHAR,
+    address                VARCHAR,
+    phone                  VARCHAR,
+    fax                    VARCHAR,
+    email                  VARCHAR,
+    website                VARCHAR,
+    branches               VARCHAR,
+    history                VARCHAR,
+    free_float_percentage  DOUBLE,
+    free_float             BIGINT,
+    outstanding_shares     BIGINT,
+    as_of_date             VARCHAR,
+    source                 VARCHAR NOT NULL DEFAULT 'vnstock',
+    fetched_at             TIMESTAMP NOT NULL
+);
+
+-- core.company_shareholders: Major shareholders distribution (VN30 & market leaders)
+CREATE TABLE IF NOT EXISTS core.company_shareholders (
+    symbol               VARCHAR NOT NULL,
+    shareholder_name     VARCHAR NOT NULL,
+    shares_owned         BIGINT,
+    ownership_percentage DOUBLE,
+    update_date          VARCHAR,
+    source               VARCHAR NOT NULL DEFAULT 'vnstock',
+    fetched_at           TIMESTAMP NOT NULL,
+    PRIMARY KEY (symbol, shareholder_name)
+);
+
+
