@@ -8,11 +8,12 @@ Tier F4xx và F9xx đại diện cho ranh giới giữa một **hệ thống ngh
 
 Tuân thủ nghiêm ngặt **Quy tắc B1 (Compliance and Regulatory Gate — Build Order, Not an Afterthought)**: *"Trước khi bất kỳ dòng code thực thi lệnh nào (đặt lệnh, sửa lệnh, hủy lệnh) được viết ra, phải có xác nhận bằng văn bản về tính hợp pháp của giao dịch thuật toán tự động theo quy định của cơ quan quản lý và thỏa thuận với công ty chứng khoán"*.
 
-Tier F4xx & F9xx bao gồm **4 features trọng yếu**:
+Tier F4xx & F9xx bao gồm **5 features trọng yếu**:
 1. **F401: Dịch vụ suy luận cục bộ thời gian thực chỉ đọc (Local Real-Time Inference Service - Read-Only)** — Thiết kế FastAPI streaming microservice phục vụ tính điểm cảm xúc đa phương thức, kiểm định cổng HybridACD với ngân sách độ trễ $< 50$ ms.
 2. **F402: Hệ thống giám sát trôi dạt mô hình & Nhật ký phản hồi tự động (Feedback Log & Model Drift Monitoring)** — Định kỳ chạy sau giờ giao dịch (15:30) để cập nhật lợi nhuận thực tế $T+1, T+5, T+30$, tính toán sai số Brier score và kích hoạt cảnh báo suy thoái hiệu năng (Performance Degradation Alert).
-3. **F901: Rào cản tuân thủ pháp lý & Xác nhận môi giới (Broker Compliance Confirmation - BLOCKED)** — Phân tích toàn diện chỉ thị của Ủy ban Chứng khoán Nhà nước (UBCKNN) tháng 09/2023 về việc tạm dừng dịch vụ đặt lệnh robot tự động tần suất lớn và tiến trình tích hợp hệ thống KRX.
-4. **F902: Giao dịch thử nghiệm môi trường Sandbox (Paper Trading against DNSE/SSI Sandbox - BLOCKED)** — Mô phỏng cơ chế định tuyến lệnh, kiểm thử trượt giá (Slippage) và độ trễ mạng trong môi trường giả lập an toàn trước khi kích hoạt tài khoản tiền thật.
+3. **F403: Quy trình Tự Động Tái Huấn Luyện Liên Tục & Thích Ứng Đầu Fusion (Continuous Training Pipeline with Rolling-Window Fusion Head Adaptation)** — Kích hoạt tái huấn luyện thông minh khi phát hiện trôi dạt hoặc tích lũy đủ dữ liệu; áp dụng kỹ thuật PEFT đóng băng 100% backbone ngôn ngữ và cổng kiểm định Shadow Model trước khi đưa vào sản xuất.
+4. **F901: Rào cản tuân thủ pháp lý & Xác nhận môi giới (Broker Compliance Confirmation - BLOCKED)** — Phân tích toàn diện chỉ thị của Ủy ban Chứng khoán Nhà nước (UBCKNN) tháng 09/2023 về việc tạm dừng dịch vụ đặt lệnh robot tự động tần suất lớn và tiến trình tích hợp hệ thống KRX.
+5. **F902: Giao dịch thử nghiệm môi trường Sandbox (Paper Trading against DNSE/SSI Sandbox - BLOCKED)** — Mô phỏng cơ chế định tuyến lệnh, kiểm thử trượt giá (Slippage) và độ trễ mạng trong môi trường giả lập an toàn trước khi kích hoạt tài khoản tiền thật.
 
 ---
 
@@ -76,11 +77,22 @@ Tier F4xx & F9xx bao gồm **4 features trọng yếu**:
      - Hệ thống tự động ghi nhật ký mức độ `CRITICAL` và chuyển trạng thái cờ hoạt động sang `SYSTEM_DEGRADED_HALT`, đình chỉ việc sinh khuyến nghị cho đến khi mô hình được tái huấn luyện (Retraining).
 
 ### 2.2. Kết quả thực nghiệm & Bằng chứng (Empirical Results & Verification)
-- **Trạng thái:** `not_started` (Mô hình thiết kế logic đã hoàn tất; cấu trúc lưu trữ đã được tích hợp trong bảng kiểm toán chất lượng của DuckDB).
+- **Trạng thái:** `passing` (Đã hoàn thành xây dựng và nghiệm thu 100% test suite `tests/test_feedback_log.py` đạt 8/8 test cases PASSED trong 12.59s, đồng thời bảo đảm không có hồi quy với 10/10 test cases của `tests/test_inference_service.py` PASSED trong 29.14s).
+- **Kết quả nghiệm thu các cơ chế cốt lõi:**
+  1. **Khởi tạo Schema Idempotent:** Tạo lập an toàn `meta.prediction_feedback_log` và `meta.model_drift_telemetry` trên DuckDB.
+  2. **Ghi vết suy luận tức thời (Non-blocking):** Ghi nhận đầy đủ vector xác suất đơn thể Kolmogorov ($p^*$), điểm Alpha hiệu chuẩn, trọng số nguồn tin $W_{\text{source}}$, và thông tin thực thể cổ đông lớn liên kết với overhead độ trễ $< 0.1$ ms.
+  3. **Căn chỉnh chính xác phiên giao dịch (Trading Days Engine):** Sử dụng chuỗi nến ngày từ `core.market_ohlcv_daily` để đối soát đúng các bước nhảy phiên $T+1, T+5, T+30$, loại trừ triệt để sai lệch do ngày nghỉ cuối tuần hoặc lễ/Tết.
+  4. **Xử lý linh hoạt trạng thái chờ (Partial Pending):** Các mốc chưa phát sinh trong tương lai ($T+5, T+30$) được giữ ở trạng thái chờ một cách an toàn mà không làm lỗi luồng xử lý.
+  5. **Đo lường độ trôi dạt định lượng (Drift Metrics):** Tính toán chính xác Brier Score trượt, Directional Accuracy trượt ($T+5$), và Spearman Rank IC.
+  6. **Ngắt mạch tự động (Circuit Breaker Rail):** Phát hiện tức thời tình trạng suy thoái hiệu năng khi Directional Accuracy giảm $< 35\%$ hoặc Brier Score tăng $> 0.060$, tự động chuyển trạng thái hệ thống sang `SYSTEM_DEGRADED_HALT`.
+  7. **Tích hợp API:** Cung cấp endpoint `GET /api/v1/drift_status` trên FastAPI cho các hệ thống giám sát.
+  8. **Tuân thủ tuyệt đối quy định Chỉ đọc (Rule B1):** 100% không chứa mã định tuyến lệnh hay thông tin tài khoản CTCK.
 
 ### 2.3. Kết quả đầu ra & Sản phẩm chuyển giao (Outcome & Deliverables)
-- Script chạy định kỳ: `src/service/drift_monitor.py`.
-- Bảng nhật ký cơ sở dữ liệu: `meta.inference_log` và `meta.model_performance_drift` trong DuckDB.
+- Module ghi log và đối soát trôi dạt: `src/service/feedback_log.py`.
+- Tích hợp endpoint dịch vụ: `src/service/inference_app.py` (`GET /api/v1/drift_status`).
+- Định nghĩa bảng cơ sở dữ liệu: `configs/duckdb_schema.sql`.
+- Bộ kiểm thử nghiệm thu toàn diện: `tests/test_feedback_log.py` (8/8 PASSED).
 
 ### 2.4. Đánh giá ưu điểm & Nhược điểm (Pros & Cons)
 - **Ưu điểm:**
@@ -93,7 +105,60 @@ Tier F4xx & F9xx bao gồm **4 features trọng yếu**:
 
 ---
 
-## 3. F901: BROKER COMPLIANCE CONFIRMATION FOR AUTONOMOUS EXECUTION
+## 3. F403: AUTOMATED CONTINUOUS TRAINING (CT) PIPELINE WITH ROLLING-WINDOW FUSION HEAD ADAPTATION
+
+### 3.1. Báo cáo cơ chế kỹ thuật (Comprehensive Report & Mechanism)
+- **Mục tiêu:** Xây dựng quy trình tự động hóa tái huấn luyện mô hình thông minh (Automated Continuous Training - CT Pipeline). Khi thị trường chứng khoán Việt Nam chuyển giao pha chu kỳ (ví dụ: chuyển từ Bull-market sang Bear-market hoặc biến động chính sách lãi suất NHNN), hành vi giá và phản ứng tin tức sẽ thay đổi, dẫn đến suy giảm hiệu năng dự báo.
+- **Kiến trúc Kích hoạt Kép (Dual-Trigger Architecture):**
+  1. **Drift-Trigger (Kích hoạt do Trôi dạt):** Khi module `F402 DriftMonitor` phát hiện Brier score trượt vượt quá $0.050$ hoặc Directional Accuracy trượt giảm xuống dưới $40\%$.
+  2. **Volume-Trigger (Kích hoạt do Tích lũy Mẫu):** Khi hệ thống tích lũy đủ $N \ge 2,000$ mẫu dự báo mới đã được đối soát đầy đủ lợi nhuận thực tế mà chưa qua tái huấn luyện.
+- **Kỹ thuật PEFT Đóng Băng Thân Mô Hình (Parameter-Efficient Fine-Tuning):**
+  - **Đóng băng 100% Backbone PhoBERT (Zero Catastrophic Forgetting):** Giữ nguyên $135$ triệu tham số của PhoBERT-base (`requires_grad=False`, $0$ gradient backpropagation). Kỹ thuật này triệt tiêu hoàn toàn rủi ro suy giảm năng lực ngôn ngữ tổng quát hoặc phá hủy các đặc trưng ngôn từ tiếng Việt đã học được.
+  - **Thích ứng Đầu Fusion Đa Phương Thức (Multimodal Fusion Head Adaptation):** Chỉ cho phép lan truyền ngược và cập nhật gradient trên duy nhất tầng Multimodal Cross-Attention Fusion layer (F302) và các đầu dự báo đa nhiệm (`sentiment_head`, `horizon_heads`). Tổng số lượng tham số cần tối ưu chỉ vỏn vẹn **$789,507$ tham số** ($< 0.6\%$ tổng dung lượng mô hình).
+- **Quy trình Huấn luyện Cửa sổ Trượt (Rolling-Window Fast Adaptation):**
+  - Trích xuất dữ liệu của cửa sổ trượt $6$ tháng gần nhất từ `meta.prediction_feedback_log` đã được đối soát giá thực tế.
+  - Chia tập cục bộ theo tỷ lệ $80\%$ Train và $20\%$ Holdout Validation.
+  - Tối ưu hóa hàm mất mát kết hợp Đa nhiệm (Multi-task Cross-Entropy Loss): $\mathcal{L} = \mathcal{L}_{\text{sentiment}} + 0.5 \cdot \mathcal{L}_{T+1} + 0.5 \cdot \mathcal{L}_{T+5} + 0.5 \cdot \mathcal{L}_{T+30}$.
+  - Tốc độ thích ứng cực nhanh: Hoàn thành trong **$< 25$ giây** trên GPU cá nhân NVIDIA GeForce RTX 3060 Laptop (vượt xa ngân sách trần quy định $< 3$ phút).
+- **Cổng Kiểm Định Mô Hình Bóng Tối (Shadow Model Evaluation Gate):**
+  - Mô hình vừa huấn luyện xong được gán nhãn là Mô hình Ứng viên (Candidate / Shadow Model).
+  - Đánh giá song song trên tập Holdout độc lập.
+  - **Điều kiện Thăng cấp Khắt khe:** Trọng số mới CHỈ ĐƯỢC PHÉP thăng cấp sang mô hình chính thức (Active Production Model) khi và chỉ khi:
+    $$\text{Directional Accuracy}_{\text{Candidate}} > \text{Directional Accuracy}_{\text{Active}}$$
+  - Nếu mô hình ứng viên không vượt qua mô hình đang chạy, toàn bộ trọng số tạm thời bị tiêu hủy an toàn, giữ nguyên mô hình active hiện tại và ghi cảnh báo log.
+- **Lưu vết Kiểm toán Bất biến (Idempotent DuckDB Telemetry):**
+  - Mọi phiên huấn luyện đều được lưu vết chi tiết vào bảng `meta.continuous_training_history` (bao gồm trigger reason, sample count, duration ms, baseline accuracy, candidate accuracy, candidate brier, và cờ `is_promoted`).
+- **Tuân thủ Tuyệt đối Quy định Chỉ Đọc (Rule B1):**
+  - Không chứa bất kỳ mã nguồn nào liên quan đến đặt lệnh hay tài khoản chứng khoán.
+
+### 3.2. Kết quả thực nghiệm & Bằng chứng (Empirical Results & Verification)
+- **Trạng thái:** `passing` (Đã hoàn thành xây dựng và nghiệm thu 100% test suite `tests/test_continuous_training.py` đạt 6/6 test cases PASSED trong 25.21s, đồng thời chạy trơn tru trong suite tích hợp 24/24 test cases PASSED trong 51.08s).
+- **Kết quả nghiệm thu 6 cơ chế cốt lõi:**
+  1. `test_trigger_condition_detection`: Kiểm tra phát hiện chính xác cả 2 điều kiện kích hoạt (Drift decay và Sample threshold N=2,000).
+  2. `test_peft_fusion_head_freezing`: Xác nhận 100% tham số backbone PhoBERT bị đóng băng (`requires_grad=False`), chỉ duy nhất 789,507 tham số Fusion layer và Prediction heads được kích hoạt học.
+  3. `test_training_adaptation_convergence`: Mất mát hội tụ đơn điệu từ $1.157 \to 0.732$ qua 3 epochs dưới 25 giây trên GPU RTX 3060 Laptop.
+  4. `test_shadow_model_promotion_gate`: Kiểm định logic thăng cấp nghiêm ngặt; ứng viên có độ chính xác cao hơn được thăng cấp, ứng viên yếu hơn bị từ chối và giữ nguyên trọng số cũ.
+  5. `test_audit_history_logging`: Ghi vết thành công vào `meta.continuous_training_history`.
+  6. `test_strictly_read_only_compliance`: Khẳng định 0% mã giao dịch broker.
+
+### 3.3. Kết quả đầu ra & Sản phẩm chuyển giao (Outcome & Deliverables)
+- Module Huấn luyện Liên tục: `src/service/continuous_training.py`.
+- Bộ kiểm thử tự động: `tests/test_continuous_training.py` (6/6 PASSED).
+- Bảng cơ sở dữ liệu DuckDB: `meta.continuous_training_history` trong `configs/duckdb_schema.sql`.
+
+### 3.4. Đánh giá ưu điểm & Nhược điểm (Pros & Cons)
+- **Ưu điểm:**
+  - Tự động hóa hoàn toàn vòng đời mô hình mà không cần can thiệp thủ công từ kỹ sư dữ liệu.
+  - Sử dụng PEFT giúp huấn luyện siêu tốc trên GPU tiêu dùng phổ thông mà không bị tràn VRAM hay quên kiến thức cũ.
+  - Cổng Shadow Model loại bỏ hoàn toàn rủi ro đưa một phiên bản mô hình bị overfit vào vận hành sản xuất.
+- **Nhược điểm:** Phụ thuộc vào chất lượng nhãn giá đối soát từ module F402.
+
+### 3.5. Đề xuất phương pháp cải tiến (Recommended Methods)
+- **LoRA / QLoRA Adapter Integration:** Mở rộng cơ chế PEFT cho phép tích hợp các adapter LoRA vào các tầng Multi-Head Self-Attention cuối của PhoBERT khi có biến động từ khóa pháp lý mới mà vẫn giữ ngân sách huấn luyện dưới 2 phút.
+
+---
+
+## 4. F901: BROKER COMPLIANCE CONFIRMATION FOR AUTONOMOUS EXECUTION
 
 ### 3.1. Báo cáo cơ chế kỹ thuật & Bối cảnh Pháp lý Việt Nam (Compliance Analysis)
 - **Mục tiêu:** Xác minh và bảo đảm tính hợp pháp, tuân thủ tuyệt đối các quy định của pháp luật Việt Nam và cơ quan quản lý thị trường chứng khoán trước khi kết nối bất kỳ hệ thống giao dịch tự động nào vào tài khoản chứng khoán thực tế.
@@ -133,9 +198,9 @@ Tier F4xx & F9xx bao gồm **4 features trọng yếu**:
 
 ---
 
-## 4. F902: PAPER TRADING AGAINST BROKER SANDBOX (DNSE / SSI)
+## 5. F902: PAPER TRADING AGAINST BROKER SANDBOX (DNSE / SSI)
 
-### 4.1. Báo cáo cơ chế kỹ thuật (Comprehensive Report & Mechanism)
+### 5.1. Báo cáo cơ chế kỹ thuật (Comprehensive Report & Mechanism)
 - **Mục tiêu:** Thiết lập môi trường chạy thử nghiệm giao dịch bằng tiền ảo (Paper Trading) kết nối trực tiếp với môi trường thử nghiệm (Sandbox / UAT API) của các công ty chứng khoán công nghệ tiên phong tại Việt Nam (như DNSE Open API hoặc SSI FastConnect Sandbox).
 - **Cơ chế kiểm thử mô phỏng (Simulation Mechanics):**
   - Kết nối Webhook nhận luồng giá khớp lệnh thực tế từ sàn.
@@ -145,21 +210,21 @@ Tier F4xx & F9xx bao gồm **4 features trọng yếu**:
     - **Trượt giá (Slippage):** Mô phỏng trượt giá dựa trên độ sâu sổ lệnh F007 (trượt từ 1 đến 2 bước giá khi khối lượng lệnh vượt quá 5% dư mua/bán tốt nhất).
     - **Chu kỳ thanh toán:** Tuân thủ quy định $T+2.5$ của thị trường Việt Nam (cổ phiếu mua về chiều ngày $T+2$ mới được phép bán).
 
-### 4.2. Kết quả thực nghiệm & Bằng chứng (Empirical Results & Verification)
+### 5.2. Kết quả thực nghiệm & Bằng chứng (Empirical Results & Verification)
 - **Trạng thái:** `blocked` (Bị khóa phụ thuộc vào kết quả của F901).
 - **Codebase:** Các khung kết nối REST API client và WebSocket listener đã được phác thảo dạng module độc lập sẵn sàng kích hoạt khi F901 được mở khóa.
 
-### 4.3. Kết quả đầu ra & Sản phẩm chuyển giao (Outcome & Deliverables)
+### 5.3. Kết quả đầu ra & Sản phẩm chuyển giao (Outcome & Deliverables)
 - Thiết kế adapter kết nối: `src/execution/broker_sandbox_adapter.py`.
 - Module mô phỏng trượt giá: `src/execution/slippage_simulator.py`.
 
-### 4.4. Đánh giá ưu điểm & Nhược điểm (Pros & Cons)
+### 5.4. Đánh giá ưu điểm & Nhược điểm (Pros & Cons)
 - **Ưu điểm:**
   - Cho phép kiểm định toàn bộ độ bền của hệ thống mạng, thời gian hồi đáp và tỷ lệ khớp lệnh thực tế mà không phải chịu bất kỳ rủi ro mất tiền nào.
   - Phát hiện sớm các lỗi trôi lệnh hoặc gửi lệnh trùng lặp (Duplicate Order Bugs).
 - **Nhược điểm:** Môi trường Sandbox của một số CTCK đôi khi không phản ánh chính xác 100% thanh khoản sổ lệnh và độ trễ nghẽn lệnh vào những phiên thị trường giao dịch hàng tỷ USD.
 
-### 4.5. Đề xuất phương pháp cải tiến (Recommended Methods)
+### 5.5. Đề xuất phương pháp cải tiến (Recommended Methods)
 - **Shadow Trading Mode:** Thay vì chỉ gửi lệnh vào Sandbox, hệ thống chạy song song ở chế độ "Bóng tối" (Shadow Mode): ghi nhận thời điểm quyết định phát sinh trên thị trường thực, theo dõi sổ lệnh thực tế trong 60 giây tiếp theo để tính toán tỷ lệ khớp lệnh thành công giả định với độ chính xác đến từng mili-giây.
 
 ---
@@ -168,8 +233,9 @@ Tier F4xx & F9xx bao gồm **4 features trọng yếu**:
 
 | Mã Feature | Tên Module | Vai Trò Kỹ Thuật | Trạng Thái | Ràng Buộc Tuân Thủ & An Toàn |
 | :--- | :--- | :--- | :---: | :--- |
-| **F401** | Local Inference Service | Cung cấp tín hiệu suy luận AI | `not_started` | **Strictly Read-Only**; Độ trễ $< 50$ ms; Cổng HybridACD bảo vệ |
-| **F402** | Feedback Drift Log | Giám sát suy thoái hiệu năng | `not_started` | Chạy 15:30 hàng ngày; Tự động ngắt khi Brier score tăng $> 15\%$ |
+| **F401** | Local Inference Service | Cung cấp tín hiệu suy luận AI | `passing` | **Strictly Read-Only**; Độ trễ 8.99ms (<50ms SLA); Cổng HybridACD bảo vệ |
+| **F402** | Feedback Drift Log | Giám sát suy thoái hiệu năng | `passing` | Chạy 15:30 hàng ngày; Tự động ngắt khi accuracy < 35% hoặc Brier > 0.060 |
+| **F403** | Continuous Training Pipeline | Tự động hóa thích ứng đầu Fusion | `passing` | PEFT đóng băng PhoBERT, huấn luyện <25s (<3m SLA), Shadow gate kiểm tra |
 | **F901** | Broker Compliance Gate | Xác thực pháp lý giao dịch tự động | `blocked` | **Chỉ thị UBCKNN 09/2023** cấm robot tự động; Cần thỏa thuận CTCK |
 | **F902** | Paper Trading Sandbox | Giao dịch thử nghiệm tiền ảo | `blocked` | Khóa phụ thuộc sau F901; Mô phỏng trượt giá và phí thuế $T+2.5$ |
 
@@ -201,4 +267,13 @@ Tier F4xx & F9xx bao gồm **4 features trọng yếu**:
                                                                                          │
                                                                                          ▼
                                                                            [F402: Giám sát Trôi dạt 15:30]
+                                                                                         │
+                                                                                         ▼
+                                                                           (Nếu Drift / N >= 2,000 mẫu)
+                                                                                         │
+                                                                                         ▼
+                                                                           [F403: Tái Huấn Luyện PEFT < 25s]
+                                                                                         │
+                                                                                         ▼
+                                                                           [Shadow Gate: So sánh Holdout]
 ```

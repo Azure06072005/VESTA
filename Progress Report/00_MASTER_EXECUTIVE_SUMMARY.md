@@ -58,10 +58,16 @@ flowchart TD
         M4 --> OUT["Tín Hiệu Alpha Có Bảo Chứng Toán Học (Cohen's d = 0.0852, Brier -29.5%)"]
     end
 
-    subgraph S4["TẦNG 4: SUY LUẬN THỜI GIAN THỰC & PHÁP LÝ (F4xx, F9xx)"]
+    subgraph S4["TẦNG 4: SUY LUẬN THỜI GIAN THỰC (F4xx)"]
         OUT --> P1["F401: Streaming FastAPI Inference (< 50ms, SimHash Dedup, W_source)"]
         P1 --> P2["F402: Feedback Realized Return Drift Monitor (T+5/T+30 Logging)"]
-        P2 -.-> BLK["F901/F902: Broker Compliance & Sandbox Execution (Khóa cứng UBCKNN)"]
+        P2 --> P3["F403: Automated Continuous Training (PEFT Head Adaptation < 25s)"]
+    end
+
+    subgraph S5["TẦNG 5: ĐẤU TRƯỜNG MONTE CARLO ĐA BOT & PHÁP LÝ (F5xx, F9xx)"]
+        P3 --> T1["F501: Multi-Bot Strategy Arena (10,000 Paths Block Bootstrap)"]
+        T1 --> T2["5 Bot Personas Tournament: Force-Buy, Force-Sell, Momentum, Regime-Gated, Sniper"]
+        T2 -.-> BLK["F901/F902: Broker Compliance & Sandbox Execution (Khóa cứng UBCKNN)"]
     end
 
     style BLK fill:#f96,stroke:#333,stroke-width:2px;
@@ -70,9 +76,9 @@ flowchart TD
 
 ---
 
-## 3. Bảng Điều Khiển Toàn Bộ 54 Tính Năng (Master Feature Ledger)
+## 3. Bảng Điều Khiển Toàn Bộ 56 Tính Năng (Master Feature Ledger)
 
-Dưới đây là bảng tổng hợp tình trạng nghiệm thu của toàn bộ 54 tính năng được định nghĩa trong Harness của VESTA:
+Dưới đây là bảng tổng hợp tình trạng nghiệm thu của toàn bộ 56 tính năng được định nghĩa trong Harness của VESTA:
 
 | Mã | Phân Tầng | Tên Tính Năng | Trạng Thái | Kết Quả / Bằng Chứng Thực Nghiệm Cốt Lõi | Công Nghệ / Vai Trò |
 |:---:|:---:|:---|:---:|:---|:---|
@@ -127,7 +133,9 @@ Dưới đây là bảng tổng hợp tình trạng nghiệm thu của toàn b�
 | **F303** | F3xx | Multimodal Edge Validation Backtest | `passing` | Cohen's $d$ tăng từ $0.0557 \to 0.0840$ ($+50.8\%$), đạt $0.1736$ ($3.12\times$) ở $S < 35$. | Paired Reversion Benchmark |
 | **F304** | F3xx | HybridACD Simplex-TCD Consistency Gate | `passing` | Kolmogorov error $= 0.00$; V-FAN latency $= 0.0197$ ms; Brier giảm $-29.51\%$; Cohen's $d = \mathbf{0.0852}$. | Simplex Projection, V-FAN |
 | **F401** | F4xx | Streaming FastAPI Inference Service | `passing` | Độ trễ thực tế 8.99ms (<50ms SLA), SimHash dedup 6h, phân giải cổ đông lớn, cổng HybridACD, Rào chắn an toàn F203. | FastAPI, SimHash, PhoBERT FP16 |
-| **F402** | F4xx | Feedback Drift Log for Realized Returns | `not_started` | Ghi log suy luận kèm đầu vào, tự động fill giá thực tế $T+5, T+30$ để giám sát trôi dạt. | SQLite/DuckDB Audit Log |
+| **F402** | F4xx | Feedback Drift Log for Realized Returns | `passing` | Tự động ghi vết suy luận, đối soát giá thực tế $T+1, T+5, T+30$ (theo số phiên giao dịch), giám sát Brier/Accuracy trượt, ngắt mạch `SYSTEM_DEGRADED_HALT` khi accuracy $< 35\%$. | DuckDB Feedback Log, DriftMonitor |
+| **F403** | F4xx | Continuous Training & Fusion Head Adaptation | `passing` | Kích hoạt tự động khi drift/tích lũy mẫu; PEFT đóng băng 100% backbone PhoBERT, huấn luyện tầng Cross-Attention trong <25s (<3 phút SLA), Shadow model gate kiểm soát trước khi thăng cấp. | PEFT PyTorch, Fusion Adaptation |
+| **F501** | F5xx | Multi-Bot Monte Carlo Strategy Arena | `passing` | 10.000 đường đi mô phỏng 5 bot personas qua 5 tình huống thị trường; DSR, CVaR 95%, ma trận đối đầu. | Monte Carlo, Block Bootstrap |
 | **F901** | F9xx | Broker Compliance Confirmation | `blocked` | Công văn UBCKNN 09/2023 cấm đặt lệnh robot tần suất lớn; khóa cứng tầng thực thi. | Legal & Compliance Gate |
 | **F902** | F9xx | Paper Trading Against Broker Sandbox | `blocked` | Bị khóa bởi F901; chuẩn bị stub OAuth2+PKCE cho SSI/DNSE sandbox. | Sandbox Order Router |
 
