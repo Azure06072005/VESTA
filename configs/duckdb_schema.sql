@@ -574,4 +574,77 @@ CREATE TABLE IF NOT EXISTS core.company_shareholders (
     PRIMARY KEY (symbol, shareholder_name)
 );
 
+-- F402: Feedback log for scored predictions vs realized returns and model drift monitoring
+CREATE TABLE IF NOT EXISTS meta.prediction_feedback_log (
+    prediction_id          VARCHAR PRIMARY KEY,
+    created_at             TIMESTAMP NOT NULL,
+    symbol                 VARCHAR NOT NULL,
+    headline               VARCHAR NOT NULL,
+    source                 VARCHAR,
+    source_trust_weight    DOUBLE NOT NULL,
+    raw_sentiment_score    DOUBLE NOT NULL,
+    consistent_alpha_score DOUBLE NOT NULL,
+    sentiment_class        VARCHAR NOT NULL,
+    p_star_neg             DOUBLE NOT NULL,
+    p_star_neu             DOUBLE NOT NULL,
+    p_star_pos             DOUBLE NOT NULL,
+    violation_score        DOUBLE NOT NULL,
+    is_consistent          BOOLEAN NOT NULL,
+    is_duplicate           BOOLEAN NOT NULL,
+    action_recommendation  VARCHAR NOT NULL,
+    regime_safe_to_trade   BOOLEAN NOT NULL,
+    matched_shareholder    VARCHAR,
+    
+    -- Realized Settlement Prices (back-filled by FeedbackReconciler)
+    event_date             DATE,
+    realized_price_t0      DOUBLE,
+    realized_price_t1      DOUBLE,
+    realized_price_t5      DOUBLE,
+    realized_price_t30     DOUBLE,
+    
+    -- Realized Returns: (P_t - P_0) / P_0
+    return_t1              DOUBLE,
+    return_t5              DOUBLE,
+    return_t30             DOUBLE,
+    
+    -- Metric Calibration
+    direction_hit_t5       INTEGER,
+    brier_score_t5         DOUBLE,
+    
+    is_backfilled          BOOLEAN NOT NULL DEFAULT FALSE,
+    backfilled_at          TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS meta.model_drift_telemetry (
+    run_id                         VARCHAR PRIMARY KEY,
+    audit_timestamp                TIMESTAMP NOT NULL,
+    window_size                    INTEGER NOT NULL,
+    rolling_directional_accuracy_t5 DOUBLE,
+    rolling_brier_score_t5         DOUBLE,
+    rolling_spearman_ic_t5         DOUBLE,
+    rolling_spearman_ic_t30        DOUBLE,
+    total_evaluated                INTEGER NOT NULL,
+    total_pending                  INTEGER NOT NULL,
+    circuit_breaker_status         VARCHAR NOT NULL, -- 'NORMAL' | 'WARNING' | 'SYSTEM_DEGRADED_HALT'
+    alert_message                  VARCHAR
+);
+
+-- F403: Continuous Training & Shadow Model Promotion History
+CREATE TABLE IF NOT EXISTS meta.continuous_training_history (
+    training_run_id        VARCHAR PRIMARY KEY,
+    triggered_at           TIMESTAMP NOT NULL,
+    trigger_reason         VARCHAR NOT NULL, -- 'DRIFT_ALERT' | 'SAMPLE_VOLUME' | 'MANUAL'
+    samples_count          INTEGER NOT NULL,
+    epochs                 INTEGER NOT NULL,
+    train_loss_start       DOUBLE,
+    train_loss_final       DOUBLE,
+    prev_val_accuracy      DOUBLE,
+    shadow_val_accuracy    DOUBLE,
+    prev_val_brier         DOUBLE,
+    shadow_val_brier       DOUBLE,
+    is_promoted            BOOLEAN NOT NULL,
+    checkpoint_path        VARCHAR,
+    metadata_json          VARCHAR
+);
+
 

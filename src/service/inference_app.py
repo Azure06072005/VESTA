@@ -37,6 +37,7 @@ if str(SRC_DIR) not in sys.path:
 from pipeline.f3xx_modeling.hybridacd_gate import HybridACDConsistencyGate
 from pipeline.sentiment_lexicon import score_headline as lexicon_score
 from pipeline.shareholder_entity_matcher import shareholder_registry
+from service.feedback_log import DriftMonitor, InferenceFeedbackLogger
 from service.simhash_cache import SimHashDedupCache, canonicalize_url
 
 logger = logging.getLogger("inference_app")
@@ -125,6 +126,7 @@ class HeadlineScoreResponse(BaseModel):
     action_recommendation: str  # BUY_DIP, HOLD, AVOID, IGNORE_NOISE
     regime_safe_to_trade: bool
     latency_ms: float
+    prediction_id: Optional[str] = None
 
 
 class BatchScoreRequest(BaseModel):
@@ -161,6 +163,11 @@ class LocalInferenceEngine:
         self.tokenizer: Any = None
         self.gate = HybridACDConsistencyGate(noise_threshold=0.35, discard_inconsistent=True)
         self.dedup_cache = SimHashDedupCache(ttl_seconds=21600.0, hamming_threshold=4)
+        self.feedback_logger: Optional[InferenceFeedbackLogger] = None
+        try:
+            self.feedback_logger = InferenceFeedbackLogger()
+        except Exception as err:
+            logger.warning(f"Feedback logger initialization deferred: {err}")
         self._load_model()
         self._init_shareholder_registry()
 
@@ -200,6 +207,30 @@ class LocalInferenceEngine:
         except Exception as err:
             logger.warning(f"Failed to load PyTorch model ({err}). Fallback to calibrated lexicon engine.")
             self.model = None
+
+    def _predict_raw_probabilities_batch(self, texts: List[str]) -> List[np.ndarray]:
+        """Computes raw softmax probabilities for a batch of texts in a single forward pass."""
+        if self.model is not None and self.tokenizer is not None:
+            try:
+                import torch
+                with torch.inference_mode():
+                    enc = self.tokenizer(
+                        texts,
+                        return_tensors="pt",
+                        truncation=True,
+                        max_length=128,
+                        padding=True,
+                    )
+                    input_ids = enc["input_ids"].to(self.device)
+                    attention_mask = enc["attention_mask"].to(self.device)
+                    out = self.model(input_ids=input_ids, attention_mask=attention_mask)
+                    logits = out.sentiment_logits.float()
+                    probs = torch.softmax(logits, dim=-1).cpu().numpy()
+                    return [probs[i] for i in range(len(texts))]
+            except Exception as err:
+                logger.warning(f"Batch PyTorch forward pass failed ({err}), using individual fallback.")
+
+        return [self._predict_raw_probabilities(t) for t in texts]
 
     def _predict_raw_probabilities(self, text: str) -> np.ndarray:
         """Computes raw softmax probabilities [p_neg, p_neu, p_pos] for given text."""
@@ -266,7 +297,7 @@ class LocalInferenceEngine:
         if is_dup:
             latency_ms = (time.perf_counter() - t0) * 1000.0
             dup_action = "AVOID" if not regime_safe else "IGNORE_NOISE"
-            return HeadlineScoreResponse(
+            resp = HeadlineScoreResponse(
                 symbol=resolved_sym,
                 sentiment_class="NEUTRAL",
                 raw_probabilities={"negative": 0.0, "neutral": 1.0, "positive": 0.0},
@@ -283,14 +314,20 @@ class LocalInferenceEngine:
                 regime_safe_to_trade=regime_safe,
                 latency_ms=round(latency_ms, 2),
             )
+            if self.feedback_logger is not None:
+                try:
+                    resp.prediction_id = self.feedback_logger.log_prediction(req, resp)
+                except Exception as err:
+                    logger.debug(f"Feedback log skipped on duplicate: {err}")
+            return resp
 
-        # Step 4: Neural / Calibrated Probability Inference
+        # Step 4: Neural / Calibrated Probability Inference & Consistency Gating
         full_text = f"{req.headline} {req.body[:200] if req.body else ''}".strip()
-        p_orig = self._predict_raw_probabilities(full_text)
+        negated_text = self.gate.generate_negated_headline(req.headline)
+        probs_pair = self._predict_raw_probabilities_batch([full_text, negated_text])
+        p_orig, p_neg = probs_pair[0], probs_pair[1]
 
         # Step 5: HybridACD Consistency Gating (Simplex-TCD + V-FAN)
-        negated_text = self.gate.generate_negated_headline(req.headline)
-        p_neg = self._predict_raw_probabilities(negated_text)
         gate_res = self.gate.evaluate_event(
             headline=req.headline,
             prob_orig=p_orig,
@@ -327,7 +364,7 @@ class LocalInferenceEngine:
 
         latency_ms = (time.perf_counter() - t0) * 1000.0
 
-        return HeadlineScoreResponse(
+        resp = HeadlineScoreResponse(
             symbol=resolved_sym,
             sentiment_class=sentiment_cls,
             raw_probabilities={
@@ -352,6 +389,12 @@ class LocalInferenceEngine:
             regime_safe_to_trade=regime_safe,
             latency_ms=round(latency_ms, 2),
         )
+        if self.feedback_logger is not None:
+            try:
+                resp.prediction_id = self.feedback_logger.log_prediction(req, resp)
+            except Exception as err:
+                logger.debug(f"Feedback log skipped on scored headline: {err}")
+        return resp
 
 
 # Global Engine Instance
@@ -420,3 +463,24 @@ def score_batch_endpoint(batch: BatchScoreRequest):
         batch_size=len(results),
         total_latency_ms=round(total_latency, 2),
     )
+
+
+@app.get("/api/v1/drift_status", tags=["Monitoring"])
+def get_drift_status_endpoint(window_size: int = 30):
+    """Computes real-time rolling model drift telemetry and circuit-breaker status (F402)."""
+    db_path = engine.feedback_logger.db_path if engine.feedback_logger else None
+    monitor = DriftMonitor(db_path=db_path)
+    report = monitor.compute_rolling_drift(window_size=window_size)
+    return {
+        "run_id": report.run_id,
+        "audit_timestamp": report.audit_timestamp.isoformat(),
+        "window_size": report.window_size,
+        "total_evaluated": report.total_evaluated,
+        "total_pending": report.total_pending,
+        "directional_accuracy_t5": report.directional_accuracy_t5,
+        "mean_brier_score_t5": report.mean_brier_score_t5,
+        "spearman_ic_t5": report.spearman_ic_t5,
+        "circuit_breaker_status": report.circuit_breaker_status,
+        "alert_triggered": report.alert_triggered,
+        "alert_message": report.alert_message,
+    }

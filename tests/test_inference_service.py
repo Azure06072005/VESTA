@@ -22,6 +22,7 @@ from typing import List
 
 import numpy as np
 import pytest
+import torch
 from fastapi.testclient import TestClient
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
@@ -274,6 +275,17 @@ def test_batch_scoring_endpoint(client: TestClient):
 # =============================================================================
 def test_latency_budget_under_50ms_sla(client: TestClient):
     """Benchmarks 50 unique requests to ensure streaming inference strictly respects < 50ms budget."""
+    # Warmup pass (5 requests) to prime PyTorch CUDA allocator and cuDNN kernels
+    import gc
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+    gc.collect()
+    for w in range(5):
+        client.post(
+            "/api/v1/score_headline",
+            json={"headline": f"Khởi động mô hình thị trường {w}", "symbol": "VCB"},
+        )
+
     latencies: List[float] = []
 
     for i in range(50):
