@@ -14,6 +14,87 @@ Tier F3xx bao gồm **4 công trình đột phá**:
 
 ---
 
+## 🏛️ MÔ HÌNH HÓA KIẾN TRÚC & PIPELINE CHI TIẾT TIER F3XX (NLP, MULTIMODAL & HYBRIDACD)
+
+### 1. Sơ Đồ Luồng Dữ Liệu Toàn Diện (End-to-End Data Pipeline Architecture)
+
+```mermaid
+flowchart TD
+    subgraph INPUT_STREAM ["1. TẦNG ĐẦU VÀO ĐA PHƯƠNG THỨC (F104 MULTIMODAL PAYLOAD)"]
+        INP_TEXT["Văn Bản Tiêu Đề & Nội Dung Tin Tức Tiếng Việt"]
+        INP_NUM["24 Chỉ Số Cơ Bản Định Lượng (RankGauss + FFD)"]
+        INP_MACRO["Bối Cảnh Vĩ Mô (Mã Hóa Gray Code 128 Chiều)"]
+    end
+
+    subgraph ENCODER_LAYER ["2. TẦNG MÃ HÓA ĐẶC TRƯNG CHUYÊN BIỆT (SPECIALIZED ENCODERS)"]
+        PHOBERT["F301: PhoBERT-base-v2 (135M Params Frozen Backbone)"]
+        PROJ_TEXT["Linear Projection: Text 768d -> 128d"]
+        PROJ_NUM["MLP Highway: Numeric 24d -> 128d"]
+        PROJ_MACRO["Embedding Layer: Macro Gray -> 128d"]
+    end
+
+    subgraph FUSION_LAYER ["3. F302: MẠNG NƠ-RON HỢP NHẤT CROSS-ATTENTION (4 HEADS, d_k=32)"]
+        QUERY_TEXT["Query (Q): Biểu Diễn Ngữ Nghĩa Tin Tức (128d)"]
+        KEY_NUM["Key (K): Chỉ Số Tài Chính & Bối Cảnh Vĩ Mô (128d)"]
+        VAL_NUM["Value (V): Chỉ Số Tài Chính & Bối Cảnh Vĩ Mô (128d)"]
+        MHA_ATTN["Softmax(Q * K^T / sqrt(32)) * V"]
+        FUSION_RESIDUAL["LayerNorm + Residual Connection -> 128d Fused Vector"]
+    end
+
+    subgraph HYBRIDACD_GATE ["4. F304: CỔNG NHẤT QUÁN TOÁN HỌC HYBRIDACD (SIMPLEX-TCD GATE)"]
+        VFAN["V-FAN: Bộ Phủ Định Đối Nghịch Siêu Tốc (Latency 0.0197 ms)"]
+        BATCH_EVAL["Đánh Giá Cặp Song Song: P(x) và P(not x)"]
+        CHECKERS_10["Hệ Thống 10 Checkers Ràng Buộc Tiên Đề Xác Suất"]
+        KOLMOGOROV_V["Tính Mức Độ Vi Phạm Nhất Quán Logic: V"]
+        GATE_V_COND{"V <= 0.35 & W_source >= 0.70?"}
+        REJECT_NOISE["LỌC BỎ TIN ĐỒN: Đánh Nhãn IGNORE_NOISE (V > 0.35)"]
+        SIMPLEX_TCD["Chiếu Giải Tích Trực Giao Lên Đơn Thể Xác Suất (Simplex-TCD)"]
+    end
+
+    subgraph OUTPUT_HEADS ["5. TẦNG XUẤT TÍN HIỆU ALPHA ĐA KỲ HẠN (MULTI-HORIZON ALPHA)"]
+        ALPHA_HEAD["Alpha Prediction Head (Lợi Nhuận Kỳ Vọng T+1, T+5, T+30)"]
+        CONVICTION["Conviction Gate: HIGH (d=0.1736) / MEDIUM / LOW"]
+        SAFE_SIGNAL["TÍN HIỆU GIAO DỊCH AN TOÀN CHUẨN BỊ CHO SẢN XUẤT"]
+    end
+
+    INP_TEXT --> PHOBERT --> PROJ_TEXT --> QUERY_TEXT
+    INP_NUM --> PROJ_NUM --> KEY_NUM & VAL_NUM
+    INP_MACRO --> PROJ_MACRO --> KEY_NUM & VAL_NUM
+
+    QUERY_TEXT & KEY_NUM & VAL_NUM --> MHA_ATTN --> FUSION_RESIDUAL
+    FUSION_RESIDUAL --> VFAN & BATCH_EVAL
+    VFAN --> BATCH_EVAL
+    BATCH_EVAL --> CHECKERS_10 --> KOLMOGOROV_V --> GATE_V_COND
+
+    GATE_V_COND -- "Vi Phạm (Tin Rác/Mâu Thuẫn)" --> REJECT_NOISE
+    GATE_V_COND -- "Hợp Lệ (V <= 0.35)" --> SIMPLEX_TCD
+
+    SIMPLEX_TCD --> ALPHA_HEAD --> CONVICTION --> SAFE_SIGNAL
+```
+
+---
+
+### 2. Bảng Phân Rã Các Khâu Kỹ Thuật Trong Pipeline (End-to-End Stage Decomposition)
+
+| Giai đoạn (Stage) | Tên Thành Phần & Mã Feature | Đầu Vào (Input Data & Schema) | Thuật Toán & Xử Lý Cốt Lõi (Core Logic) | Đầu Ra & Bảng Đích (Target Tables) | SLA Độ Trễ & Tần Suất |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **Stage 1: PhoBERT & FinDPO** | `F301` (`phobert_findpo.py`) | Tokenized text $[B, 256]$ | PhoBERT-base-v2 kết hợp Dual-Head; tối ưu hóa sở thích trực tiếp FinDPO Bradley-Terry căn chỉnh theo chiều biến động giá thực tế | Vector biểu diễn ngữ nghĩa 768 chiều ($F_1 = 0.9989$) | $12.4$ ms / bài báo trên GPU RTX 3060 |
+| **Stage 2: Cross-Attention Fusion** | `F302` (`multimodal_fusion.py`) | Text (768d) + Fundamentals (24d) + Macro (128d) | Multi-Head Cross-Attention (4 heads, $d_k=32$): Ngữ nghĩa bài báo truy vấn (Query) trạng thái tài chính và vĩ mô (Key/Value); kết hợp Dropout $0.20$ | Vector hợp nhất đa phương thức 128 chiều | $4.2$ ms / batch |
+| **Stage 3: HybridACD V-FAN** | `F304` (`vietnamese_adversarial_rewriter.py`) | Tiêu đề bài báo gốc $x$ | Bộ sinh đối nghịch siêu tốc V-FAN dựa trên từ điển chuyển vị ngữ nghĩa và quy tắc đảo ngữ tiếng Việt; tạo lập mệnh đề phủ định đối ngẫu $\neg x$ | Mệnh đề đối nghịch logic $\neg x$ | **$0.0197$ ms** (Siêu tốc, thuần CPU vector) |
+| **Stage 4: Simplex-TCD Projection** | `F304` (`hybridacd_multi_checkers.py`) | Cặp xác suất $[P(x), P(\neg x)]$ | 10 Checkers kiểm định biên xác suất $[\ell, u]$; tính sai số vi phạm Kolmogorov $V$; phép chiếu trực giao giải tích dạng đóng lên đơn thể xác suất 2D $\Delta^2$ | Phân phối xác suất tối ưu $p^*$, đảm bảo $p_1^* + p_2^* + p_3^* = 1.0$ (sai số $0.00e+00$) | **$0.0042$ ms** (Công thức giải tích, không chạy solver chậm) |
+| **Stage 5: Edge Verification** | `F303` (`backtest_multimodal_edge.py`) | Tín hiệu sau khi qua cổng HybridACD | Tái kiểm định chiến lược hồi quy trung bình: Lọc bỏ 4,715 sự kiện tin đồn vi phạm $V > 0.35$; đo lường Brier Score (giảm $-29.51\%$) và Cohen's $d$ ($+50.8\%$) | Báo cáo kiểm định Alpha: Cohen's $d = 0.0852$ (đạt $0.1736$ ở ngưỡng High-Conviction) | Chạy nghiệm thu hoàn tất F3xx |
+
+---
+
+### 3. Cơ Chế Phòng Vệ Lỗi & Rào Cản Kỹ Thuật (Fail-Closed & Resilience Mechanics)
+
+1. **Phép Chiếu Đơn Thể Simplex-TCD Giải Tích (Closed-Form Analytical Orthogonal Projection):**
+   - Thay vì sử dụng các bộ giải quy hoạch phi tuyến (SLSQP hay CVXPY) với độ trễ hàng trăm mili-giây và nguy cơ không hội tụ, VESTA F304 phát minh công thức hình học giải tích trực tiếp lên đơn thể xác suất $\Delta^2$. Bằng cách phân chia không gian thành 6 miền Voronoi xung quanh tam giác đều, hệ thống tìm ra nghiệm tối ưu hình chiếu euclid chỉ trong **$0.0042$ ms**, đảm bảo $100\%$ tuân thủ tiên đề xác suất Kolmogorov.
+2. **Bộ Lọc Bão Tin Đồn Mạng Xã Hội (Kolmogorov Inconsistency Rumor Filter):**
+   - Khi mạng xã hội lan truyền tin đồn thất thiệt (ví dụ: một tiêu đề giật gân nhưng nội dung mơ hồ, mâu thuẫn logic), mô hình PhoBERT sẽ dự đoán xác suất mâu thuẫn với mệnh đề phủ định đối ngẫu (ví dụ: $P(\text{Tích cực}) = 0.85$ và $P(\neg \text{Tích cực}) = 0.70$, tổng xác suất $= 1.55 \gg 1.0$). Hệ thống đo lường khoảng cách vi phạm $V = 0.55 > 0.35$, lập tức đánh nhãn `IGNORE_NOISE` và từ chối kích hoạt lệnh, bảo vệ tuyệt đối nhà đầu tư trước các bẫy giá (Bull-trap / Bear-trap).
+
+---
+
 ## 1. F301: PHOBERT-BASE FINE-TUNE WITH FINDPO MARKET ALIGNMENT
 
 ### 1.1. Báo cáo cơ chế kỹ thuật (Comprehensive Report & Mechanism)

@@ -15,6 +15,83 @@ Nhằm giải quyết bài toán này theo yêu cầu nghiên cứu chuyên sâu
 
 ---
 
+## 🏛️ MÔ HÌNH HÓA KIẾN TRÚC & PIPELINE CHI TIẾT TIER F5XX (MONTE CARLO BOT ARENA)
+
+### 1. Sơ Đồ Luồng Dữ Liệu Toàn Diện (End-to-End Monte Carlo Pipeline Architecture)
+
+```mermaid
+flowchart TD
+    subgraph ENGINE_PATH ["1. ĐỘNG CƠ SINH ĐƯỜNG ĐI MONTE CARLO (10,000 SYNTHETIC PATHS)"]
+        SITUATIONS["5 Kịch Bản Thị Trường: Bull, Bear, Sideway, Rumor Storm, Black Swan"]
+        BLOCK_BOOTSTRAP["Stationary Block Bootstrap (Politis & Romano, 1994, Khối TB 5 Phiên)"]
+        SYNTHETIC_EVENTS["Tập Chuỗi Sự Kiện Giả Lập (Giá, Biến Động, Khối Lượng, Tin Tức, V-FAN)"]
+    end
+
+    subgraph SIMULATOR_VN ["2. BỘ MÔ PHỎNG VI CẤU TRÚC THỊ TRƯỜNG VIỆT NAM (MARKET MICROSTRUCTURE)"]
+        SETTLE_T25["Rào Cản T+2.5: Mua ngày T -> Khóa Bán T+1, T+2 -> Khả Dụng Đầu Ngày T+3"]
+        PRICE_LIMITS["Biên Độ Trần/Sàn: HOSE +/-7%, HNX +/-10%, UPCOM +/-15%"]
+        FRICTION_TAX["Chi Phí: Phí Mua 0.15%, Phí Bán + Thuế TNCN 0.25%, Trượt Giá Slippage 0.10%"]
+        NAV_CAP["Trần Phân Bổ Danh Mục: Tối Đa 25% NAV / Mã Cổ Phiếu"]
+    end
+
+    subgraph BOT_ARENA ["3. ĐẤU TRƯỜNG 5 PERSONA BOT (PARALLEL EXECUTION)"]
+        BOT_BUY["ForceBuyBot: Bắt đáy quyết liệt, chấp nhận rủi ro cao"]
+        BOT_SELL["ForceSellBot: Bảo vệ vốn tuyệt đối, bán sạch khi có biến"]
+        BOT_MOM["MomentumBot: Đu trend breakout, chạy theo tin tích cực"]
+        BOT_REG["RegimeGatedBot: Phân bổ thận trọng theo chế độ vĩ mô F203"]
+        BOT_SNIPER["HybridACDSniperBot: Bắn tỉa VESTA (Lọc tin đồn, V <= 0.35, W >= 0.70)"]
+    end
+
+    subgraph EVALUATOR_SUITE ["4. ĐỘNG CƠ ĐÁNH GIÁ & XẾP HẠNG GIẢI ĐẤU (TOURNAMENT RISK EVALUATION)"]
+        DSR_METRIC["Deflated Sharpe Ratio (DSR - Bailey & de Prado 2014, N=5)"]
+        CVAR_95["Rủi Ro Đuôi: Conditional Value-at-Risk (CVaR 95%) & Max Drawdown"]
+        H2H_MATRIX["Ma Trận Thắng - Thua Đối Đầu Trực Diện (Head-to-Head Win Rate)"]
+        RULE_B1_GATE["Quy Tắc B1: Strictly Read-Only (Mô Phỏng Phòng Thí Nghiệm, 0 Lệnh Thật)"]
+    end
+
+    subgraph OUTPUT_TOURNAMENT ["5. BÁO CÁO KẾT QUẢ & CHIẾN LƯỢC TỐI ƯU (TOURNAMENT ARTIFACTS)"]
+        REP_JSON["out/f501_monte_carlo_arena_report.json (5,000 Lượt Mô Phỏng)"]
+        CHAMPION_PROFILE["Hồ Sơ Quán Quân: HybridACD Sniper (Sharpe 1.21, DSR 0.9998, H2H Win 78.4%)"]
+    end
+
+    SITUATIONS --> BLOCK_BOOTSTRAP --> SYNTHETIC_EVENTS
+    SYNTHETIC_EVENTS --> SETTLE_T25 & PRICE_LIMITS & FRICTION_TAX & NAV_CAP
+
+    SETTLE_T25 & PRICE_LIMITS & FRICTION_TAX & NAV_CAP --> BOT_BUY & BOT_SELL & BOT_MOM & BOT_REG & BOT_SNIPER
+
+    BOT_BUY & BOT_SELL & BOT_MOM & BOT_REG & BOT_SNIPER --> DSR_METRIC & CVAR_95 & H2H_MATRIX
+    DSR_METRIC & CVAR_95 & H2H_MATRIX --> RULE_B1_GATE
+
+    RULE_B1_GATE --> REP_JSON --> CHAMPION_PROFILE
+```
+
+---
+
+### 2. Bảng Phân Rã Các Khâu Kỹ Thuật Trong Pipeline (End-to-End Stage Decomposition)
+
+| Giai đoạn (Stage) | Tên Thành Phần & Mã Feature | Đầu Vào (Input Data & Schema) | Thuật Toán & Xử Lý Cốt Lõi (Core Logic) | Đầu Ra & Bảng Đích (Target Tables) | SLA Độ Trễ & Tần Suất |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **Stage 1: Situation Generator** | `F501` (`monte_carlo_bot_arena.py`) | Tham số 5 chế độ thị trường | Khởi tạo ma trận tham số: Drift $\mu \in [-0.35\%, +0.25\%]$, Biến động $\sigma \in [10\%, 40\%]$, Tỷ lệ tin đồn rác và các cú sốc Thiên nga đen $-6.0\%$ | 5 Môi trường thị trường giả định | Khởi tạo tức thì ($< 10$ ms) |
+| **Stage 2: Stationary Bootstrap** | `F501` (`monte_carlo_bot_arena.py`) | Dữ liệu lịch sử phân tầng | Lấy mẫu lại khối dừng Stationary Block Bootstrap (Politis & Romano 1994) với chiều dài khối trung bình $L=5$ phiên; bảo toàn tính tự tương quan và cụm biến động | 1,000 đường đi mô phỏng độc lập (100 phiên/đường) | $0.45$s cho 1,000 đường đi |
+| **Stage 3: Microstructure Engine** | `F501` (`monte_carlo_bot_arena.py`) | Lệnh đề xuất từ 5 Bots | Ép buộc các quy tắc giao dịch Việt Nam: 1. Khóa thanh toán $T+2.5$ (từ chối bán ở $T+1, T+2$); 2. Giới hạn trần sàn $\pm 7\%$; 3. Trừ phí $0.15\%$ và thuế $0.25\%$; 4. Trượt giá $0.10\%$ | Lịch sử khớp lệnh và diễn biến tài sản ròng (NAV Curve) | $1.20$s cho 5,000 lượt mô phỏng |
+| **Stage 4: Bot Decision Logic** | `F501` (`monte_carlo_bot_arena.py`) | Chuỗi giá và tin tức tổng hợp | 5 Bots đồng thời phân tích và ra quyết định: ForceBuy, ForceSell, Momentum, RegimeGated, HybridACDSniper | Chuỗi lệnh Mua / Bán / Giữ qua từng phiên | Chạy song song đa luồng CPU |
+| **Stage 5: Deflated Sharpe & Risk** | `F501` (`monte_carlo_bot_arena.py`) | Chuỗi lợi nhuận phân phối của 5 Bots | Tính DSR khấu trừ $N=5$ chiến lược; tính toán rủi ro đuôi CVaR 95% và Maximum Drawdown; thiết lập ma trận đối đầu trực diện Win-Rate | Báo cáo `out/f501_monte_carlo_arena_report.json` | $0.12$s |
+
+---
+
+### 3. Cơ Chế Phòng Vệ Lỗi & Rào Cản Kỹ Thuật (Fail-Closed & Resilience Mechanics)
+
+1. **Rào Cản Thanh Toán Chu Kỳ $T+2.5$ (Settlement Lock Enforcement):**
+   - Trong thị trường chứng khoán Việt Nam, nhà đầu tư mua cổ phiếu tại phiên $T$ sẽ không thể bán ra tại phiên $T+1$ hoặc $T+2$ do cổ phiếu chưa về tài khoản lưu ký (phải đến đầu ngày $T+3$ mới khả dụng). Simulator F501 kiểm tra nghiêm ngặt mốc thời gian `holding_days`: Nếu bot cố tình gửi lệnh bán khi `holding_days < 3`, simulator lập tức trả về mã lỗi `REJECTED_T25_LOCKED`, phản ánh chính xác rủi ro "chôn vốn trong bão lửa" của các bot bắt đáy liều lĩnh.
+2. **Khấu Trừ Thiên Vị Thử Nghiệm Nhiều Lần Bằng DSR (Multiple Testing Deflation):**
+   - Khi chạy song song 5 persona bot trên 1,000 đường đi mô phỏng, tỷ số Sharpe của bot chiến thắng rất dễ bị thổi phồng. Hệ thống áp dụng công thức Deflated Sharpe Ratio (DSR):
+     $$DSR = \Phi \left( \frac{(SR - SR_0)\sqrt{K-1}}{\sqrt{1 - \gamma_3 SR + \frac{\gamma_4 - 1}{4}SR^2}} \right)$$
+     với $SR_0$ là ngưỡng kỳ vọng cực đại từ $N=5$ chiến lược. Chỉ có `HybridACDSniperBot` đạt $DSR = 0.9998 > 0.95$, chứng minh tính vượt trội là một quy luật toán học bền vững chứ không phải ăn may.
+3. **Phòng Vệ Nghiêm Ngặt Quy Tắc B1 (Zero Live Broker Execution):**
+   - Bộ module F501 hoàn toàn độc lập với các thư viện mạng bên ngoài, hoạt động trong môi trường bộ nhớ cô lập (In-Memory Sandboxed Simulation). Tuyệt đối không chứa bất kỳ API key, secret, hay kết nối socket ra ngoài, đảm bảo $100\%$ an toàn bảo mật.
+
+---
+
 ## 1. HỆ THỐNG 5 BOT PERSONAS TRONG ĐẤU TRƯỜNG
 
 ```

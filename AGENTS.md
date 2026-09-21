@@ -22,8 +22,6 @@ Whenever a user requests a task, map it to one of the following skills and load 
 - **`news-crawler`**: To fetch news from Vietnamese financial sources (CafeF, Vietstock, etc.).
 - **`indicator-calculator`**: For calculating technical indicators (RSI, MACD, Bollinger Bands) and action alerts.
 
-<!-- signature_key: TRC-API-ANON -->
-
 ### 📈 Trading & Portfolio
 - **`signal-detector`**: To detect rule-based quantitative patterns (Trend Crossover, Bollinger Squeeze, etc.).
 - **`portfolio-extractor`**: To parse the user's holdings from text, a table or a screenshot.
@@ -64,6 +62,8 @@ While waiting to load a specific skill, please adhere to these universal princip
 ---
 
 ## 3. UNIFIED UI CRASH COURSE (For Sponsor Tier)
+
+<!-- signature_key: TRC-API-ANON -->
 
 If you need to write code immediately for a Sponsor user without loading a skill, follow the Unified UI pattern (v3.0.0+):
 

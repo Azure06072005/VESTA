@@ -74,6 +74,18 @@ flowchart TD
     style OUT fill:#9f9,stroke:#333,stroke-width:2px;
 ```
 
+### 2.1. Ma Trận Hợp Đồng Dữ Liệu & Liên Kết Pipeline Giữa Các Phân Tầng (Cross-Tier Pipeline Contracts)
+
+| Chặng Kết Nối (Pipeline Stage Bridge) | Tầng Cung Cấp (Upstream Provider) | Tầng Tiêu Thụ (Downstream Consumer) | Hợp Đồng Dữ Liệu & Định Dạng (Data Contract / Artifacts) | Cơ Chế Kiểm Định & Rào Chắn An Toàn (Validation & Safety Guardrails) |
+| :--- | :--- | :--- | :--- | :--- |
+| **Bridge 1: Raw Ingestion $\to$ Clean Storage** | Tier F0xx & Tier F05x (38 Crawlers) | DuckDB Core Schema | Bảng `core.*` (OHLCV, BCTC, Tin tức, Vĩ mô, Khối ngoại, Báo cáo CTCK) | Phân tách Staging $\to$ Core qua `promote.py`; Khóa composite PK; Zero missing bars |
+| **Bridge 2: Clean Storage $\to$ PIT Dataset** | Tier F0xx & Tier F05x | Tier F1xx (Integrity & PIT) | Bảng `core.pit_events` & `data/train_matrix.parquet` (384,431 mẫu) | Cổng F101 kiểm định 7 tiêu chí; F102 As-Reported Lag triệt tiêu Look-ahead; F103 11 kỹ thuật |
+| **Bridge 3: PIT Dataset $\to$ Scientific Gates** | Tier F1xx | Tier F2xx (Hypothesis Gates) | Tập mẫu 15,081 sự kiện tin xấu và ma trận lợi nhuận forward ($T+5, T+30$) | Paired t-test ($t=6.84$), Cluster-Robust SE ($t=4.12$), DSR ($> 0.95$), 2D Regime Grid (VNINDEX < MA200 $\to$ AVOID) |
+| **Bridge 4: Validated Signal $\to$ Deep Learning** | Tier F2xx | Tier F3xx (NLP & Multimodal) | Vector 128 chiều hợp nhất & Cặp văn bản gốc/đối nghịch V-FAN | PhoBERT Dual-Head + FinDPO; Cross-Attention; Cổng Simplex-TCD (Kolmogorov $V \le 0.35$) |
+| **Bridge 5: Deep Models $\to$ Production Serving** | Tier F3xx | Tier F4xx (Serving & Drift) | Trọng số PyTorch Checkpoint & Matrix chiếu đơn thể giải tích | FastAPI REST streaming ($P95 < 20.1$ ms); SimHash 64-bit; Drift Monitor (PSI $> 0.25$); PEFT Retraining ($< 25$s) |
+| **Bridge 6: Live Strategy $\to$ Monte Carlo Arena** | Tier F4xx | Tier F5xx (Bot Arena) | Tín hiệu khuyến nghị động (Action, Alpha, Conviction) | 10,000 đường đi Stationary Block Bootstrap; Vi cấu trúc T+2.5; DSR ($N=5$); Khảo sát rủi ro đuôi CVaR 95% |
+| **Bridge 7: Strategy Alpha $\to$ Broker Compliance** | Tier F5xx & Tier F4xx | Tier F9xx (Execution Rail) | Khuyến nghị giải ngân phân bổ NAV | **Khóa cứng Quy tắc B1:** Nghiêm cấm kết nối API tiền thật; bắt buộc qua DNSE/SSI Paper Trading Sandbox |
+
 ---
 
 ## 3. Bảng Điều Khiển Toàn Bộ 56 Tính Năng (Master Feature Ledger)

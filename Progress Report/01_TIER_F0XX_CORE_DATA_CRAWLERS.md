@@ -22,6 +22,107 @@
 
 ---
 
+## 🏛️ MÔ HÌNH HÓA KIẾN TRÚC & PIPELINE CHI TIẾT TIER F0XX (CORE DATA CRAWLERS)
+
+### 1. Sơ Đồ Luồng Dữ Liệu Toàn Diện (End-to-End Data Pipeline Architecture)
+
+```mermaid
+flowchart TD
+    subgraph SOURCELAYER ["1. TẦNG NGUỒN DỮ LIỆU NGOẠI VI (EXTERNAL DATA SOURCES)"]
+        SRC_VNSTOCK["vnstock Unified API (v3.x / vnstock_data)"]
+        SRC_CAFEF_API["CafeF REST API (CenterId 1,2,8,9 JSON)"]
+        SRC_CAFEF_WEB["CafeF Web Portal (HTML Articles / Editorial)"]
+    end
+
+    subgraph CRAWLERLAYER ["2. TẦNG THU THẬP & ĐIỀU PHỐI (CRAWLER & ORCHESTRATION ENGINE)"]
+        F001["F001/F001b: Reference Master Crawler (dim_symbol)"]
+        F002["F002: Market OHLCV Daily Crawler"]
+        F003["F003: vnstock News Crawler"]
+        F004["F004/F004b/F004c: CafeF News & Body Enrichment Engine"]
+        F004d["F004d: Sector Taxonomy & Symbol Matcher"]
+        F005["F005: Fundamental Financial Suite (5 Statements)"]
+        F006["F006: Corporate Events Crawler"]
+        F007["F007/F007b: Market Snapshot & Retention Policy"]
+    end
+
+    subgraph STAGINGLAYER ["3. TẦNG LƯU TRỮ TẠM & THEO DÕI (DUCKDB STAGING & METADATA)"]
+        STG_OHLCV["staging.market_ohlcv (Raw JSON Payload)"]
+        STG_NEWS["staging.news / staging.cafef_articles"]
+        STG_FUND["staging.fundamentals (Balance/Income/Cashflow)"]
+        META_PROG["meta.crawl_progress (Job Status, Retries, Latency)"]
+    end
+
+    subgraph ETLRECON ["4. TẦNG CHUẨN HÓA, XÁC THỰC & ĐỐI SOÁT (ETL & RECONCILIATION)"]
+        F008["F008: Retry & Reconciliation Worker (Backoff 2^n)"]
+        PROMOTE["src/etl/promote.py (Upsert & PK Deduplication)"]
+        MATCH_TAX["Taxonomy Normalization & Regex Entity Linking"]
+        F009["F009: Checkpoint Audit Gate (Zero Missing Bars / No Orphans)"]
+    end
+
+    subgraph CORELAYER ["5. KHO DỮ LIỆU CHUẨN ĐỊNH LƯỢNG (CORE FEATURE MART)"]
+        CORE_SYM["core.dim_symbol (3,446 Symbols Master)"]
+        CORE_OHLCV["core.market_ohlcv_daily (2.85M Bars)"]
+        CORE_NEWS["core.news_articles (658K Clean Events)"]
+        CORE_FUND["core.fundamentals_ratios (Clean Quarters)"]
+        CORE_EVENTS["core.corporate_events (Ex-dividend/Splits)"]
+    end
+
+    SRC_VNSTOCK --> F001 & F002 & F003 & F005 & F006 & F007
+    SRC_CAFEF_API --> F001b & F004
+    SRC_CAFEF_WEB --> F004b & F004c
+
+    F001 --> CORE_SYM
+    F002 --> STG_OHLCV
+    F003 & F004 & F004b & F004c --> STG_NEWS
+    F005 --> STG_FUND
+    F006 --> CORE_EVENTS
+    
+    F001 & F002 & F003 & F004 & F005 --> META_PROG
+    META_PROG -.-> F008
+    F008 -.-> F002 & F004 & F005
+
+    STG_NEWS --> MATCH_TAX
+    F004d --> MATCH_TAX
+    MATCH_TAX --> PROMOTE
+
+    STG_OHLCV --> PROMOTE
+    STG_FUND --> PROMOTE
+
+    PROMOTE --> CORE_OHLCV
+    PROMOTE --> CORE_NEWS
+    PROMOTE --> CORE_FUND
+
+    CORE_SYM & CORE_OHLCV & CORE_NEWS & CORE_FUND & CORE_EVENTS --> F009
+```
+
+---
+
+### 2. Bảng Phân Rã Các Khâu Kỹ Thuật Trong Pipeline (End-to-End Stage Decomposition)
+
+| Giai đoạn (Stage) | Tên Thành Phần & Mã Feature | Đầu Vào (Input Data & Schema) | Thuật Toán & Xử Lý Cốt Lõi (Core Logic) | Đầu Ra & Bảng Đích (Target Tables) | SLA Độ Trễ & Tần Suất |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **Stage 1: Master Reference** | `F001`, `F001b` (`dim_symbol`) | API `Reference.equity.list()` & JSON danh bạ CafeF (3,016 records) | Ánh xạ `CenterId` (1: HOSE, 2: HNX, 8: OTC, 9: UPCOM); chuẩn hóa mã ICB ngành; khử trùng mã hủy niêm yết | `core.dim_symbol`, `core.dim_symbol_cafef` (3,446 mã sạch) | Chạy đầu kỳ (Weekly EOD / Setup) |
+| **Stage 2: Price Ingestion** | `F002` (`market_ohlcv_daily`) | REST API OHLCV vnstock từ 2000-nay | Tách lô (Batching 50 symbols/chunk), nạp staging, kiểm tra $Low \le Open, Close \le High$, upsert theo `(symbol, time)` | `staging.market_ohlcv` $\to$ `core.market_ohlcv_daily` (2.85M nến) | 15:15 hàng ngày (EOD), $< 5$ phút toàn thị trường |
+| **Stage 3: Multi-Source News** | `F003`, `F004`, `F004b`, `F004c` | RSS Feeds, CafeF Category API, HTML Scraper BeautifulSoup4 | Lấy URL bài viết, crawl nội dung body đầy đủ, bóc tách thẻ tác giả, loại bỏ quảng cáo/boilerplate HTML | `staging.news`, `core.cafef_articles` (658K bài báo) | Streaming 15 phút/lần phiên sáng & EOD |
+| **Stage 4: Taxonomy Matching** | `F004d` (`taxonomy_engine`) | Tiêu đề + Body bài báo + Danh mục ngành ICB | Ánh xạ thực thể bằng Regex ngữ nghĩa và Dictionary ngành; gắn trọng số liên kết mã cổ phiếu ($W \in [0.1, 1.0]$) | `core.news_symbol_mapping` | Tự động sau mỗi lô cào tin tức |
+| **Stage 5: Fundamentals Suite** | `F005` (5 BCTC: CĐKT, KQKD, LCTT, Chỉ số, Sức khỏe) | `Fundamental.equity(symbol)` 5 bảng BCTC quý | Chuẩn hóa bảng mã tài khoản kế toán VAS, xử lý dữ liệu âm/dương trong ngoặc đơn, tính toán 18 chỉ số tài chính quý | `staging.fundamentals_*` $\to$ `core.fundamentals_ratios` | Hàng quý khi có báo cáo tài chính (Q1-Q4) |
+| **Stage 6: Reconciliation & Audit** | `F008`, `F009` (`retry_failed_jobs`) | Bảng `meta.crawl_progress` (Job failed, HTTP 429/500/timeout) | Exponential Backoff $t = 2^k \times 1.5s$; kiểm toán toàn vẹn không sót phiên (Zero missing bars), không khóa ngoại mồ côi | Báo cáo kiểm toán F0xx Checkpoint Audit Passed | Tự động quét lúc 17:00 hàng ngày |
+
+---
+
+### 3. Cơ Chế Phòng Vệ Lỗi & Rào Cản Kỹ Thuật (Fail-Closed & Resilience Mechanics)
+
+1. **Phân Tách 3 Tầng Dữ Liệu Độc Lập (Staging - Core - Meta Isolation):**
+   - Không bao giờ ghi trực tiếp dữ liệu thô từ mạng vào bảng `core.*`. Mọi payload bắt buộc phải qua `staging.*` và chạy qua hàm `src/etl/promote.py` với ràng buộc kiểm tra schema, deduplication và kiểm tra kiểu dữ liệu nghiêm ngặt.
+2. **Quản Lý Concurrency & Khóa File Trên Windows (DuckDB Concurrency Gate):**
+   - DuckDB trên hệ điều hành Windows áp dụng cơ chế khóa tệp độc quyền (`EXCLUSIVE_LOCK`). Để giải quyết xung đột giữa tiến trình cào dữ liệu (Ghi) và tiến trình phân tích mô hình (Đọc), hệ thống áp dụng cơ chế tách luồng:
+     * Cào dữ liệu ghi vào tệp cơ sở dữ liệu đệm (`vesta_staging.duckdb`).
+     * Khi hoàn thành phiên giao dịch, mở giao dịch nguyên tử (`BEGIN TRANSACTION ... ATTACH ... COPY ... COMMIT`) đồng bộ vào `db/vesta.duckdb`.
+3. **Cơ Chế Bù Lỗi Tự Động Với Exponential Backoff (F008):**
+   - Bảng `meta.crawl_progress` ghi nhận toàn bộ mã trạng thái HTTP. Đối với các lỗi gián đoạn tạm thời (HTTP 429 Too Many Requests, HTTP 502 Bad Gateway), worker áp dụng cơ chế lùi số mũ $t_k = \min(60, 1.5 \times 2^k)$, tối đa 5 lần thử lại trước khi đưa vào hàng đợi cảnh báo Dead-Letter.
+
+---
+
 ### F000: Environment & Schema Bootstrap
 
 #### 1. Báo cáo Chi Tiết

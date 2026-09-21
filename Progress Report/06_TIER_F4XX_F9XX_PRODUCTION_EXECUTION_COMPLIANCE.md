@@ -17,6 +17,92 @@ Tier F4xx & F9xx bao gồm **5 features trọng yếu**:
 
 ---
 
+## 🏛️ MÔ HÌNH HÓA KIẾN TRÚC & PIPELINE CHI TIẾT TIER F4XX & F9XX (PRODUCTION SERVING, DRIFT & COMPLIANCE)
+
+### 1. Sơ Đồ Luồng Dữ Liệu Toàn Diện (End-to-End Production & Compliance Architecture)
+
+```mermaid
+flowchart TD
+    subgraph REALTIME_INFERENCE ["1. F401: DỊCH VỤ SUY LUẬN TRỰC TUYẾN THỜI GIAN THỰC (FASTAPI SLA < 50ms)"]
+        STREAM_IN["Client Request: POST /api/v1/score {headline, symbol, published_at}"]
+        SIMHASH_64["SimHash 64-bit Dedup Cache (Hamming <= 3 -> IGNORE_NOISE in 0.1ms)"]
+        SH_RESOLVER["Shareholder Entity Resolution (core.company_shareholders)"]
+        BATCH_PHOBERT["Batched Dual Forward Pass: [Original, V-FAN Negated] (18ms)"]
+        SIMPLEX_TCD_GATE["Simplex-TCD Orthogonal Projection (Kolmogorov V <= 0.35)"]
+        W_SOURCE_GATE["Trọng Số Nguồn Tin: W_source * Alpha Score (0.1ms)"]
+        REGIME_FAIL_CLOSED{"F203 Regime Gate: VNINDEX < MA200?"}
+        ACTION_AVOID["Cưỡng Chế Ngắt Lệnh: action = AVOID (Fail-Closed)"]
+        STREAM_RESP["JSON Response: {action, alpha_score, confidence, v_inconsistency}"]
+    end
+
+    subgraph TELEMETRY_FEEDBACK ["2. F402: THEO DÕI TRÔI DẠT & ĐỐI SOÁT EOD (EOD RECONCILIATION & DRIFT)"]
+        LOG_PRED["meta.prediction_feedback_log (Ghi nhận dự đoán thời gian thực)"]
+        EOD_CRON["15:30 EOD Worker: Khớp Lợi Nhuận Thực Tế T+1, T+5, T+30"]
+        DRIFT_METRICS["Tính Toán Chỉ Số Trôi Dạt: PSI, CSI, Rank-IC, Brier Score"]
+        CIRCUIT_BREAKER{"Phát Hiện Trôi Dạt? (PSI > 0.25 OR Rank-IC < 0.02)"}
+        ALERT_DEGRADE["Kích Hoạt Cảnh Báo Suy Thoái & Bật Cờ Cần Tái Huấn Luyện"]
+    end
+
+    subgraph CONTINUOUS_TRAINING ["3. F403: TỰ ĐỘNG TÁI HUẤN LUYỆN PEFT (CONTINUOUS ADAPTATION PIPELINE)"]
+        RETRAIN_TRIGGER["Trigger: Circuit Breaker Bật HOẶC Đủ 1,000 Mẫu Mới"]
+        PEFT_ISOLATION["PEFT Parameter Isolation: Đóng Băng 100% PhoBERT (135M Params)"]
+        TRAIN_FUSION["Huấn Luyện Nhanh Fusion Head & Output Heads (789K Params, < 25s)"]
+        SHADOW_GATE{"Shadow Gate: Val Loss Model Mới <= Production Model?"}
+        PROMOTE_PROD["PROMOTION: Thăng Hạng Làm Model Sản Xuất Mới"]
+        REJECT_MODEL["REJECT: Giữ Nguyên Model Cũ & Báo Cáo Kỹ Sư"]
+        AUDIT_DB["meta.continuous_training_history (Ghi Nhật Ký Kiểm Toán DuckDB)"]
+    end
+
+    subgraph COMPLIANCE_RAIL ["4. F901/F902: HÀNH LANG PHÁP LÝ & MÔ PHÒNG SANDBOX (COMPLIANCE GATE)"]
+        RULE_B1{"Rule B1 Check: Đã Có Giấy Phép Giao Dịch Thuật Toán UBCKNN?"}
+        BLOCK_LIVE["BLOCKED: Cấm Tuyệt Đối Kết Nối API Đặt Lệnh Tiền Thật"]
+        SANDBOX_SIM["F902: DNSE / SSI Paper Trading Sandbox (Khớp Lệnh Ảo An Toàn)"]
+    end
+
+    STREAM_IN --> SIMHASH_64
+    SIMHASH_64 -- "Mới" --> SH_RESOLVER --> BATCH_PHOBERT --> SIMPLEX_TCD_GATE --> W_SOURCE_GATE --> REGIME_FAIL_CLOSED
+    REGIME_FAIL_CLOSED -- "Pha Khủng Hoảng" --> ACTION_AVOID --> STREAM_RESP
+    REGIME_FAIL_CLOSED -- "Bình Thường" --> STREAM_RESP
+
+    STREAM_RESP --> LOG_PRED
+    LOG_PRED --> EOD_CRON --> DRIFT_METRICS --> CIRCUIT_BREAKER
+    CIRCUIT_BREAKER -- "Trôi Dạt (Drift)" --> ALERT_DEGRADE --> RETRAIN_TRIGGER
+
+    RETRAIN_TRIGGER --> PEFT_ISOLATION --> TRAIN_FUSION --> SHADOW_GATE
+    SHADOW_GATE -- "Tốt Hơn" --> PROMOTE_PROD --> AUDIT_DB
+    SHADOW_GATE -- "Kém Hơn" --> REJECT_MODEL --> AUDIT_DB
+
+    STREAM_RESP -.-> RULE_B1
+    RULE_B1 -- "Chưa Có Văn Bản" --> BLOCK_LIVE
+    RULE_B1 -- "Sandbox Thử Nghiệm" --> SANDBOX_SIM
+```
+
+---
+
+### 2. Bảng Phân Rã Các Khâu Kỹ Thuật Trong Pipeline (End-to-End Stage Decomposition)
+
+| Giai đoạn (Stage) | Tên Thành Phần & Mã Feature | Đầu Vào (Input Data & Schema) | Thuật Toán & Xử Lý Cốt Lõi (Core Logic) | Đầu Ra & Bảng Đích (Target Tables) | SLA Độ Trễ & Tần Suất |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **Stage 1: Streaming Inference** | `F401` (`inference_app.py`) | JSON Payload `{headline, symbol}` | 1. SimHash 64-bit phát hiện tin trùng trong 0.1ms.<br>2. Entity Resolution nhận diện cổ đông lớn.<br>3. Batch PhoBERT forward pass.<br>4. Simplex-TCD kiểm tra $V \le 0.35$.<br>5. F203 Market Regime ngắt mạch nếu thị trường xấu. | JSON Response `{action, alpha_score, p95_latency}` | **P95 Latency $< 20.1$ ms** (SLA $< 50$ ms), VRAM $< 300$ MB |
+| **Stage 2: EOD Reconciliation** | `F402` (`feedback_log.py`) | Giá khớp lệnh thực tế sau phiên | Ghép nối dự đoán quá khứ với biến động giá $T+1, T+5, T+30$; cập nhật trạng thái `RECONCILED` | `meta.prediction_feedback_log` | Chạy 15:30 hàng ngày sau giờ đóng cửa |
+| **Stage 3: Drift & Circuit Breaker** | `F402` (`feedback_log.py`) | Sai số dự đoán và nhãn thực tế | Tính toán chỉ số suy thoái quần thể Population Stability Index (PSI), Rank-IC của tín hiệu, Brier Score. Ngắt mạch khi $PSI > 0.25$ hoặc $Rank\text{-}IC < 0.02$ | `meta.model_drift_telemetry` | Cập nhật EOD hàng ngày |
+| **Stage 4: PEFT Retraining** | `F403` (`continuous_training.py`) | 1,000 bản ghi feedback gần nhất | Đóng băng 100% PhoBERT (135M params); chỉ huấn luyện Fusion Head & Multi-Horizon Heads (789K params); AdamW $lr=1e-4$ | Mô hình ứng viên Candidate Model (Checkpoint) | **$< 25$ giây** trên GPU laptop RTX 3060 |
+| **Stage 5: Shadow Model Gate** | `F403` (`continuous_training.py`) | Candidate Model vs Champion Model | Đánh giá song song trên tập kiểm thử trượt (Rolling Test Window); kiểm tra điều kiện $Loss_{\text{candidate}} \le Loss_{\text{champion}}$ | Quyết định Thăng hạng (Promote) hoặc Từ chối (Reject) | Tự động sau mỗi phiên huấn luyện |
+| **Stage 6: Broker Compliance** | `F901`, `F902` (Hành lang pháp lý) | Tín hiệu giao dịch khuyến nghị | Kiểm tra thỏa thuận môi giới & quy chế UBCKNN; phong tỏa tuyệt đối cổng đặt lệnh thật; chỉ cho phép định tuyến sang DNSE/SSI Sandbox | Môi trường Paper Trading an toàn (Rule B1 strictly compliant) | Kiểm soát thường trực 24/7 |
+
+---
+
+### 3. Cơ Chế Phòng Vệ Lỗi & Rào Cản Kỹ Thuật (Fail-Closed & Resilience Mechanics)
+
+1. **Kỹ Thuật Đóng Băng Tham Số Cốt Lõi (PEFT Parameter-Isolation Safety Rail):**
+   - Trong quá trình tự động huấn luyện liên tục (Continuous Retraining), nếu tinh chỉnh toàn bộ 135 triệu tham số của PhoBERT trên tập dữ liệu nhỏ gần nhất, mô hình sẽ gặp hiện tượng **Quên thảm họa (Catastrophic Forgetting)** — mất đi toàn bộ tri thức ngôn ngữ tiếng Việt đã học trong 20 năm. F403 áp dụng cơ chế khóa cứng $100\%$ tham số backbone, chỉ cho phép cập nhật 789,507 tham số ở tầng Fusion và Prediction Heads, vừa đảm bảo tốc độ hội tụ siêu nhanh ($< 25$ giây), vừa triệt tiêu hoàn toàn rủi ro suy thoái ngôn ngữ.
+2. **Cổng Thăng Hạng Mô Hình Bóng Đổ (Shadow Model Promotion Gate):**
+   - Không một mô hình mới tái huấn luyện nào được phép ghi đè lên môi trường sản xuất (Production) nếu chưa vượt qua cuộc đối đầu trực tiếp với mô hình hiện tại (Champion). Bất kỳ sự gia tăng nào về Validation Loss hay suy giảm về Rank-IC đều khiến quy trình kích hoạt cờ `REJECTED`, ghi lại nhật ký cảnh báo vào bảng `meta.continuous_training_history` và bảo lưu nguyên vẹn mô hình đang hoạt động.
+3. **Chốt Chặn Pháp Lý Tối Thượng Quy Tắc B1 (Rule B1 Compliance Enforcer):**
+   - Tuân thủ công văn cảnh báo của UBCKNN về rủi ro gián đoạn thanh khoản do robot đặt lệnh tần suất cao, hệ thống VESTA mã hóa chốt chặn phần cứng: Mã nguồn không chứa bất kỳ thư viện hay endpoint gửi lệnh Mua/Bán (`order_placement`) nào tới sàn giao dịch thật. Mọi thử nghiệm đều bắt buộc đi qua môi trường Sandbox của công ty chứng khoán (F902) dưới sự giám sát độc lập của chuyên viên rủi ro.
+
+---
+
 ## 1. F401: LOCAL REAL-TIME INFERENCE SERVICE (READ-ONLY)
 
 ### 1.1. Báo cáo cơ chế kỹ thuật (Comprehensive Report & Mechanism)
