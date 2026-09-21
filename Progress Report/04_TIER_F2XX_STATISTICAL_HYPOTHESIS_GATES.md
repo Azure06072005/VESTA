@@ -16,6 +16,89 @@ Tier F2xx gồm 4 công trình kiểm định mẫu mực:
 
 ---
 
+## 🏛️ MÔ HÌNH HÓA KIẾN TRÚC & PIPELINE CHI TIẾT TIER F2XX (STATISTICAL HYPOTHESIS & AUDIT GATES)
+
+### 1. Sơ Đồ Luồng Dữ Liệu Toàn Diện (End-to-End Data Pipeline Architecture)
+
+```mermaid
+flowchart TD
+    subgraph INPUT_PIT ["1. DỮ LIỆU SỰ KIỆN POINT-IN-TIME (F102/F104)"]
+        PIT_DATA["core.pit_events (15,081 Sự Kiện Tin Tiêu Cực S < 45)"]
+        FWD_RETURNS["Forward Returns: R(T+5) & R(T+30) Khớp Lệnh Thực Tế"]
+        REGIME_CTX["Bối Cảnh Vĩ Mô: VN-Index MA200, Thanh Khoản Toàn Sàn"]
+    end
+
+    subgraph GATE1_F201 ["2. TRẠM 1: KIỂM ĐỊNH HỒI QUY NGÂY THƠ (F201 NAIVE MEAN-REVERSION GATE)"]
+        DELTA_CALC["Tính Chênh Lệch: Delta = R(T+30) - R(T+5)"]
+        TTEST_PAIRED["Paired Student's t-test (Kỳ Vọng Delta > 0)"]
+        COHEN_D["Đo Quy Mô Tác Động: Cohen's d"]
+        GATE1_COND{"t > 3.0 & p < 0.001 & d > 0.05?"}
+        GATE1_REJECT["BÁC BỎ GIẢ THUYẾT: Đình Chỉ Dự Án (Quy Tắc B2)"]
+    end
+
+    subgraph GATE2_F202 ["3. TRẠM 2: KIỂM ĐỊNH CỤM MÃ & THỜI GIAN (F202 CLUSTER-ROBUST SE)"]
+        SYM_BOOTSTRAP["Symbol Cluster Bootstrap (1,437 Cụm Doanh Nghiệp)"]
+        TIME_BOOTSTRAP["Stationary Block Time Bootstrap (214 Tháng Lịch Sử)"]
+        CGM_SE["Cameron-Gelbach-Miller Two-Way Clustered Standard Errors"]
+        GATE2_COND{"t_cluster > 2.58 (Độ Tin Cậy 99%)?"}
+        GATE2_REJECT["BÁC BỎ: Dữ Liệu Bị Chi Phối Bởi Vài Cổ Phiếu Cá Biệt"]
+    end
+
+    subgraph GATE3_F202B ["4. TRẠM 3: TỶ SỐ SHARPE SUY GIẢM & OVERFITTING (F202b DSR & PBO)"]
+        BAILEY_DSR["Deflated Sharpe Ratio (DSR, Bailey & López de Prado 2014)"]
+        CSCV_PBO["Combinatorially Symmetric Cross-Validation (CSCV PBO)"]
+        TRADABILITY_AUDIT["Kiểm Toán Khả Năng Giao Dịch Thực Tế (HOSE vs UPCOM)"]
+        GATE3_COND{"DSR >= 0.95 & PBO < 0.15?"}
+        GATE3_WARN["Cảnh Báo Ảo Ảnh UPCOM: Bắt Buộc Chuyển Sang F302 Multimodal"]
+    end
+
+    subgraph GATE4_F203 ["5. TRẠM 4: MA TRẬN ĐIỀU KIỆN CHẾ ĐỘ 2 CHIỀU (F203 2D REGIME MATRIX)"]
+        REGIME_GRID["16 Chế Độ Vĩ Mô x 3 Sàn Giao Dịch (HOSE, HNX, UPCOM)"]
+        SIGN_FLIP_DETECTOR["Bộ Dò Hiện Tượng Đảo Chiều Âm (Sign-Flips in Liquidity Crisis)"]
+        FAIL_CLOSED_RAIL["Rào Chắn Ngắt Mạch: IF VNINDEX < MA200 -> ACTION = AVOID"]
+        SIGNAL_PASSED["TÍN HIỆU ALPHA ĐƯỢC PHÊ DUYỆT (UNBLOCK TIER F3XX)"]
+    end
+
+    PIT_DATA & FWD_RETURNS --> DELTA_CALC
+    DELTA_CALC --> TTEST_PAIRED & COHEN_D
+    TTEST_PAIRED & COHEN_D --> GATE1_COND
+    GATE1_COND -- "Không Đạt" --> GATE1_REJECT
+    GATE1_COND -- "Đạt Chuẩn (t=6.84, p=8.4e-12)" --> SYM_BOOTSTRAP & TIME_BOOTSTRAP
+
+    SYM_BOOTSTRAP & TIME_BOOTSTRAP --> CGM_SE --> GATE2_COND
+    GATE2_COND -- "Không Đạt" --> GATE2_REJECT
+    GATE2_COND -- "Đạt Chuẩn (t_clustered=4.12)" --> BAILEY_DSR & CSCV_PBO
+
+    BAILEY_DSR & CSCV_PBO & TRADABILITY_AUDIT --> GATE3_COND
+    GATE3_COND -- "UPCOM DSR=0.99 (Ảo), HOSE DSR=0.72" --> GATE3_WARN
+    GATE3_WARN --> REGIME_GRID
+
+    REGIME_GRID & REGIME_CTX --> SIGN_FLIP_DETECTOR --> FAIL_CLOSED_RAIL
+    FAIL_CLOSED_RAIL --> SIGNAL_PASSED
+```
+
+---
+
+### 2. Bảng Phân Rã Các Khâu Kỹ Thuật Trong Pipeline (End-to-End Stage Decomposition)
+
+| Giai đoạn (Stage) | Tên Thành Phần & Mã Feature | Đầu Vào (Input Data & Schema) | Thuật Toán & Xử Lý Cốt Lõi (Core Logic) | Đầu Ra & Bảng Đích (Target Tables) | SLA Độ Trễ & Tần Suất |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **Stage 1: Naive Proof** | `F201` (`backtest_meanreversion.py`) | 15,081 sự kiện tin tiêu cực ($S < 45$) | Paired t-test tính $\Delta = R_{T+30} - R_{T+5}$; đo Effect Size Cohen's $d = 0.0557$; kiểm định $t = 6.837, p < 10^{-11}$ | Chứng minh hiện tượng hồi phục có thật trên toàn thị trường Việt Nam | Chạy 1 lần nghiệm thu giả thuyết (8.2s) |
+| **Stage 2: Multi-Way Clustering** | `F202` (`cluster_robust_audit.py`) | 1,437 cụm mã doanh nghiệp & 214 tháng | Symbol Cluster Bootstrap & Block Time Bootstrap; loại bỏ hiện tượng sai số phụ thuộc chéo (Cross-sectional Correlation) | Khẳng định $t_{\text{cluster}} = 4.12 > 2.58$; Alpha không phụ thuộc vào 1 nhóm cổ phiếu | Chạy kiểm toán định kỳ hàng quý |
+| **Stage 3: DSR & PBO Audit** | `F202b` (`deflated_sharpe_audit.py`) | Chuỗi tỷ suất lợi nhuận chiến lược | Tính Deflated Sharpe Ratio (DSR) khấu trừ hiện tượng thử nghiệm nhiều lần ($N$ trials, độ nhọn Kurtosis); đo xác suất Overfitting CSCV PBO | Phát hiện Nghịch lý UPCOM: UPCOM có DSR cao nhưng phí thanh khoản lớn; HOSE đòi hỏi Multimodal F302 | Chạy kiểm định sau mỗi lần tối ưu tham số |
+| **Stage 4: 2D Regime Grid** | `F203` (`regime_grid_validator.py`) | Ma trận 16 trạng thái thị trường $\times$ 3 sàn | Phân tích Sign-Flips: Trong khủng hoảng thanh khoản (2008, 2022), bắt đáy thất bại hoàn toàn ($\Delta < 0$). Thiết lập logic Ngắt mạch: VN-Index $<$ MA200 $\to$ Tự động chuyển sang `AVOID` | `core.regime_validity_matrix` (Rào chắn an toàn bảo vệ vốn) | Cập nhật sau giờ giao dịch 15:00 hàng ngày |
+
+---
+
+### 3. Cơ Chế Phòng Vệ Lỗi & Rào Cản Kỹ Thuật (Fail-Closed & Resilience Mechanics)
+
+1. **Rào Cản Triệt Tiêu Ảo Tưởng Bắt Đáy (Liquidity Crisis Circuit Breaker):**
+   - Phân tích F203 phát hiện: Chiến lược hồi quy trung bình (Mean-Reversion) chỉ phát huy hiệu quả mạnh mẽ trong pha Thị trường Bò (Bull Market: $\bar{\Delta} = +4.12\%$) hoặc Đi ngang (Sideway: $\bar{\Delta} = +2.05\%$). Trong pha Khủng hoảng tín dụng / Mất thanh khoản (Bear/Credit Crunch), $\bar{\Delta} = -3.85\%$ (giá tiếp tục giảm sâu sau $T+5$). Do đó, F203 đóng vai trò là **Bộ Ngắt Mạch Fail-Closed**: Khi VNINDEX nằm dưới đường trung bình 200 ngày (MA200), toàn bộ tín hiệu mua bắt đáy bị đình chỉ $100\%$.
+2. **Khắc Phục Hiện Tượng Data Snooping Bằng Deflated Sharpe Ratio (DSR):**
+   - Khi nhà nghiên cứu thử nghiệm hàng trăm tham số để chọn ra chiến lược có Sharpe cao nhất, Sharpe đó thường là kết quả của sự may mắn ngẫu nhiên. Công thức DSR của Bailey & López de Prado (2014) chiết khấu trực tiếp số lần thử nghiệm $N$, độ lệch chuẩn của các Sharpe đã thử, và độ bất đối xứng (Skewness/Kurtosis) của phân phối lợi nhuận, đảm bảo chỉ những chiến lược có $DSR \ge 0.95$ mới được đưa vào sản xuất.
+
+---
+
 ## 1. F201: SENTIMENT MEAN-REVERSION PROOF GATE
 
 ### 1.1. Báo cáo cơ chế kỹ thuật (Comprehensive Report & Mechanism)

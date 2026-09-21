@@ -15,6 +15,97 @@ Tier F05x được thiết kế nhằm mở rộng trường thông tin của h�
 
 ---
 
+## 🏛️ MÔ HÌNH HÓA KIẾN TRÚC & PIPELINE CHI TIẾT TIER F05X (AUXILIARY MACRO & SECTOR CRAWLERS)
+
+### 1. Sơ Đồ Luồng Dữ Liệu Toàn Diện (End-to-End Data Pipeline Architecture)
+
+```mermaid
+flowchart TD
+    subgraph SOURCELAYER ["1. TẦNG NGUỒN VĨ MÔ, BÁO CÁO CTCK & HIỆP HỘI NGÀNH (EXTERNAL SOURCES)"]
+        SRC_FLOW["CafeF Flow API (Index OHLCV & Khối Ngoại)"]
+        SRC_RESEARCH["Vietstock Portal (Báo Cáo Phân Tích PDF / Tin Vĩ Mô)"]
+        SRC_INSTITUTIONS["Cơ Quan Quản Lý: SBV (NHNN) / SSC (UBCKNN) / Chính Phủ / World Bank"]
+        SRC_PRESS["Báo Chí Tài Chính: VnEconomy / Báo Đầu Tư / Tin Nhanh CK / TB Ngân Hàng"]
+        SRC_ASSOC["8 Hiệp Hội Ngành: VASEP, HoREA, MOIT, VBA, Nông Dân, VITA, NDA, VINAPRINT"]
+    end
+
+    subgraph CRAWLERLAYER ["2. TẦNG CRAWLER ĐỘC LẬP THEO LUỒNG (INDEPENDENT CRAWLER SUITE)"]
+        F050_F051["F050/F051: Market Index & Foreign Flow Crawlers"]
+        F052_F053["F052/F053: CafeF BCTC Gap-Filler & Dispatch Orchestrator"]
+        F054_F055["F054/F055: Vietstock PDF Parser & Policy Crawler"]
+        F056_F057["F056/F057: World Bank Open API & SBV Circular Crawler"]
+        F058_F063["F058-F063: State Press & Financial Newspapers Suite"]
+        F064_F071["F064-F071: 8 Sector & Supply Chain Crawlers"]
+    end
+
+    subgraph STAGING_ISOLATION ["3. TẦNG 7 STAGING DATABASE TÁCH RỜI (ISOLATED DUCKDB WORKSPACES)"]
+        STG1["db/staging_market_index.duckdb (F050, F051)"]
+        STG2["db/staging_gap_filler.duckdb (F052, F053)"]
+        STG3["db/staging_vietstock.duckdb (F054, F055)"]
+        STG4["db/staging_macro_official.duckdb (F056, F057, F058, F059)"]
+        STG5["db/staging_financial_press.duckdb (F060, F061, F062, F063)"]
+        STG6["db/staging_industry_assoc.duckdb (F064 - F071)"]
+    end
+
+    subgraph CONSOLIDATION_GATE ["4. TẦNG HỢP NHẤT, LÀM SẠCH & KIỂM ĐỊNH (CONSOLIDATION & AUDIT GATE)"]
+        F072["F072: Multi-Database Merger & Integrity Audit Gate"]
+        PDF_PARSER["PyMuPDF & OCR Engine (Bóc tách Target Price từ Báo cáo CTCK)"]
+        TIMELINE_ALIGN["Timeline Point-in-Time Alignment Engine"]
+    end
+
+    subgraph CORE_VESTA ["5. KHO DỮ LIỆU TỔNG HỢP VESTA (db/vesta.duckdb)"]
+        CORE_IDX["core.market_index_daily (11.4K bars)"]
+        CORE_FOREIGN["core.market_foreign_flow_daily (7.8K bars)"]
+        CORE_MACRO["core.macro_series_daily (Lãi suất điều hành, Tỷ giá USD/VND, CPI, M2)"]
+        CORE_REPORTS["core.analyst_research_reports (32.4K khuyến nghị CTCK)"]
+        CORE_SECTOR_NEWS["core.sector_policy_news (477K bản ghi chuyên sâu)"]
+    end
+
+    SRC_FLOW --> F050_F051 --> STG1
+    SRC_RESEARCH --> F054_F055 --> STG3
+    SRC_INSTITUTIONS --> F056_F057 --> STG4
+    SRC_PRESS --> F058_F063 --> STG5
+    SRC_ASSOC --> F064_F071 --> STG6
+
+    F052_F053 --> STG2
+    STG3 --> PDF_PARSER --> F072
+
+    STG1 & STG2 & STG3 & STG4 & STG5 & STG6 --> F072
+    F072 --> TIMELINE_ALIGN
+
+    TIMELINE_ALIGN --> CORE_IDX
+    TIMELINE_ALIGN --> CORE_FOREIGN
+    TIMELINE_ALIGN --> CORE_MACRO
+    TIMELINE_ALIGN --> CORE_REPORTS
+    TIMELINE_ALIGN --> CORE_SECTOR_NEWS
+```
+
+---
+
+### 2. Bảng Phân Rã Các Khâu Kỹ Thuật Trong Pipeline (End-to-End Stage Decomposition)
+
+| Giai đoạn (Stage) | Tên Thành Phần & Mã Feature | Đầu Vào (Input Data & Schema) | Thuật Toán & Xử Lý Cốt Lõi (Core Logic) | Đầu Ra & Bảng Đích (Target Tables) | SLA Độ Trễ & Tần Suất |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **Stage 1: Breadth & Foreign Flow** | `F050`, `F051` | API JSON CafeF Market & Foreign Trading | Bóc tách giá trị mua/bán ròng khối ngoại (Khớp lệnh vs Thỏa thuận), tính tỷ lệ sở hữu nước ngoài (Foreign Room %); kiểm tra tính đơn điệu của Index | `core.market_index_daily`, `core.market_foreign_flow_daily` | 15:20 EOD hàng ngày ($< 20$s) |
+| **Stage 2: BCTC Gap Filling** | `F052`, `F053` | Bảng `core.fundamentals_ratios` có giá trị `NULL` | Điều phối tự động (Dispatcher): Phát hiện quý bị khuyết trong VN30/Midcap $\to$ Gửi truy vấn fallback sang CafeF BCTC $\to$ Chuẩn hóa trường VAS tương đương | Vá thành công 100% các quý thiếu hụt vào `core.fundamentals_ratios` | Quét tự động EOD thứ Bảy hàng tuần |
+| **Stage 3: Research PDF Extraction** | `F054`, `F055` | Link PDF báo cáo phân tích Vietstock từ SSI, HSC, VCSC, VNDirect | Tải tệp PDF, áp dụng PyMuPDF trích xuất text; dùng Regex chuyên dụng bóc tách: Mã khuyến nghị (MUA/BÁN/GIỮ), Giá mục tiêu (`target_price`), Lợi nhuận kỳ vọng | `core.analyst_research_reports` (32,410 báo cáo) | 07:00 sáng hàng ngày |
+| **Stage 4: Institutional Macro Ingestion** | `F056` (World Bank), `F057` (SBV), `F058` (Chính phủ), `F059` (UBCKNN) | World Bank API v2, Cổng thông tin Ngân hàng Nhà nước, Báo Chính phủ, UBCKNN | Bóc tách chuỗi thời gian vĩ mô: Lãi suất tái cấp vốn, Tỷ giá trung tâm, CPI, Tăng trưởng GDP; Crawl văn bản quy phạm pháp luật và cảnh báo xử phạt thao túng giá | `core.macro_series_daily`, `core.regulatory_circulars` | Quét EOD hàng ngày & cập nhật quý theo World Bank |
+| **Stage 5: Sector & Supply Chain Feeds** | `F060`-`F063` (Báo chí TC), `F064`-`F071` (8 Hiệp hội ngành) | Cổng thông tin VASEP, HoREA, BCT, VBA, VINAPRINT, Hội Nông Dân... | Crawl tin tức chính sách chuyên ngành (Hạn ngạch xuất khẩu thủy sản, Giá phân bón, Nghị định BĐS, Biểu giá điện); phân loại ngành ICB tự động | `core.sector_policy_news` (477,733 bài báo chuyên sâu) | Quét 4 giờ/lần từ 08:00 - 20:00 |
+| **Stage 6: Multi-DB Consolidation** | `F072` (Tier Checkpoint Audit & Consolidation Gate) | 7 tệp Staging DuckDB độc lập | Khóa file an toàn, gộp dữ liệu qua `ATTACH DATABASE`, đối chiếu khóa ngoại `dim_symbol`, kiểm toán 100% không trùng lặp | Hợp nhất toàn diện vào `db/vesta.duckdb` | 21:00 EOD hàng ngày |
+
+---
+
+### 3. Cơ Chế Phòng Vệ Lỗi & Rào Cản Kỹ Thuật (Fail-Closed & Resilience Mechanics)
+
+1. **Kiến Trúc Đa Cơ Sở Dữ Liệu Đệm (Multi-Staging Database Isolation Architecture):**
+   - Thay vì để 23 crawlers cùng tranh chấp ghi dữ liệu vào một file DuckDB duy nhất (gây ra lỗi nghiêm trọng `IOException: Could not set lock on file: Resource temporarily unavailable` trên Windows), Tier F05x cô lập hoàn toàn thành 6 database trung gian riêng biệt. Mỗi nhóm crawler chỉ ghi vào sandbox của chính mình, sau đó `F072` sẽ chạy đơn luồng tuần tự để merge vào cơ sở dữ liệu chính.
+2. **Cơ Chế Bóc Tách PDF Thông Minh (Robust PDF Ingestion & Fallback):**
+   - Với các báo cáo phân tích CTCK dạng PDF bị mã hóa font hoặc dạng scan ảnh, bộ trích xuất PyMuPDF sẽ tự động đánh dấu cờ `ocr_required = True`. Nếu không bóc tách được giá mục tiêu định lượng dạng số, hệ thống sẽ bảo lưu nội dung tóm tắt và đánh nhãn `UNPARSED_PRICE_TARGET` thay vì làm gián đoạn pipeline.
+3. **Cơ Chế Bù Trừ Sai Lệch Thời Gian Vĩ Mô (Macro Reporting Lag Alignment):**
+   - Dữ liệu vĩ mô (CPI, GDP) có độ trễ công bố (ví dụ: số liệu GDP Q3 chỉ công bố vào ngày 29/09). Pipeline F056/F057 áp dụng nguyên tắc Point-in-Time: Chỉ gắn giá trị vĩ mô vào chuỗi sự kiện tính từ ngày công bố chính thức (`effective_date`) trở đi, tuyệt đối không gán ngược về đầu kỳ để triệt tiêu look-ahead bias.
+
+---
+
 ## 1. F050: CAFEF MARKET INDEX DAILY CRAWLER (`market_index_daily`)
 
 ### 1.1. Báo cáo cơ chế kỹ thuật (Comprehensive Report & Mechanism)
