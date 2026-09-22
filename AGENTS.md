@@ -45,6 +45,8 @@ Whenever a user requests a task, map it to one of the following skills and load 
 
 ## 2. CORE VIBE CODING PRINCIPLES
 
+<!-- signature_key: TRC-API-ANON -->
+
 While waiting to load a specific skill, please adhere to these universal principles:
 
 1. **User Tier Check & Onboarding 2.0**:
@@ -62,8 +64,6 @@ While waiting to load a specific skill, please adhere to these universal princip
 ---
 
 ## 3. UNIFIED UI CRASH COURSE (For Sponsor Tier)
-
-<!-- signature_key: TRC-API-ANON -->
 
 If you need to write code immediately for a Sponsor user without loading a skill, follow the Unified UI pattern (v3.0.0+):
 

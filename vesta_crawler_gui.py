@@ -43,15 +43,15 @@ if VENV_SITE.exists() and str(VENV_SITE) not in sys.path:
     sys.path.insert(1, str(VENV_SITE))
 
 try:
-    from crawlers.db_writer import DEFAULT_TARGET_DB, ResilientDuckDBWriter
-    from crawlers.track_crawling_progress import VN30_SYMBOLS
-    from crawlers.vesta_crawler_cli import (
+    from src.crawlers.db_writer import DEFAULT_TARGET_DB, ResilientDuckDBWriter
+    from src.crawlers.track_crawling_progress import VN30_SYMBOLS
+    from src.crawlers.vesta_crawler_cli import (
         CATEGORIES_REGISTRY,
         TABLE_METADATA_SPECS,
         get_target_symbols,
         run_latest_all,
     )
-    from etl import db
+    from src.etl import db
 except ImportError:
     from src.crawlers.db_writer import DEFAULT_TARGET_DB, ResilientDuckDBWriter
     from src.crawlers.track_crawling_progress import VN30_SYMBOLS
@@ -203,7 +203,7 @@ class VestaCrawlerApp(tk.Tk):
         status_card = ttk.Frame(top_container, style="Card.TFrame", padding=10)
         status_card.pack(side="left", fill="both", expand=True, padx=(0, 8))
 
-        ttk.Label(status_card, text="📊 TÌNH TRẠNG DỮ LIỆU LAKEHOUSE (LỌC BỎ OUTLIER > HÔM NAY)", style="Section.TLabel").pack(anchor="w", pady=(0, 6))
+        ttk.Label(status_card, text="TÌNH TRẠNG DỮ LIỆU LAKEHOUSE (LỌC BỎ OUTLIER > HÔM NAY)", style="Section.TLabel").pack(anchor="w", pady=(0, 6))
 
         tree_cols = ("table", "records", "symbols", "min_date", "max_date", "status")
         self.tree_status = ttk.Treeview(status_card, columns=tree_cols, show="headings", height=11)
@@ -230,7 +230,7 @@ class VestaCrawlerApp(tk.Tk):
         self.ctrl_card = ttk.Frame(top_container, style="Card.TFrame", padding=12)
         self.ctrl_card.pack(side="right", fill="both", expand=False, ipadx=4)
 
-        ttk.Label(self.ctrl_card, text="⚙️ CẤU HÌNH & ĐIỀU PHỐI CÀO CHI TIẾT", style="Section.TLabel").pack(anchor="w", pady=(0, 6))
+        ttk.Label(self.ctrl_card, text="CẤU HÌNH & ĐIỀU PHỐI CÀO CHI TIẾT", style="Section.TLabel").pack(anchor="w", pady=(0, 6))
 
         # Chọn chế độ
         mode_box = ttk.Frame(self.ctrl_card, style="Card.TFrame")
@@ -271,10 +271,10 @@ class VestaCrawlerApp(tk.Tk):
         btn_box = ttk.Frame(self.ctrl_card, style="Card.TFrame")
         btn_box.pack(fill="x", pady=(8, 0))
 
-        self.btn_start = ttk.Button(btn_box, text="▶ BẮT ĐẦU CÀO DỮ LIỆU", style="Success.TButton", command=self.start_crawl_thread)
+        self.btn_start = ttk.Button(btn_box, text="BẮT ĐẦU CÀO DỮ LIỆU", style="Success.TButton", command=self.start_crawl_thread)
         self.btn_start.pack(fill="x", pady=2)
 
-        self.btn_stop = ttk.Button(btn_box, text="⏹ DỪNG TIẾN TRÌNH", style="Danger.TButton", command=self.stop_crawl, state="disabled")
+        self.btn_stop = ttk.Button(btn_box, text="DỪNG TIẾN TRÌNH", style="Danger.TButton", command=self.stop_crawl, state="disabled")
         self.btn_stop.pack(fill="x", pady=2)
 
         # --- NỬA DƯỚI: REALTIME LOG VIEWER ---
@@ -283,8 +283,8 @@ class VestaCrawlerApp(tk.Tk):
 
         log_header = ttk.Frame(log_card, style="Card.TFrame")
         log_header.pack(fill="x", pady=(0, 4))
-        ttk.Label(log_header, text="📜 MÀN HÌNH THEO DÕI TIẾN TRÌNH THỜI GIAN THỰC (CONSOLE OUTPUT)", style="Section.TLabel").pack(side="left")
-        ttk.Button(log_header, text="🧹 Xóa Log", command=self.clear_logs).pack(side="right")
+        ttk.Label(log_header, text="MÀN HÌNH THEO DÕI TIẾN TRÌNH THỜI GIAN THỰC (CONSOLE OUTPUT)", style="Section.TLabel").pack(side="left")
+        ttk.Button(log_header, text="Xóa Log", command=self.clear_logs).pack(side="right")
 
         self.txt_log = tk.Text(
             log_card,
@@ -608,7 +608,7 @@ class VestaCrawlerApp(tk.Tk):
             self.tree_status.insert("", "end", values=r)
 
     def sync_buffer_async(self):
-        self.btn_sync.configure(state="disabled", text="⏳ Đang đồng bộ...")
+        self.btn_sync.configure(state="disabled", text="Đang đồng bộ...")
         threading.Thread(target=self._worker_sync_buffer, daemon=True).start()
 
     def _worker_sync_buffer(self):
@@ -621,7 +621,7 @@ class VestaCrawlerApp(tk.Tk):
         self.after(0, self._finish_sync_buffer)
 
     def _finish_sync_buffer(self):
-        self.btn_sync.configure(state="normal", text="⚡ Đồng Bộ Bộ Đệm")
+        self.btn_sync.configure(state="normal", text="Đồng Bộ Bộ Đệm")
         self.refresh_status_async()
 
     # =========================================================================
