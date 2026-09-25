@@ -242,6 +242,8 @@ Toàn bộ 54 tính năng đã được biên soạn thành các tài liệu bá
 4. [`04_TIER_F2XX_STATISTICAL_HYPOTHESIS_GATES.md`](file:///d:/VESTA/Progress%20Report/04_TIER_F2XX_STATISTICAL_HYPOTHESIS_GATES.md): Báo cáo chi tiết 4 cổng kiểm định thống kê DSR, PBO, Bootstrap cụm và lưới 2D Regime (F201 – F203).
 5. [`05_TIER_F3XX_NLP_MULTIMODAL_CONSISTENCY.md`](file:///d:/VESTA/Progress%20Report/05_TIER_F3XX_NLP_MULTIMODAL_CONSISTENCY.md): Báo cáo chi tiết 4 mô hình học sâu PhoBERT FinDPO, Multimodal Fusion, HybridACD Gate (F301 – F304), kèm Lộ trình nâng cấp Qwen2.5-3B-Instruct (4-bit VRAM ~2.2GB) và Khung 10 Checkers Kolmogorov.
 6. [`06_TIER_F4XX_F9XX_PRODUCTION_EXECUTION_COMPLIANCE.md`](file:///d:/VESTA/Progress%20Report/06_TIER_F4XX_F9XX_PRODUCTION_EXECUTION_COMPLIANCE.md): Báo cáo chi tiết 4 tính năng suy luận thời gian thực, log trôi dạt và rào chắn pháp lý UBCKNN (F401, F402, F901, F902).
+7. [`07_TIER_F5XX_MONTE_CARLO_BOT_ARENA.md`](file:///d:/VESTA/Progress%20Report/07_TIER_F5XX_MONTE_CARLO_BOT_ARENA.md): Báo cáo chi tiết đấu trường chiến lược đa bot Monte Carlo 10,000 đường đi, vi cấu trúc T+2.5, trần sàn và kiểm thử DSR (F501).
+8. [`08_COMPREHENSIVE_PROS_AND_CONS_ALL_PROCESSES_REPORT.md`](file:///d:/VESTA/Progress%20Report/08_COMPREHENSIVE_PROS_AND_CONS_ALL_PROCESSES_REPORT.md): Báo cáo tổng hợp toàn diện ưu điểm (Pros), nhược điểm (Cons), điểm nghẽn kỹ thuật và cạm bẫy thực chiến cho **toàn bộ 37 quy trình kỹ thuật** trong hệ sinh thái VESTA.
 
 ---
 
