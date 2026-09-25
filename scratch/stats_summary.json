@@ -1,0 +1,156 @@
+[
+  {
+    "table": "core.market_ohlcv_daily",
+    "row_count": 2985236,
+    "distinct_symbols": 3928,
+    "min_date": "2001-12-19",
+    "max_date": "2026-09-22"
+  },
+  {
+    "table": "core.market_ohlcv_1m",
+    "row_count": 6807406,
+    "distinct_symbols": 1462,
+    "min_date": "2023-09-11 09:00:00",
+    "max_date": "2026-09-18 14:59:00"
+  },
+  {
+    "table": "core.market_foreign_flow_daily",
+    "row_count": 4839720,
+    "distinct_symbols": 3980,
+    "min_date": "2001-04-02",
+    "max_date": "2026-09-11"
+  },
+  {
+    "table": "core.proprietary_flow",
+    "row_count": 37757,
+    "distinct_symbols": 960,
+    "min_date": "2019-01-02",
+    "max_date": "2026-09-16"
+  },
+  {
+    "table": "core.fundamentals",
+    "row_count": 189653,
+    "distinct_symbols": 1743,
+    "min_date": "None",
+    "max_date": "None"
+  },
+  {
+    "table": "core.financial_notes",
+    "row_count": 7358616,
+    "distinct_symbols": 1496,
+    "min_date": "None",
+    "max_date": "None"
+  },
+  {
+    "table": "core.company_overview",
+    "row_count": 1522,
+    "distinct_symbols": 1522,
+    "min_date": "None",
+    "max_date": "None"
+  },
+  {
+    "table": "core.company_shareholders",
+    "row_count": 4268,
+    "distinct_symbols": 1513,
+    "min_date": "None",
+    "max_date": "None"
+  },
+  {
+    "table": "core.corporate_events",
+    "row_count": 40277,
+    "distinct_symbols": 1028,
+    "min_date": "2014-03-06",
+    "max_date": "2030-08-19"
+  },
+  {
+    "table": "core.news",
+    "row_count": 661627,
+    "distinct_symbols": 1890,
+    "min_date": "2007-02-23 00:00:00",
+    "max_date": "2026-09-14 15:04:49.883773"
+  },
+  {
+    "table": "core.news_resources",
+    "row_count": 478388,
+    "distinct_symbols": null,
+    "min_date": "1990-12-31 00:00:00",
+    "max_date": "2026-09-18 17:05:46.473513"
+  },
+  {
+    "table": "core.pit_events",
+    "row_count": 658182,
+    "distinct_symbols": 1820,
+    "min_date": "2007-02-23 00:00:00",
+    "max_date": "2026-09-07 18:06:00"
+  },
+  {
+    "table": "core.stock_research_reports",
+    "row_count": 777,
+    "distinct_symbols": 157,
+    "min_date": "2026-09-05",
+    "max_date": "2026-09-17"
+  },
+  {
+    "table": "core.market_index_daily",
+    "row_count": 206313,
+    "distinct_symbols": 33,
+    "min_date": "2000-01-03",
+    "max_date": "2026-09-11"
+  },
+  {
+    "table": "core.macro_rates",
+    "row_count": 8727,
+    "distinct_symbols": null,
+    "min_date": "2009-08-16",
+    "max_date": "2026-09-17"
+  },
+  {
+    "table": "core.macro_economic_series",
+    "row_count": 13060,
+    "distinct_symbols": null,
+    "min_date": "2014-01-31",
+    "max_date": "2026-09-17"
+  },
+  {
+    "table": "core.order_book_depth",
+    "row_count": 311,
+    "distinct_symbols": 311,
+    "min_date": "2026-09-17 03:11:01.186793",
+    "max_date": "2026-09-17 03:42:15.733926"
+  },
+  {
+    "table": "core.intraday_trades",
+    "row_count": 31863,
+    "distinct_symbols": 136,
+    "min_date": "2026-09-17 09:00:00",
+    "max_date": "2026-09-17 10:40:51"
+  },
+  {
+    "table": "preprocessed.events",
+    "row_count": 581944,
+    "distinct_symbols": 1775,
+    "min_date": "2007-02-23 00:00:00",
+    "max_date": "2026-07-21 14:59:47"
+  },
+  {
+    "table": "preprocessed.fundamentals_ratios",
+    "row_count": 46337,
+    "distinct_symbols": 1736,
+    "min_date": "None",
+    "max_date": "None"
+  },
+  {
+    "table": "preprocessed.market_regimes",
+    "row_count": 6357,
+    "distinct_symbols": null,
+    "min_date": "2000-07-28",
+    "max_date": "2026-09-11"
+  },
+  {
+    "table": "preprocessed.macro_policy",
+    "row_count": 477733,
+    "distinct_symbols": null,
+    "min_date": "1204-04-09 14:42:04",
+    "max_date": "2027-03-01 15:00:00"
+  }
+]

@@ -1,0 +1,484 @@
+{
+  "00_MASTER_EXECUTIVE_SUMMARY.md": [
+    {
+      "heading": "## 6. Phân Tích Ma Trận SWOT & Đánh Giá Rủi Ro Thực Thi",
+      "text": "\n| Yếu Tố | Phân Tích Thực Trạng Của VESTA |\n|:---|:---|\n| **STRENGTHS (Điểm mạnh)** | 1. Hạ tầng dữ liệu Point-in-Time sạch 100%, tích hợp kho 939.732 tin tức và 3.446 mã cổ phiếu.<br>2. Quy trình kiểm định thống kê DSR/PBO/Bootstrap nghiêm ngặt bậc nhất trong các công trình nghiên cứu chứng khoán VN.<br>3. Mô hình học sâu Cross-Attention đa phương thức chứng minh có Alpha vượt trội (+50.8% đến 3.12x baseline).<br>4. Lớp kiểm chứng nhất quán logic xác suất Simplex-TCD đảm bảo toán học 100% không vi phạm Kolmogorov.<br>5. Bộ sinh đối kháng V-FAN siêu nhẹ (0.0197 ms) sẵn sàng đáp ứng độ trễ thời gian thực. |\n| **WEAKNESSES (Điểm yếu)** | 1. \"Nghịch lý khả thi giao dịch\": Hiệu ứng suy yếu rõ rệt trên rổ cổ phiếu lớn HOSE ở $N \\ge 2$.<br>2. Sự phụ thuộc vào dữ liệu báo chí công khai: Tin tức tài chính tiếng Việt thường có độ trễ công bố so với thời điểm dòng tiền lớn nhập cuộc.<br>3. Chưa tích hợp dữ liệu độ sâu sổ lệnh Tick-by-Tick Level 2 để đo lường áp lực mua/bán tức thời (OFI). |\n| **OPPORTUNITIES (Cơ hội)** | 1. Hệ thống giao dịch KRX đi vào vận hành mở ra cơ chế giao dịch trong ngày (T+0), bán khống và thanh toán bù trừ trung tâm (CCP).<br>2. Khả năng mở rộng sang các nguồn dữ liệu thay thế: Mạng xã hội tài chính (F319, FireAnt, diễn đàn chứng khoán), dòng tiền tự doanh nâng cấp.<br>3. Thị trường chứng khoán Việt Nam nâng hạng từ Cận biên (Frontier) lên Mới nổi (Secondary Emerging) thu hút dòng vốn ngoại định lượng. |\n| **THREATS (Thách thức & Rủi ro)** | 1. **Rào cản pháp lý:** Công văn UBCKNN 09/2023 vẫn đang có hiệu lực hạn chế các hình thức robot đặt lệnh tự động tần suất lớn.<br>2. **Rủi ro chế độ thị trường (Regime Sign-Flips):** Các cú sốc chính sách tiền tệ toàn cầu ($VIX > 25$, DXY tăng vọt) có thể làm tê liệt chiến lược bắt đáy.<br>3. **Chi phí trượt giá và thanh khoản:** Độ sâu thị trường hạn chế ở các phiên giảm sàn trắng bên mua (mất thanh khoản chiều bán). |\n\n---\n"
+    }
+  ],
+  "01_TIER_F0XX_CORE_DATA_CRAWLERS.md": [
+    {
+      "heading": "#### 4. Ưu Điểm & Nhược Điểm",
+      "text": "- **Ưu điểm:** Tốc độ truy vấn cột (Columnar OLAP) của DuckDB cực nhanh trên ổ SSD cục bộ, không cần cài đặt dịch vụ database server cồng kềnh.\n- **Nhược điểm:** Cơ chế khóa độc quyền (File locking) của DuckDB trên Windows ngăn chặn nhiều tiến trình ghi đồng thời nếu không cấu hình lock-sharing hoặc snapshot.\n"
+    },
+    {
+      "heading": "#### 5. Đề Xuất Phương Pháp Cải Tiến",
+      "text": "- Tích hợp kiến trúc bản sao đọc độc lập (**DuckDB Snapshot / Read-Replica strategy**), tách tiến trình đọc phân tích ML (PhoBERT/Multimodal) ra khỏi tiến trình cào ghi EOD để triệt tiêu xung đột lock PID.\n\n---\n"
+    },
+    {
+      "heading": "#### 4. Ưu Điểm & Nhược Điểm",
+      "text": "- **Ưu điểm:** Độ phủ toàn diện nhất thị trường; giải quyết triệt để rủi ro survivorship bias bằng cách lưu vết cả các mã đã giải thể, sáp nhập từ năm 2000.\n- **Nhược điểm:** API bên thứ ba đôi khi thay đổi tên ngành ICB giữa các đợt phát hành, cần ánh xạ cố định.\n"
+    },
+    {
+      "heading": "#### 5. Đề Xuất Phương Pháp Cải Tiến",
+      "text": "- Xây dựng từ điển ánh xạ ngành ICB 4 cấp (Supersector, Sector, Subsector) tĩnh dựa trên quyết định niêm yết chính thức của HOSE/HNX thay vì phụ thuộc vào string trả về của vendor.\n\n---\n"
+    },
+    {
+      "heading": "#### 4. Ưu Điểm & Nhược Điểm",
+      "text": "- **Ưu điểm:** Khám phá ra phân khúc cổ phiếu OTC có tính biến động tâm lý cao; ánh xạ `CenterId` được xác minh trực tiếp từ network capture HAR.\n- **Nhược điểm:** Dữ liệu giao dịch của nhóm OTC rất mỏng, thanh khoản không liên tục.\n"
+    },
+    {
+      "heading": "#### 5. Đề Xuất Phương Pháp Cải Tiến",
+      "text": "- Tách nhóm 750 mã OTC thành rổ phân tích riêng biệt (OTC-Subuniverse), gắn cờ `tradeable_flag = False` trong bài toán backtest để không làm nhiễu tín hiệu thực thi của rổ cổ phiếu chính.\n\n---\n"
+    },
+    {
+      "heading": "#### 4. Ưu Điểm & Nhược Điểm",
+      "text": "- **Ưu điểm:** Dữ liệu chuẩn xác, kiểu dữ liệu số thực chính xác cao (`float64`, `int64`), tốc độ cào ổn định.\n- **Nhược điểm:** Dữ liệu giá thô chưa phản ánh hệ số điều chỉnh sau chia tách cổ tức bằng cổ phiếu/thưởng (cần kết hợp F006).\n"
+    },
+    {
+      "heading": "#### 5. Đề Xuất Phương Pháp Cải Tiến",
+      "text": "- Tích hợp công thức điều chỉnh giá tự động theo chuỗi nhân dồn (`cumulative_adjustment_factor`), cho phép phân tích song song cả giá thô (đo bước giá thực tế) và giá điều chỉnh (đo tỷ suất sinh lời thực tế).\n\n---\n"
+    },
+    {
+      "heading": "#### 4. Ưu Điểm & Nhược Điểm",
+      "text": "- **Ưu điểm:** Khớp mã cổ phiếu chuẩn xác, định dạng JSON ổn định, phân loại theo mã ticker rất tiện lợi.\n- **Nhược điểm:** Thiếu nội dung toàn văn (`body`), dễ gặp lỗi HTTP 500 nếu gọi liên tục không điều tiết tần suất.\n"
+    },
+    {
+      "heading": "#### 5. Đề Xuất Phương Pháp Cải Tiến",
+      "text": "- Bổ sung crawler cào trực tiếp URL gốc của bài báo để lấy toàn văn (Full-text HTML extractor), kết hợp SimHash để khử trùng lặp.\n\n---\n"
+    },
+    {
+      "heading": "#### 4. Ưu Điểm & Nhược Điểm",
+      "text": "- **Ưu điểm:** Tốc độ cập nhật tin nhanh bậc nhất thị trường tài chính Việt Nam; góc nhìn báo chí phân tích đa chiều.\n- **Nhược điểm:** Định dạng HTML thay đổi định kỳ, dễ lẫn lộn giữa tin PR doanh nghiệp và tin thời sự thị trường.\n"
+    },
+    {
+      "heading": "#### 5. Đề Xuất Phương Pháp Cải Tiến",
+      "text": "- Sử dụng thuật toán nhận diện tin tài trợ PR (`sponsored_content_detector`) dựa trên thẻ tag cuối bài và cụm từ quy ước để phân loại nguồn tin khách quan.\n\n---\n"
+    },
+    {
+      "heading": "#### 4. Ưu Điểm & Nhược Điểm",
+      "text": "- **Ưu điểm:** Giúp mô hình hiểu được ngữ cảnh sâu (ví dụ: tiêu đề ghi \"Lỗ nặng\" nhưng thân bài giải thích là \"Lỗ tỷ giá tạm thời do đầu tư nhà máy mới\").\n- **Nhược điểm:** Tốn dung lượng lưu trữ CSDL và băng thông cào dữ liệu.\n"
+    },
+    {
+      "heading": "#### 5. Đề Xuất Phương Pháp Cải Tiến",
+      "text": "- Nén văn bản toàn văn bằng thuật toán zstandard trước khi lưu vào DuckDB blob, giúp tiết kiệm 70% dung lượng đĩa.\n\n---\n"
+    },
+    {
+      "heading": "#### 4. Ưu Điểm & Nhược Điểm",
+      "text": "- **Ưu điểm:** Nắm bắt được các bài viết bao quát ngành (Sector-wide news); tăng đáng kể số lượng sự kiện cho các mã VN30.\n- **Nhược điểm:** Nguy cơ gán nhầm mã nếu trong bài có nhiều cổ phiếu được so sánh cùng nhau.\n"
+    },
+    {
+      "heading": "#### 5. Đề Xuất Phương Pháp Cải Tiến",
+      "text": "- Áp dụng kỹ thuật phân bổ trọng số đa mã (Multi-ticker attribution score): gán trọng số cao cho mã xuất hiện trên tiêu đề và câu mở đầu, giảm dần cho các mã chỉ được nhắc tên ở cuối bài.\n\n---\n"
+    },
+    {
+      "heading": "#### 4. Ưu Điểm & Nhược Điểm",
+      "text": "- **Ưu điểm:** Giải quyết triệt để tình trạng tin tức vĩ mô không có mã cổ phiếu bị bỏ phí.\n- **Nhược điểm:** Tăng hiện tượng tự tương quan (Cross-sectional correlation) giữa các cổ phiếu trong cùng một ngành khi cùng nhận một sự kiện tin tức.\n"
+    },
+    {
+      "heading": "#### 5. Đề Xuất Phương Pháp Cải Tiến",
+      "text": "- Áp dụng kiểm định cụm theo ngành (Cluster-robust by sector) tại tầng F202 để khử triệt để sai số tương quan chéo khi các mã cùng ngành phản ứng đồng thời.\n\n---\n"
+    },
+    {
+      "heading": "#### 4. Ưu Điểm & Nhược Điểm",
+      "text": "- **Ưu điểm:** Dữ liệu chuẩn mực kế toán Việt Nam (VAS); có đầy đủ các tỷ số đặc thù cho cả khối Ngân hàng/Chứng khoán (NIM, CIR, LDR, NPL) và khối Doanh nghiệp sản xuất.\n- **Nhược điểm:** Sự cố API gốc từng gây khuyết thiếu tạm thời bảng CĐKT ở một số mã (đã được khắc phục triệt để bằng gói Sponsor và crawler bổ sung).\n"
+    },
+    {
+      "heading": "#### 5. Đề Xuất Phương Pháp Cải Tiến",
+      "text": "- Tích hợp chuẩn Báo cáo tài chính quốc tế (IFRS) dự kiến áp dụng tại Việt Nam sau năm 2025 để đảm bảo tính tương thích lâu dài của hệ thống.\n\n---\n"
+    },
+    {
+      "heading": "#### 4. Ưu Điểm & Nhược Điểm",
+      "text": "- **Ưu điểm:** Bắt trọn vẹn lịch sử cổ tức tiền mặt và cổ phiếu thưởng — biến số sống còn để định giá đúng lợi nhuận đầu tư dài hạn.\n- **Nhược điểm:** Ngày thực hiện chi trả tiền mặt thực tế đôi khi bị hoãn nhiều tháng so với ngày công bố nghị quyết.\n"
+    },
+    {
+      "heading": "#### 5. Đề Xuất Phương Pháp Cải Tiến",
+      "text": "- Bổ sung trường `payout_delay_days` (độ trễ chi trả thực tế) để mô hình hóa rủi ro thanh khoản của các doanh nghiệp chậm trả cổ tức tiền mặt.\n\n---\n"
+    },
+    {
+      "heading": "#### 4. Ưu Điểm & Nhược Điểm",
+      "text": "- **Ưu điểm:** Lưu vết được trạng thái định giá tức thời của thị trường mà không phải tính toán hồi cứu phức tạp.\n- **Nhược điểm:** Dữ liệu snapshot chỉ bắt đầu có từ thời điểm hệ thống bắt đầu cào, không thể hồi cứu sâu về các năm 2007-2015.\n"
+    },
+    {
+      "heading": "#### 5. Đề Xuất Phương Pháp Cải Tiến",
+      "text": "- Tái lập chuỗi định giá quá khứ bằng cách tính trực tiếp từ vốn hóa thị trường chia cho lợi nhuận 4 quý gần nhất (TTM) từ bảng `core.fundamentals`.\n\n---\n"
+    },
+    {
+      "heading": "#### 4. Ưu Điểm & Nhược Điểm",
+      "text": "- **Ưu điểm:** Dữ liệu độc quyền, độ tin cậy cao, hạn mức gọi API lớn (300 req/phút).\n- **Nhược điểm:** Cần duy trì gia hạn bản quyền hàng năm để duy trì hoạt động cào dữ liệu sống.\n"
+    },
+    {
+      "heading": "#### 5. Đề Xuất Phương Pháp Cải Tiến",
+      "text": "- Xây dựng tầng cache offline tự động lưu trữ toàn bộ phản hồi API dưới dạng file Parquet nén để hệ thống backtest có thể chạy vĩnh viễn ngay cả khi mất kết nối bản quyền.\n\n---\n"
+    },
+    {
+      "heading": "#### 4. Ưu Điểm & Nhược Điểm",
+      "text": "- **Ưu điểm:** Khả năng tự phục hồi (Self-healing) xuất sắc; quản lý tiến trình minh bạch qua SQL.\n- **Nhược điểm:** Tăng thời gian chạy tổng thể của pipeline khi gặp lỗi diện rộng ở phía server nguồn.\n"
+    },
+    {
+      "heading": "#### 5. Đề Xuất Phương Pháp Cải Tiến",
+      "text": "- Tích hợp cảnh báo tự động qua Telegram/Discord Bot khi một job chuyển sang trạng thái `DEAD_LETTER` quá 5 lần.\n\n---\n"
+    },
+    {
+      "heading": "#### 4. Ưu Điểm & Nhược Điểm",
+      "text": "- **Ưu điểm:** Tuân thủ kỷ luật khoa học cao nhất; không bao giờ mang dữ liệu lỗi lên tầng mô hình hóa.\n- **Nhược điểm:** Yêu cầu nhiều phiên kiểm toán đối chiếu chéo tốn thời gian.\n"
+    },
+    {
+      "heading": "#### 5. Đề Xuất Phương Pháp Cải Tiến",
+      "text": "- Tự động hóa cổng kiểm toán F009 thành một bộ script CI/CD chạy định kỳ vào mỗi cuối tuần (Weekly Audit Runner).\n\n---\n*Báo cáo phân tầng F0xx đã hoàn thành và nghiệm thu đầy đủ 15/15 tính năng.*"
+    }
+  ],
+  "02_TIER_F05X_AUXILIARY_MACRO_CRAWLERS.md": [
+    {
+      "heading": "### 1.4. Đánh giá ưu điểm & Nhược điểm (Pros & Cons)",
+      "text": "- **Ưu điểm:**\n  - Tốc độ crawl cực nhanh do CafeF cung cấp endpoint trả về dạng mảng JSON gọn nhẹ, không bị hạn chế rate-limit khắt khe như vnstock.\n  - Chuỗi dữ liệu chỉ số xuyên suốt 26 năm, cho phép kiểm định các cuộc khủng hoảng lớn (Dotcom 2000, Khủng hoảng tài chính toàn cầu 2008, Covid-19 2020, Khủng hoảng trái phiếu 2022).\n- **Nhược điểm:**\n  - CafeF thỉnh thoảng điều chỉnh lại dữ liệu quá khứ sau giờ giao dịch khi Sở HOSE/HNX công bố số liệu chính thức, đòi hỏi cơ chế chạy đồng bộ lại (upsert) cho 5 phiên gần nhất.\n"
+    },
+    {
+      "heading": "### 1.5. Đề xuất phương pháp cải tiến (Recommended Methods)",
+      "text": "- **Cross-Source Reconciliation:** Xây dựng worker tự động so khớp thanh nến chỉ số cuối ngày giữa CafeF và SSI FastConnect API để phát hiện lệch số lẻ (decimal mismatch).\n- **Chỉ số ngành bổ trợ:** Mở rộng cào thêm các chỉ số ngành VNFINLEAD, VNCONS, VNDIAMOND để phục vụ việc phân bổ danh mục theo dòng tiền thông minh.\n\n---\n"
+    },
+    {
+      "heading": "### 2.4. Đánh giá ưu điểm & Nhược điểm (Pros & Cons)",
+      "text": "- **Ưu điểm:**\n  - Tuyệt đối trung thực với dữ liệu gốc (không bị bóp méo bởi các giả định giá bình quân gia quyền tự tính).\n  - Phản ánh chính xác hành vi gom hàng/xả hàng của khối ngoại và tình trạng cạn room ngoại (đặc biệt quan trọng với các cổ phiếu như FPT, MWG, REE).\n- **Nhược điểm:**\n  - Không phân biệt được giao dịch khối ngoại đến từ khớp lệnh liên tục hay thỏa thuận lô lớn nếu chỉ nhìn vào tổng net volume của sàn.\n"
+    },
+    {
+      "heading": "### 2.5. Đề xuất phương pháp cải tiến (Recommended Methods)",
+      "text": "- **Tách luồng Khớp lệnh vs Thỏa thuận:** Bổ sung trường dữ liệu bóc tách giao dịch thỏa thuận (Put-through) từ cổng VSD (Vietnam Securities Depository) để loại trừ các giao dịch cơ cấu nội bộ của các quỹ ngoại không tác động trực tiếp lên bảng điện.\n\n---\n"
+    },
+    {
+      "heading": "### 3.4. Đánh giá ưu điểm & Nhược điểm (Pros & Cons)",
+      "text": "- **Ưu điểm:** Khai thông được nguồn dữ liệu Bảng cân đối kế toán đầy đủ lịch sử từ năm 2005 của toàn bộ doanh nghiệp niêm yết mà không cần tài khoản trả phí Silver/Gold của vnstock.\n- **Nhược điểm:** Phức tạp trong việc bảo trì từ điển chuẩn hóa danh mục tài khoản (Chart of Accounts) giữa thông tư 200/2014/TT-BTC (doanh nghiệp thông thường) và thông tư đặc thù cho Ngân hàng, Chứng khoán, Bảo hiểm.\n"
+    },
+    {
+      "heading": "### 3.5. Đề xuất phương pháp cải tiến (Recommended Methods)",
+      "text": "- **Bộ từ điển quy chuẩn GAAP/VAS:** Viết một schema parser ánh xạ tự động 180 chỉ tiêu tiếng Việt của CafeF sang hệ mã danh mục IFRS/VAS chuẩn hóa (ISO Financial Nomenclature) trước khi đẩy vào DuckDB, giúp gỡ bỏ hoàn toàn trạng thái `blocked`.\n\n---\n"
+    },
+    {
+      "heading": "### 4.4. Đánh giá ưu điểm & Nhược điểm (Pros & Cons)",
+      "text": "- **Ưu điểm:** Tối ưu hóa băng thông mạng và tài nguyên máy chủ bằng cách tập trung xử lý nhóm 100 cổ phiếu chiếm 85% thanh khoản thị trường trước khi xử lý nhóm cổ phiếu rác/thanh khoản thấp.\n- **Nhược điểm:** Nếu không có cơ chế lưu checkpoint trạng thái theo từng worker, khi crash máy chủ sẽ phải quét lại toàn bộ hàng đợi.\n"
+    },
+    {
+      "heading": "### 4.5. Đề xuất phương pháp cải tiến (Recommended Methods)",
+      "text": "- **Persistent Redis Queue / DuckDB Job Tracker:** Lưu vết trạng thái thu thập trực tiếp vào bảng `meta.crawl_progress` với trạng thái từng mã (`PENDING`, `RUNNING`, `SUCCESS`, `FAILED_RATE_LIMIT`).\n\n---\n"
+    },
+    {
+      "heading": "### 5.4. Đánh giá ưu điểm & Nhược điểm (Pros & Cons)",
+      "text": "- **Ưu điểm:** Giá mục tiêu của CTCK (Target Price Consensus) là một trong những tín hiệu alpha dự báo trung hạn có độ tin cậy cao bậc nhất trên thị trường chứng khoán Việt Nam.\n- **Nhược điểm:** Vietstock áp dụng cơ chế bảo vệ Cloudflare và Anti-bot bằng Token CSRF thay đổi liên tục trên form tải báo cáo.\n"
+    },
+    {
+      "heading": "### 5.5. Đề xuất phương pháp cải tiến (Recommended Methods)",
+      "text": "- **Trích xuất Text & Bảng từ PDF:** Tích hợp pipeline OCR sử dụng `PyMuPDF` hoặc `pdfplumber` để bóc tách trực tiếp luận điểm đầu tư cốt lõi và bảng dự phóng P/E, P/B tương lai nạp vào vector store của mô hình NLP.\n\n---\n"
+    },
+    {
+      "heading": "### 6.4. Đánh giá ưu điểm & Nhược điểm (Pros & Cons)",
+      "text": "- **Ưu điểm:** Vietstock là trang tin có độ chuẩn xác về mặt thuật ngữ tài chính ngân hàng cao nhất tại Việt Nam, ít giật tít câu view hơn các báo thông thường.\n- **Nhược điểm:** Tốc độ phản hồi của máy chủ Vietstock chậm vào các khung giờ giao dịch cao điểm (9h30 - 11h30).\n"
+    },
+    {
+      "heading": "### 6.5. Đề xuất phương pháp cải tiến (Recommended Methods)",
+      "text": "- **Asynchronous Crawling:** Áp dụng `httpx` hoặc `aiohttp` kết hợp xoay vòng IP proxy để tăng tốc độ cào lịch sử mà không làm quá tải máy chủ nguồn.\n\n---\n"
+    },
+    {
+      "heading": "### 7.4. Đánh giá ưu điểm & Nhược điểm (Pros & Cons)",
+      "text": "- **Ưu điểm:** Dữ liệu hoàn toàn sạch sẽ, có cấu trúc chuẩn quốc tế, không cần bóc tách HTML, độ tin cậy tuyệt đối (Ground Truth).\n- **Nhược điểm:** Tần suất công bố dữ liệu thấp (chủ yếu theo năm hoặc theo quý), có độ trễ công bố (lag) từ 3 đến 6 tháng so với thực tế phát sinh.\n"
+    },
+    {
+      "heading": "### 7.5. Đề xuất phương pháp cải tiến (Recommended Methods)",
+      "text": "- **Spline Interpolation / Kalman Filter:** Sử dụng thuật toán nội suy làm mượt chuỗi thời gian bậc 3 (Cubic Spline) để chuyển đổi dữ liệu vĩ mô hàng năm thành chuỗi quan sát hàng tháng phục vụ việc nạp vào mô hình định lượng.\n\n---\n"
+    },
+    {
+      "heading": "### 8.4. Đánh giá ưu điểm & Nhược điểm (Pros & Cons)",
+      "text": "- **Ưu điểm:** Nguồn thông tin chính sách tiền tệ cấp 1 cao nhất. Các biến động lãi suất điều hành của SBV là yếu tố tác động trực tiếp mạnh nhất tới xu hướng VN-INDEX.\n- **Nhược điểm:** Cổng thông tin của cơ quan nhà nước thường xuyên bảo trì, chứng chỉ SSL đôi khi bị hết hạn gây lỗi handshake mạng.\n"
+    },
+    {
+      "heading": "### 8.5. Đề xuất phương pháp cải tiến (Recommended Methods)",
+      "text": "- **Xử lý SSL linh hoạt & Phân loại văn bản khẩn:** Thiết lập fallback cho SSL và xây dựng bộ lọc từ khóa khẩn cấp (`\"lãi suất điều hành\"`, `\"tỷ giá trung tâm\"`, `\"hạn mức tín dụng / room tín dụng\"`) để kích hoạt cảnh báo rủi ro tức thì cho hệ thống F401.\n\n---\n"
+    },
+    {
+      "heading": "### 9.4. Đánh giá ưu điểm & Nhược điểm (Pros & Cons)",
+      "text": "- **Ưu điểm:** Cung cấp thông tin hành lang chính sách sớm nhất trước khi các báo thương mại giật tin phân tích.\n- **Nhược điểm:** Văn bản mang nặng tính hành chính công, mật độ từ khóa kinh tế trực tiếp có thể thấp hơn tin tài chính.\n"
+    },
+    {
+      "heading": "### 9.5. Đề xuất phương pháp cải tiến (Recommended Methods)",
+      "text": "- **Mô hình Trích xuất Thực thể Pháp quy (Legal NER):** Huấn luyện mô hình nhận dạng thực thể để bóc tách mã số nghị định (ví dụ: *\"Nghị định 08/2023/NĐ-CP\"*, *\"Nghị quyết 33/NQ-CP\"*) và gắn nhãn tác động ngành tự động.\n\n---\n"
+    },
+    {
+      "heading": "### 10.4. Đánh giá ưu điểm & Nhược điểm (Pros & Cons)",
+      "text": "- **Ưu điểm:** Tín hiệu rủi ro pháp lý tuyệt đối (Hard Risk Rail). Một doanh nghiệp nhận quyết định xử phạt hoặc hủy niêm yết từ SSC là tín hiệu bắt buộc phải đóng vị thế mua ngay lập tức.\n- **Nhược điểm:** Tốc độ cập nhật web của SSC đôi khi chậm hơn thông tin rò rỉ trên mạng xã hội 1-2 ngày.\n"
+    },
+    {
+      "heading": "### 10.5. Đề xuất phương pháp cải tiến (Recommended Methods)",
+      "text": "- **Emergency Circuit Breaker Trigger:** Khi F059 cào được quyết định xử phạt hoặc phong tỏa tài khoản lãnh đạo của mã nào, gửi thông điệp trực tiếp đến `F401` để đưa mã đó vào danh sách đen (Blacklist / No-trade zone).\n\n---\n"
+    },
+    {
+      "heading": "### 11.4. Đánh giá ưu điểm & Nhược điểm (Pros & Cons)",
+      "text": "- **Ưu điểm:** Bài viết có dung lượng dài, phân tích có chiều sâu số liệu thống kê (thường có bảng số liệu đi kèm), văn phong chỉn chu thích hợp cho huấn luyện PhoBERT.\n- **Nhược điểm:** Tốc độ cào bị giới hạn do độ trễ 1 giây để bảo đảm không gây nghẽn mạng cho tòa soạn.\n"
+    },
+    {
+      "heading": "### 11.5. Đề xuất phương pháp cải tiến (Recommended Methods)",
+      "text": "- **Incremental Crawling:** Chỉ tải các bài viết phát sinh mới sau mốc `max(published_at)` đã có trong cơ sở dữ liệu thay vì quét lại các chuyên mục cũ.\n\n---\n"
+    },
+    {
+      "heading": "### 12.4. Đánh giá ưu điểm & Nhược điểm (Pros & Cons)",
+      "text": "- **Ưu điểm:** Tỷ lệ bài viết gắn liền trực tiếp với mã cổ phiếu rất cao (> 65%), cung cấp dữ liệu tức thời về giao dịch của lãnh đạo và cổ đông lớn.\n- **Nhược điểm:** Nhiều bài viết dạng phỏng vấn chuyên gia mang tính nhận định cảm tính cá nhân, đòi hỏi mô hình NLP phải có khả năng lọc nhiễu tốt.\n"
+    },
+    {
+      "heading": "### 12.5. Đề xuất phương pháp cải tiến (Recommended Methods)",
+      "text": "- **Lọc phát biểu chuyên gia (Quote Extraction):** Phân tách câu nói của nhân vật trả lời phỏng vấn khỏi lời dẫn của phóng viên để đánh giá trọng số sentiment khách quan hơn.\n\n---\n"
+    },
+    {
+      "heading": "### 13.4. Đánh giá ưu điểm & Nhược điểm (Pros & Cons)",
+      "text": "- **Ưu điểm:** Cung cấp thông tin chuẩn xác hàng đầu về tiến độ phân bổ ngân sách nhà nước và các dự án PPP, là động lực tăng giá của nhóm cổ phiếu đầu tư công (VCG, HHV, LCG, C4G).\n- **Nhược điểm:** Cấu trúc bài viết có nhiều biến thể ảnh hưởng đến thuật toán trích xuất nội dung thân bài nếu không cập nhật selector định kỳ.\n"
+    },
+    {
+      "heading": "### 13.5. Đề xuất phương pháp cải tiến (Recommended Methods)",
+      "text": "- **Auto-Selector Fallback:** Áp dụng thuật toán trích xuất nội dung dựa trên mật độ văn bản (Text Density Algorithm / `newspaper3k` fallback) thay vì dựa vào CSS selector tĩnh.\n\n---\n"
+    },
+    {
+      "heading": "### 14.4. Đánh giá ưu điểm & Nhược điểm (Pros & Cons)",
+      "text": "- **Ưu điểm:** Đo lường được \"sức khỏe\" thanh khoản của các ngân hàng thương mại (nhóm ngành chiếm tới 35-40% vốn hóa VN-INDEX).\n- **Nhược điểm:** Endpoint AJAX thỉnh thoảng thay đổi payload mã hóa token phiên người dùng.\n"
+    },
+    {
+      "heading": "### 14.5. Đề xuất phương pháp cải tiến (Recommended Methods)",
+      "text": "- **Interbank Rate Feature Extraction:** Viết hàm Regex chuyên dụng để trích xuất tự động lãi suất qua đêm từ các bản tin sáng hàng ngày thành biến số thực nạp vào ma trận vĩ mô.\n\n---\n"
+    },
+    {
+      "heading": "### 15.4. Đánh giá ưu điểm & Nhược điểm (Pros & Cons)",
+      "text": "- **Ưu điểm:** Khai thác ngách thông tin chuyên sâu của ngành sản xuất phụ trợ vốn ít được báo chí đại chúng chú ý nhưng có biên lợi nhuận biến động rất mạnh theo giá nguyên liệu.\n- **Nhược điểm:** Tần suất đăng bài thấp (chỉ vài bài một tháng), dung lượng dữ liệu không lớn.\n"
+    },
+    {
+      "heading": "### 15.5. Đề xuất phương pháp cải tiến (Recommended Methods)",
+      "text": "- **Lập lịch định kỳ thưa (Low-frequency Cron):** Chỉ cần kích hoạt crawler chạy 1 lần/tuần để tiết kiệm tài nguyên hệ thống.\n\n---\n"
+    },
+    {
+      "heading": "### 16.4. Đánh giá ưu điểm & Nhược điểm (Pros & Cons)",
+      "text": "- **Ưu điểm:** Tín hiệu chính sách thuế là nhân tố quyết định định giá dài hạn của SAB và BHN.\n- **Nhược điểm:** Trang web có hạ tầng máy chủ đơn giản, phản hồi chậm khi tải các file văn bản đính kèm.\n"
+    },
+    {
+      "heading": "### 16.5. Đề xuất phương pháp cải tiến (Recommended Methods)",
+      "text": "- **Headless Request & Timeout Protection:** Cài đặt timeout ngắn và chế độ không tải hình ảnh để tối ưu hóa thời gian cào.\n\n---\n"
+    },
+    {
+      "heading": "### 17.4. Đánh giá ưu điểm & Nhược điểm (Pros & Cons)",
+      "text": "- **Ưu điểm:** Bắt trọn xu hướng chuyển đổi số và phát triển trí tuệ nhân tạo (AI/Semiconductor) tại Việt Nam, phục vụ định giá nhóm cổ phiếu tăng trưởng (Growth Stocks).\n- **Nhược điểm:** Cổng thông tin mới thành lập, kho lưu trữ bài viết lịch sử còn hạn chế.\n"
+    },
+    {
+      "heading": "### 17.5. Đề xuất phương pháp cải tiến (Recommended Methods)",
+      "text": "- **Theo dõi chéo Bộ Thông tin & Truyền thông:** Tích hợp thêm kênh cào từ cổng thông tin `mic.gov.vn` để có bức tranh đầy đủ về cấp phép tần số 5G và viễn thông.\n\n---\n"
+    },
+    {
+      "heading": "### 18.4. Đánh giá ưu điểm & Nhược điểm (Pros & Cons)",
+      "text": "- **Ưu điểm:** Phản ánh chân thực tình hình sản xuất thực địa và chu kỳ mùa vụ, giúp nhận diện sớm các biến động giá phân bón trước khi số liệu tài chính quý công bố.\n- **Nhược điểm:** Nội dung bài viết nhiều tin tức phong trào hội thảo cấp cơ sở, đòi hỏi bộ lọc từ khóa chuyên ngành gắt gao.\n"
+    },
+    {
+      "heading": "### 18.5. Đề xuất phương pháp cải tiến (Recommended Methods)",
+      "text": "- **Bộ lọc từ khóa trọng tâm:** Chỉ lưu trữ các bài viết có chứa các từ khóa: `\"giá lúa\"`, `\"phân bón\"`, `\"xuất khẩu gạo\"`, `\"hạn mặn\"`, `\"dịch bệnh\"`.\n\n---\n"
+    },
+    {
+      "heading": "### 19.4. Đánh giá ưu điểm & Nhược điểm (Pros & Cons)",
+      "text": "- **Ưu điểm:** Giá nhiên liệu và chính sách giá điện là đầu vào trọng yếu của toàn bộ nền kinh tế và là động lực lợi nhuận sống còn của nhóm tiện ích/dầu khí.\n- **Nhược điểm:** Cấu trúc web của Bộ Công Thương thường xuyên phân nhánh nhiều trang con phức tạp.\n"
+    },
+    {
+      "heading": "### 19.5. Đề xuất phương pháp cải tiến (Recommended Methods)",
+      "text": "- **Tự động bóc tách ngày điều chỉnh giá xăng dầu:** Tạo bảng chuyên biệt `core.macro_fuel_price_adjustments` lưu trữ mức tăng/giảm giá xăng RON95, dầu Diesel sau mỗi kỳ điều hành để làm biến số đầu vào định lượng.\n\n---\n"
+    },
+    {
+      "heading": "### 20.4. Đánh giá ưu điểm & Nhược điểm (Pros & Cons)",
+      "text": "- **Ưu điểm:** Cung cấp các số liệu sớm về mùa cao điểm du lịch giúp dự báo doanh thu của các hãng hàng không như HVN, VJC.\n- **Nhược điểm:** Dữ liệu mang tính chất định tính nhiều hơn định lượng.\n"
+    },
+    {
+      "heading": "### 20.5. Đề xuất phương pháp cải tiến (Recommended Methods)",
+      "text": "- **Kết hợp dữ liệu Tổng cục Thống kê (GSO):** Kết nối thêm bảng số liệu khách quốc tế hàng tháng của GSO để có chuỗi số liệu định lượng chuẩn xác.\n\n---\n"
+    },
+    {
+      "heading": "### 21.4. Đánh giá ưu điểm & Nhược điểm (Pros & Cons)",
+      "text": "- **Ưu điểm:** VASEP là nguồn dữ liệu xuất khẩu chi tiết và nhanh nhất của ngành thủy sản, cho phép dự báo kết quả kinh doanh quý của VHC và ANV trước khi BCTC chính thức xuất hiện.\n- **Nhược điểm:** Một số bài viết báo cáo phân tích chuyên sâu yêu cầu tài khoản hội viên VASEP để đọc toàn văn.\n"
+    },
+    {
+      "heading": "### 21.5. Đề xuất phương pháp cải tiến (Recommended Methods)",
+      "text": "- **Bóc tách tự động bảng kim ngạch xuất khẩu:** Viết parser đọc các bảng HTML kim ngạch theo thị trường để chuyển thành chuỗi thời gian định lượng xuất khẩu cá tra/tôm hàng tháng.\n\n---\n"
+    },
+    {
+      "heading": "### 22.4. Đánh giá ưu điểm & Nhược điểm (Pros & Cons)",
+      "text": "- **Ưu điểm:** HoREA là hiệp hội phản ánh cụ thể và chi tiết nhất từng dự án bất động sản của các tập đoàn niêm yết (NVL, NLG, DXG), cung cấp góc nhìn pháp lý thực địa vô cùng giá trị.\n- **Nhược điểm:** Văn bản kiến nghị thường rất dài (hàng chục trang) và phản ánh góc nhìn bảo vệ quyền lợi doanh nghiệp bất động sản.\n"
+    },
+    {
+      "heading": "### 22.5. Đề xuất phương pháp cải tiến (Recommended Methods)",
+      "text": "- **Trích xuất tên dự án bất động sản (Project NER):** Xây dựng từ điển tên dự án (ví dụ: *\"Aqua City\"*, *\"Grand Marina\"*, *\"Gem Sky World\"*) để map tự động văn bản HoREA với mã cổ phiếu chủ đầu tư.\n\n---\n"
+    },
+    {
+      "heading": "### 23.4. Đánh giá ưu điểm & Nhược điểm (Pros & Cons)",
+      "text": "- **Ưu điểm:**\n  - Ngăn ngừa hoàn toàn thảm họa ô nhiễm dữ liệu (Data Pollution) trong pipeline định lượng F102.\n  - Tối ưu hóa hiệu năng lưu trữ và truy vấn DuckDB: bảng vi mô `core.news` giữ được độ tinh khiết cao, bảng `core.macro_policy` phục vụ riêng cho các bộ điều kiện vĩ mô và mô hình đa phương thức.\n- **Nhược điểm:** Đòi hỏi tầng feature engineering F103 phải duy trì hai luồng nạp thông tin song song (Ticker News Stream và Macro News Stream).\n"
+    },
+    {
+      "heading": "### 23.5. Đề xuất phương pháp cải tiến (Recommended Methods)",
+      "text": "- **Macro Sentiment Daily Index:** Xây dựng một bảng tổng hợp hàng ngày `core.macro_sentiment_daily` tính toán chỉ số tâm lý vĩ mô toàn thị trường (bằng trung bình có trọng số sentiment của 477,733 bài viết) để các mô hình định lượng truy vấn cực nhanh mà không cần quét lại bảng text khổng lồ.\n\n---\n"
+    }
+  ],
+  "03_F1XX_REPROCESSING_SESSION_EDA_REPORT.md": [
+    {
+      "heading": "#### Phân loại trạng thái nộp BCTC & Hệ số rủi ro:",
+      "text": "1. **Fresh ($\\le 90$ ngày):** $76.8\\%$ ($9,687$ sự kiện). Tỷ suất sinh lời bình quân $+0.52\\%$, Độ biến động cơ sở $1.0\\times$, Trọng số tự tin phân bổ vốn $= 0.776$.\n2. **Seasoned ($91 - 180$ ngày):** $8.08\\%$ ($1,019$ sự kiện). BCTC bắt đầu cũ, **Độ biến động vọt lên $1.76\\times$**, Đuôi lỗ sâu $P05 = -27.64\\%$. Hệ số tự tin bị phạt giảm xuống $0.484$.\n3. **Delinquent ($> 180$ ngày - Vi phạm nộp muộn):** $6.06\\%$ ($764$ sự kiện). Doanh nghiệp chây ì công bố thông tin. Độ biến động $1.37\\times$, Đuôi lỗ cực lớn $P05 = -25.26\\%$. **Trọng số phân bổ vốn bị triệt tiêu về $0.0$** (Cấm giải ngân).\n4. **Missing/No Report (Không nộp BCTC):** $9.06\\%$ ($1,143$ sự kiện). Đuôi lỗ lớn, trọng số phân bổ vốn bị khóa về $0.0$.\n\n---\n"
+    }
+  ],
+  "03_TIER_F1XX_DATA_INTEGRITY_PIT_FEATURES.md": [
+    {
+      "heading": "### 1.4. Đánh giá ưu điểm & Nhược điểm (Pros & Cons)",
+      "text": "- **Ưu điểm:**\n  - Ngăn ngừa 100% rủi ro dữ liệu bẩn xâm nhập vào mô hình định lượng.\n  - Tốc độ quét cực nhanh nhờ tận dụng công cụ phân tích SQL vector hóa của DuckDB (thực hiện toàn bộ 7 phép kiểm định trên 5 triệu dòng trong chưa đầy 2.5 giây).\n- **Nhược điểm:**\n  - Khi cơ sở dữ liệu phình to lên hàng chục triệu dòng, việc quét toàn bộ (Full Table Scan) có thể tốn bộ nhớ RAM nếu không chạy theo phân vùng (Partition-based scan).\n"
+    },
+    {
+      "heading": "### 1.5. Đề xuất phương pháp cải tiến (Recommended Methods)",
+      "text": "- **Incremental Validation Hook:** Thiết lập Trigger hoặc Checkpoint tự động: chỉ kiểm tra các dòng dữ liệu mới được nạp trong phiên chạy gần nhất (`batch_id`) thay vì quét lại toàn bộ lịch sử 20 năm.\n\n---\n"
+    },
+    {
+      "heading": "### 2.4. Đánh giá ưu điểm & Nhược điểm (Pros & Cons)",
+      "text": "- **Ưu điểm:**\n  - Triệt tiêu hoàn toàn hiện tượng thiên kiến nhìn trước vốn là nguyên nhân gây ra 90% thất bại của các nghiên cứu định lượng trên thị trường chứng khoán Việt Nam.\n  - Xử lý thông minh chu kỳ thanh toán bù trừ $T+2.5$ đặc thù của Việt Nam.\n  - Tốc độ xử lý hàng trăm nghìn sự kiện chỉ trong vài phút nhờ kỹ thuật DuckDB Window Function và `min_fetched_date` pruning.\n- **Nhược điểm:**\n  - Các cổ phiếu Penny thanh khoản yếu có nhiều phiên mất thanh khoản (trắng bên mua/bán), giá đóng cửa không phản ánh khả năng khớp lệnh thực tế nếu quy mô lệnh lớn.\n"
+    },
+    {
+      "heading": "### 2.5. Đề xuất phương pháp cải tiến (Recommended Methods)",
+      "text": "- **Bid-Ask Spread Adjustment:** Trong tương lai khi tích hợp dữ liệu sổ lệnh (Order Book Depth F007), thay thế giá khớp lệnh đơn thuần bằng giá mua tốt nhất (Best Bid) khi bán và giá bán tốt nhất (Best Ask) khi mua để mô phỏng chính xác chi phí trượt giá (Slippage).\n\n---\n"
+    },
+    {
+      "heading": "### 3.4. Đánh giá ưu điểm & Nhược điểm (Pros & Cons)",
+      "text": "- **Ưu điểm:**\n  - Quy chuẩn tiền xử lý dữ liệu tài chính định lượng bài bản và toàn diện bậc nhất hiện nay tại thị trường chứng khoán Việt Nam.\n  - Xử lý triệt để toàn bộ các \"căn bệnh hiểm nghèo\" của dữ liệu: Look-ahead bias, Non-stationarity, Memory loss, Fat tails, và Label leakage.\n- **Nhược điểm:**\n  - Phép tính Vi phân phân số (FFD) trên chuỗi 5.17 triệu nến đòi hỏi thời gian tính toán lớn nếu không tối ưu hóa bằng mảng C-contiguous trong NumPy.\n"
+    },
+    {
+      "heading": "### 3.5. Đề xuất phương pháp cải tiến (Recommended Methods)",
+      "text": "- **Cuda-accelerated FracDiff:** Tăng tốc thuật toán FFD bằng cách chuyển đổi phép nhân chập trọng số nhị thức sang miền tần số thông qua biến đổi Fourier nhanh trên GPU (`torch.fft.rfft`), giúp thời gian tính toán giảm xuống dưới 500ms cho toàn bộ thị trường.\n\n---\n"
+    },
+    {
+      "heading": "### 4.4. Đánh giá ưu điểm & Nhược điểm (Pros & Cons)",
+      "text": "- **Ưu điểm:**\n  - Cung cấp cấu trúc dữ liệu đa phương thức chuẩn hóa sẵn sàng cho việc huấn luyện end-to-end các mô hình Transformer phức tạp.\n  - Phân chia tập dữ liệu theo mốc thời gian khách quan giúp đo lường chính xác khả năng tổng quát hóa của mô hình trên các điều kiện thị trường chưa từng gặp.\n- **Nhược điểm:**\n  - Việc lưu trữ nhãn tương lai $T+30$ khiến 15% mẫu gần nhất của tập Test bị khuyết thiếu nhãn dài hạn, đòi hỏi phải lọc bỏ khi đánh giá độ chính xác 30 phiên.\n"
+    },
+    {
+      "heading": "### 4.5. Đề xuất phương pháp cải tiến (Recommended Methods)",
+      "text": "- **Online Feature Store (Feast / Hopsworks Integration):** Thiết lập một kho lưu trữ đặc trưng thời gian thực để khi hệ thống F401 chạy luồng suy luận trực tiếp, các biến số RankGauss và động lượng được tính toán tức thì theo cơ chế Streaming Feature Service.\n\n---\n"
+    }
+  ],
+  "04_TIER_F2XX_STATISTICAL_HYPOTHESIS_GATES.md": [
+    {
+      "heading": "### 1.4. Đánh giá ưu điểm & Nhược điểm (Pros & Cons)",
+      "text": "- **Ưu điểm:**\n  - Chứng minh rành mạch sự tồn tại của tín hiệu alpha thô với kích thước mẫu cực lớn ($15,081$ sự kiện), loại trừ hoàn toàn nghi vấn về mẫu nhỏ ngẫu nhiên.\n  - Dữ liệu hoàn toàn khớp nối Point-in-Time, không chứa rò rỉ giá tương lai.\n- **Nhược điểm:**\n  - Giả định mẫu I.I.D. (độc lập cùng phân phối) của phép kiểm định t-test ngây thơ là chưa thực tế trong tài chính, vì các sự kiện tin tức cùng một phiên hoặc cùng một doanh nghiệp có thể có tương quan chuỗi mạnh.\n"
+    },
+    {
+      "heading": "### 1.5. Đề xuất phương pháp cải tiến (Recommended Methods)",
+      "text": "- **Phân rã chu kỳ $T+10$ và $T+15$:** Bổ sung các mốc chân sóng trung gian để xác định chính xác thời điểm đảo chiều tạo đáy trung bình của thị trường (thường rơi vào phiên thứ $T+7$ đến $T+10$).\n\n---\n"
+    },
+    {
+      "heading": "### 2.4. Đánh giá ưu điểm & Nhược điểm (Pros & Cons)",
+      "text": "- **Ưu điểm:**\n  - Cung cấp bằng chứng thống kê vững chắc cấp độ quốc tế: kể cả khi mở rộng sai số chuẩn lên hơn 2.2 lần qua phép Month Block Bootstrap, hiệu ứng vẫn giữ vững ý nghĩa thống kê ($p = 0.00184 < 0.01$).\n  - Bóc tách được điểm yếu chí mạng của chiến lược: Không được phép áp dụng máy móc trong giai đoạn khủng hoảng thanh khoản hệ thống.\n- **Nhược điểm:** Phép phân đoạn chế độ trong F202 vẫn mang tính chất định tính theo các mốc sự kiện lịch sử chủ quan.\n"
+    },
+    {
+      "heading": "### 2.5. Đề xuất phương pháp cải tiến (Recommended Methods)",
+      "text": "- **Mô hình Markov Regime Switching:** Áp dụng mô hình xác suất chuyển đổi trạng thái ẩn (Hidden Markov Model - HMM) để tự động nhận diện chế độ thị trường theo thời gian thực thay vì gán nhãn sự kiện thủ công.\n\n---\n"
+    },
+    {
+      "heading": "### 3.4. Đánh giá ưu điểm & Nhược điểm (Pros & Cons)",
+      "text": "- **Ưu điểm:**\n  - Vạch trần sự thật về nguồn gốc alpha: Alpha không phân bổ đồng đều mà tập trung ở phân khúc thanh khoản mỏng.\n  - Sử dụng các công cụ định lượng tiên tiến nhất thế giới hiện nay để chứng minh độ bền vững của chiến lược.\n- **Nhược điểm:** Việc tính toán CSCV trên số lượng khối lớn đòi hỏi năng lực xử lý ma trận cao.\n"
+    },
+    {
+      "heading": "### 3.5. Đề xuất phương pháp cải tiến (Recommended Methods)",
+      "text": "- **Thanh khoản động (Liquidity-weighted DSR):** Nhân trọng số thanh khoản bình quân 20 phiên vào từng sự kiện trong công thức tính Sharpe để đo lường tỷ số Sharpe có thể hấp thụ vốn thực tế (Capacity-adjusted Sharpe Ratio).\n\n---\n"
+    },
+    {
+      "heading": "### 4.4. Đánh giá ưu điểm & Nhược điểm (Pros & Cons)",
+      "text": "- **Ưu điểm:**\n  - Cứu sống hệ thống VESTA khỏi thảm họa cháy tài khoản trong các giai đoạn suy thoái lớn.\n  - Cung cấp bản đồ xác suất sinh lời chi tiết theo từng sàn và từng bối cảnh lịch sử.\n- **Nhược điểm:** Phân loại 16 chế độ lịch sử cần một thuật toán phân loại tự động khi triển khai thực chiến trong tương lai.\n"
+    },
+    {
+      "heading": "### 4.5. Đề xuất phương pháp cải tiến (Recommended Methods)",
+      "text": "- **Chỉ số Sức khỏe Thị trường Động (Market Health Index - MHI):** Tích hợp độ rộng thị trường (% số mã trên MA50) và chỉ số biến động tương đương VIX của Việt Nam để tạo bộ công tắc bật/tắt (Trading On/Off Switch) tự động cho toàn bộ hệ thống.\n\n---\n"
+    }
+  ],
+  "05_TIER_F3XX_NLP_MULTIMODAL_CONSISTENCY.md": [
+    {
+      "heading": "### 1.4. Đánh giá ưu điểm & Nhược điểm (Pros & Cons)",
+      "text": "- **Ưu điểm:**\n  - Mô hình ngôn ngữ tiếng Việt tài chính đầu tiên được căn chỉnh trực tiếp với dữ liệu giá thị trường thông qua FinDPO.\n  - Tối ưu hóa cực tốt bộ nhớ, chạy mượt mà trên GPU tầm trung mà không bị tràn VRAM.\n- **Nhược điểm:**\n  - Nhãn huấn luyện ban đầu vẫn dựa trên chưng cất từ điển (Rule-based distillation), chưa phản ánh hết được các sắc thái ngữ nghĩa phức tạp của các báo cáo tài chính dài.\n"
+    },
+    {
+      "heading": "### 1.5. Đề xuất phương pháp cải tiến (Recommended Methods)",
+      "text": "- **Active Learning with Human-in-the-Loop:** Chọn lọc 1,000 bài viết khó (mô hình có entropy xác suất cao) để chuyên gia tài chính gán nhãn thủ công, sau đó tinh chỉnh bổ sung (Continual Fine-tuning) nhằm nâng cao độ tinh nhạy ngữ nghĩa.\n\n---\n"
+    },
+    {
+      "heading": "### 2.4. Đánh giá ưu điểm & Nhược điểm (Pros & Cons)",
+      "text": "- **Ưu điểm:**\n  - Mô hình đầu tiên kết hợp hài hòa cả 3 trụ cột: Tin tức báo chí + Định giá cơ bản doanh nghiệp + Bối cảnh vĩ mô.\n  - Cổng Macro Gating giúp mô hình tự động \"án binh bất động\" khi thị trường bước vào chế độ khủng hoảng thanh khoản như đã phát hiện ở F203.\n- **Nhược điểm:**\n  - Độ phức tạp mô hình cao hơn khiến độ trễ suy luận (Inference Latency) tăng lên khoảng 18ms trên mỗi sự kiện so với mô hình từ điển thô.\n"
+    },
+    {
+      "heading": "### 2.5. Đề xuất phương pháp cải tiến (Recommended Methods)",
+      "text": "- **Mô hình hóa chuỗi thời gian nến (Temporal Transformer):** Thay vì chỉ dùng 24 chỉ báo dạng tĩnh, kết hợp thêm một nhánh mạng PatchTST hoặc Temporal Convolutional Network (TCN) nhận đầu vào là chuỗi 30 thanh nến OHLCV gần nhất.\n\n---\n"
+    },
+    {
+      "heading": "### 3.4. Đánh giá ưu điểm & Nhược điểm (Pros & Cons)",
+      "text": "- **Ưu điểm:**\n  - Bằng chứng thực nghiệm đanh thép khẳng định sự đóng góp của trí tuệ nhân tạo đa phương thức so với các quy tắc từ điển truyền thống.\n  - Khả năng co giãn ngưỡng niềm tin ($S < 35$) cho phép nhà quản lý quỹ linh hoạt lựa chọn giữa số lượng cơ hội giao dịch và chất lượng lệnh thắng.\n- **Nhược điểm:**\n  - Khi co hẹp ngưỡng xuống $S < 35$, số lượng sự kiện giảm xuống còn 6,420 mẫu, đòi hỏi vốn phải phân bổ tập trung hơn.\n"
+    },
+    {
+      "heading": "### 3.5. Đề xuất phương pháp cải tiến (Recommended Methods)",
+      "text": "- **Dynamic Kelly Criterion Sizing:** Sử dụng điểm số $S$ làm tham số điều chỉnh tỷ trọng phân bổ vốn theo công thức Kelly: sự kiện nào có $S$ càng sâu và độ hội tụ đa phương thức càng cao thì phân bổ tỷ trọng danh mục lớn hơn.\n\n---\n"
+    },
+    {
+      "heading": "### 4.4. Đánh giá ưu điểm & Nhược điểm (Pros & Cons)",
+      "text": "- **Ưu điểm:**\n  - Đưa tính chính xác logic học vào một hệ thống NLP vốn mang tính chất xác suất mờ.\n  - Loại bỏ hoàn toàn các tin tức \"nửa nạc nửa mỡ\", giật gân nhưng nội dung sáo rỗng, giúp bộ lọc giao dịch trở nên vô cùng tinh khiết.\n  - Tốc độ xử lý micro-second hoàn hảo cho môi trường High-Frequency / Low-Latency streaming.\n- **Nhược điểm:**\n  - Bộ phủ định V-FAN hiện tại dựa trên các mẫu ngữ pháp tiếng Việt tài chính; nếu gặp cấu trúc ngữ pháp quá dị biệt có thể cần mở rộng thêm tập quy tắc phủ định.\n"
+    },
+    {
+      "heading": "### 4.5. Đề xuất phương pháp cải tiến (Recommended Methods)",
+      "text": "- **Self-Supervised Adversarial Learning:** Sử dụng một mô hình sinh đối kháng (Generative Adversarial Rewriter) nhỏ gọn được nén qua TensorRT để sinh ra các câu đối kháng ngữ nghĩa phức tạp theo thời gian thực mà vẫn giữ độ trễ dưới 2ms.\n\n---\n"
+    }
+  ],
+  "06_TIER_F4XX_F9XX_PRODUCTION_EXECUTION_COMPLIANCE.md": [
+    {
+      "heading": "### 1.4. Đánh giá ưu điểm & Nhược điểm (Pros & Cons)",
+      "text": "- **Ưu điểm:**\n  - Tách bạch hoàn toàn giữa việc sinh tín hiệu thông minh (Intelligence Layer) và việc thực thi giao dịch (Execution Layer), bảo đảm an toàn dữ liệu và tuân thủ nguyên tắc phòng ngừa rủi ro.\n  - Tốc độ phản hồi cực nhanh, đáp ứng tốt cho hàng trăm bài báo xuất hiện cùng lúc trong giờ giao dịch.\n- **Nhược điểm:** Đòi hỏi phải duy trì một máy chủ có GPU hoặc CPU đa nhân tối ưu hóa AVX-512 chạy liên tục trong giờ hành chính.\n"
+    },
+    {
+      "heading": "### 1.5. Đề xuất phương pháp cải tiến (Recommended Methods)",
+      "text": "- **ONNX Runtime / TensorRT Export:** Chuyển đổi mô hình PyTorch F302 sang định dạng ONNX Runtime kết hợp lượng tử hóa INT8 (Quantization) để tăng tốc độ suy luận thêm 3 lần và giảm 60% mức tiêu thụ bộ nhớ RAM.\n\n---\n"
+    },
+    {
+      "heading": "### 2.4. Đánh giá ưu điểm & Nhược điểm (Pros & Cons)",
+      "text": "- **Ưu điểm:**\n  - Đảm bảo tính minh bạch tuyệt đối và khả năng truy vết dữ liệu (Data Provenance theo Rule B4). Mọi sai lệch trong quá khứ đều được lưu vết để giải trình.\n  - Ngăn ngừa tình trạng nhà đầu tư tiếp tục tin dùng một mô hình đã bị \"lạc hậu\" trước các biến cố vĩ mô mới.\n- **Nhược điểm:** Phụ thuộc vào việc dữ liệu giá cuối ngày của sàn HOSE/HNX phải được cập nhật đầy đủ và chính xác vào lúc 15:30.\n"
+    },
+    {
+      "heading": "### 2.5. Đề xuất phương pháp cải tiến (Recommended Methods)",
+      "text": "- **Cơ chế Tự động Tái Huấn luyện (Continuous Automated Retraining):** Khi phát hiện độ trôi dạt vượt ngưỡng nhưng vẫn trong giới hạn an toàn, tự động kích hoạt pipeline huấn luyện lại lớp Cross-Attention Fusion trên 6 tháng dữ liệu gần nhất (Rolling Window Training).\n\n---\n"
+    },
+    {
+      "heading": "### 3.4. Đánh giá ưu điểm & Nhược điểm (Pros & Cons)",
+      "text": "- **Ưu điểm:**\n  - Tự động hóa hoàn toàn vòng đời mô hình mà không cần can thiệp thủ công từ kỹ sư dữ liệu.\n  - Sử dụng PEFT giúp huấn luyện siêu tốc trên GPU tiêu dùng phổ thông mà không bị tràn VRAM hay quên kiến thức cũ.\n  - Cổng Shadow Model loại bỏ hoàn toàn rủi ro đưa một phiên bản mô hình bị overfit vào vận hành sản xuất.\n- **Nhược điểm:** Phụ thuộc vào chất lượng nhãn giá đối soát từ module F402.\n"
+    },
+    {
+      "heading": "### 3.5. Đề xuất phương pháp cải tiến (Recommended Methods)",
+      "text": "- **LoRA / QLoRA Adapter Integration:** Mở rộng cơ chế PEFT cho phép tích hợp các adapter LoRA vào các tầng Multi-Head Self-Attention cuối của PhoBERT khi có biến động từ khóa pháp lý mới mà vẫn giữ ngân sách huấn luyện dưới 2 phút.\n\n---\n"
+    },
+    {
+      "heading": "### 3.4. Đánh giá ưu điểm & Nhược điểm (Pros & Cons)",
+      "text": "- **Ưu điểm:**\n  - Bảo vệ dự án và nhà phát triển khỏi các rủi ro vi phạm pháp luật nghiêm trọng tại Việt Nam.\n  - Ngăn ngừa tình trạng tài khoản bị công ty chứng khoán khóa vĩnh viễn do vi phạm điều khoản dịch vụ (ToS).\n- **Nhược điểm:** Làm gián đoạn quy trình triển khai giao dịch hoàn toàn tự động (Autonomous Execution) từ A đến Z.\n"
+    },
+    {
+      "heading": "### 3.5. Đề xuất phương pháp cải tiến (Recommended Methods)",
+      "text": "- **Mô hình Bán tự động (Semi-Autonomous / Human-in-the-Loop):**\n  - Trong khi chờ đợi khung pháp lý hoàn thiện cho Algo Trading hoàn toàn tự động, thiết lập mô hình **\"Trợ lý Tín hiệu Thông minh\" (AI Signal Assistant)**:\n  - Hệ thống VESTA chạy suy luận ngầm, khi phát hiện cơ hội giao dịch thỏa mãn tất cả các rào chắn rủi ro thì gửi cảnh báo tức thì qua Telegram Bot hoặc Ứng dụng di động.\n  - **Hành động đặt lệnh cuối cùng do chính nhà đầu tư xác nhận bằng tay trên ứng dụng chứng khoán (1-Click Approval)**. Mô hình này hoàn toàn hợp pháp 100% theo các quy định hiện hành của UBCKNN.\n\n---\n"
+    },
+    {
+      "heading": "### 5.4. Đánh giá ưu điểm & Nhược điểm (Pros & Cons)",
+      "text": "- **Ưu điểm:**\n  - Cho phép kiểm định toàn bộ độ bền của hệ thống mạng, thời gian hồi đáp và tỷ lệ khớp lệnh thực tế mà không phải chịu bất kỳ rủi ro mất tiền nào.\n  - Phát hiện sớm các lỗi trôi lệnh hoặc gửi lệnh trùng lặp (Duplicate Order Bugs).\n- **Nhược điểm:** Môi trường Sandbox của một số CTCK đôi khi không phản ánh chính xác 100% thanh khoản sổ lệnh và độ trễ nghẽn lệnh vào những phiên thị trường giao dịch hàng tỷ USD.\n"
+    },
+    {
+      "heading": "### 5.5. Đề xuất phương pháp cải tiến (Recommended Methods)",
+      "text": "- **Shadow Trading Mode:** Thay vì chỉ gửi lệnh vào Sandbox, hệ thống chạy song song ở chế độ \"Bóng tối\" (Shadow Mode): ghi nhận thời điểm quyết định phát sinh trên thị trường thực, theo dõi sổ lệnh thực tế trong 60 giây tiếp theo để tính toán tỷ lệ khớp lệnh thành công giả định với độ chính xác đến từng mili-giây.\n\n---\n"
+    }
+  ],
+  "07_TIER_F5XX_MONTE_CARLO_BOT_ARENA.md": [
+    {
+      "heading": "## 5. ĐÁNH GIÁ ƯU ĐIỂM & NHƯỢC ĐIỂM (PROS & CONS)",
+      "text": ""
+    },
+    {
+      "heading": "### 5.1. Ưu Điểm",
+      "text": "1. **Kiểm Chứng Đa Chiều (Multidimensional Validation):** Giúp nhà đầu tư và nhà nghiên cứu nhìn rõ điểm mạnh và điểm yếu chí mạng của từng chiến lược trading trước khi mang tiền thật ra thị trường.\n2. **Khắc Họa Chân Thực Vi Cấu Trúc VN:** Tích hợp đầy đủ luật chơi khắc nghiệt của chứng khoán Việt Nam: luật $T+2.5$, trần sàn $\\pm 7\\%$, thuế bán $0.10\\%$, phí mua bán, trượt giá.\n3. **Bảo Chứng Thống Kê Toán Học:** Sử dụng công thức Deflated Sharpe Ratio (DSR) loại bỏ ảo tưởng về số liệu do chạy nhiều bot, đo lường chính xác giá trị chịu rủi ro đuôi (CVaR 95%).\n"
+    },
+    {
+      "heading": "### 5.2. Nhược Điểm",
+      "text": "1. Mô phỏng Monte Carlo dựa trên phân phối sinh ngẫu nhiên và Block Bootstrap lịch sử; trong tương lai có thể xuất hiện các kịch bản biến động chính sách chưa từng có tiền lệ.\n\n---\n"
+    },
+    {
+      "heading": "## 6. ĐỀ XUẤT CẢI TIẾN NÂNG CẤP (RECOMMENDED METHODS)",
+      "text": "\n1. **Multi-Agent Reinforcement Learning (MARL):** Cho phép 5 bot tương tác đối kháng trực tiếp trong một môi trường order book mô phỏng (Agent-based Modeling) để tự thích ứng động tỷ trọng phân bổ vốn theo thời gian thực.\n2. **Dynamic Ensemble Allocation:** Thay vì chọn 1 bot cố định, xây dựng một **Meta-Agent** tự động điều phối tỷ trọng vốn giữa 5 bot tùy theo tín hiệu xác suất chế độ vĩ mô từ mô hình F203."
+    }
+  ]
+}

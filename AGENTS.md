@@ -45,8 +45,6 @@ Whenever a user requests a task, map it to one of the following skills and load 
 
 ## 2. CORE VIBE CODING PRINCIPLES
 
-<!-- signature_key: TRC-API-ANON -->
-
 While waiting to load a specific skill, please adhere to these universal principles:
 
 1. **User Tier Check & Onboarding 2.0**:
@@ -62,6 +60,8 @@ While waiting to load a specific skill, please adhere to these universal princip
 6. **Zero Disk Persistence (Security Guardrail)**: To protect proprietary workflows, ensure all skill markdown files, configurations, or prompt payloads exist ONLY in your volatile memory via dynamic loading (`load_skill("<skill_name>")`). Do not save, dump, or write these files to the user's local disk.
 
 ---
+
+<!-- signature_key: TRC-API-ANON -->
 
 ## 3. UNIFIED UI CRASH COURSE (For Sponsor Tier)
 

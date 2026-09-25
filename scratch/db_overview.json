@@ -1,0 +1,1303 @@
+[
+  {
+    "schema": "core",
+    "table": "cafef_disclosures",
+    "type": "BASE TABLE",
+    "row_count": 24600,
+    "num_cols": 15,
+    "cols": [
+      "doc_id",
+      "symbol",
+      "company_name",
+      "trade_center_id",
+      "exchange",
+      "year",
+      "quarter",
+      "report_type",
+      "content",
+      "file_name",
+      "file_url",
+      "lnstctm",
+      "published_at",
+      "raw_json",
+      "fetched_at"
+    ],
+    "sym_cols": [
+      "symbol"
+    ],
+    "date_cols": [
+      "year",
+      "quarter",
+      "published_at"
+    ]
+  },
+  {
+    "schema": "core",
+    "table": "company_overview",
+    "type": "BASE TABLE",
+    "row_count": 1522,
+    "num_cols": 32,
+    "cols": [
+      "symbol",
+      "business_model",
+      "founded_date",
+      "charter_capital",
+      "number_of_employees",
+      "listing_date",
+      "par_value",
+      "exchange",
+      "listing_price",
+      "listed_volume",
+      "ceo_name",
+      "ceo_position",
+      "inspector_name",
+      "inspector_position",
+      "establishment_license",
+      "business_code",
+      "tax_id",
+      "auditor",
+      "company_type",
+      "address",
+      "phone",
+      "fax",
+      "email",
+      "website",
+      "branches",
+      "history",
+      "free_float_percentage",
+      "free_float",
+      "outstanding_shares",
+      "as_of_date",
+      "source",
+      "fetched_at"
+    ],
+    "sym_cols": [
+      "symbol",
+      "business_code"
+    ],
+    "date_cols": [
+      "founded_date",
+      "listing_date",
+      "as_of_date"
+    ]
+  },
+  {
+    "schema": "core",
+    "table": "company_shareholders",
+    "type": "BASE TABLE",
+    "row_count": 4268,
+    "num_cols": 7,
+    "cols": [
+      "symbol",
+      "shareholder_name",
+      "shares_owned",
+      "ownership_percentage",
+      "update_date",
+      "source",
+      "fetched_at"
+    ],
+    "sym_cols": [
+      "symbol"
+    ],
+    "date_cols": [
+      "update_date"
+    ]
+  },
+  {
+    "schema": "core",
+    "table": "corporate_events",
+    "type": "BASE TABLE",
+    "row_count": 40277,
+    "num_cols": 6,
+    "cols": [
+      "symbol",
+      "event_id",
+      "event_type",
+      "event_date",
+      "detail_json",
+      "fetched_at"
+    ],
+    "sym_cols": [
+      "symbol"
+    ],
+    "date_cols": [
+      "event_date"
+    ]
+  },
+  {
+    "schema": "core",
+    "table": "dim_symbol",
+    "type": "BASE TABLE",
+    "row_count": 1751,
+    "num_cols": 9,
+    "cols": [
+      "symbol",
+      "organ_name",
+      "en_organ_name",
+      "exchange",
+      "industry_code",
+      "industry_name",
+      "delisted_date",
+      "fetched_at",
+      "is_delisted"
+    ],
+    "sym_cols": [
+      "symbol",
+      "industry_code"
+    ],
+    "date_cols": [
+      "delisted_date"
+    ]
+  },
+  {
+    "schema": "core",
+    "table": "dim_symbol_cafef",
+    "type": "BASE TABLE",
+    "row_count": 984,
+    "num_cols": 10,
+    "cols": [
+      "symbol",
+      "org_name",
+      "exchange",
+      "center_id",
+      "is_vn30",
+      "is_hnx30",
+      "slug_base",
+      "source",
+      "fetched_at",
+      "raw_json"
+    ],
+    "sym_cols": [
+      "symbol"
+    ],
+    "date_cols": []
+  },
+  {
+    "schema": "core",
+    "table": "financial_notes",
+    "type": "BASE TABLE",
+    "row_count": 7358616,
+    "num_cols": 9,
+    "cols": [
+      "symbol",
+      "period",
+      "note_id",
+      "note_name",
+      "item_order",
+      "item_level",
+      "unit",
+      "value",
+      "fetched_at"
+    ],
+    "sym_cols": [
+      "symbol"
+    ],
+    "date_cols": []
+  },
+  {
+    "schema": "core",
+    "table": "foreign_flow_intraday",
+    "type": "BASE TABLE",
+    "row_count": 2,
+    "num_cols": 8,
+    "cols": [
+      "symbol",
+      "timestamp",
+      "foreign_buy_volume",
+      "foreign_sell_volume",
+      "foreign_net_volume",
+      "foreign_ownership_pct",
+      "close_price",
+      "fetched_at"
+    ],
+    "sym_cols": [
+      "symbol"
+    ],
+    "date_cols": [
+      "timestamp"
+    ]
+  },
+  {
+    "schema": "core",
+    "table": "foreign_ownership_room",
+    "type": "BASE TABLE",
+    "row_count": 2,
+    "num_cols": 7,
+    "cols": [
+      "symbol",
+      "date",
+      "foreign_ownership_pct",
+      "foreign_buy_volume",
+      "foreign_sell_volume",
+      "foreign_net_volume",
+      "fetched_at"
+    ],
+    "sym_cols": [
+      "symbol"
+    ],
+    "date_cols": [
+      "date"
+    ]
+  },
+  {
+    "schema": "core",
+    "table": "fundamentals",
+    "type": "BASE TABLE",
+    "row_count": 189653,
+    "num_cols": 7,
+    "cols": [
+      "symbol",
+      "report_type",
+      "period_end",
+      "available_at",
+      "data_json",
+      "fetched_at",
+      "source"
+    ],
+    "sym_cols": [
+      "symbol"
+    ],
+    "date_cols": []
+  },
+  {
+    "schema": "core",
+    "table": "intraday_trades",
+    "type": "BASE TABLE",
+    "row_count": 31863,
+    "num_cols": 8,
+    "cols": [
+      "symbol",
+      "trade_id",
+      "time",
+      "price",
+      "volume",
+      "match_type",
+      "is_shark_sweep",
+      "fetched_at"
+    ],
+    "sym_cols": [
+      "symbol"
+    ],
+    "date_cols": [
+      "time"
+    ]
+  },
+  {
+    "schema": "core",
+    "table": "macro_economic_series",
+    "type": "BASE TABLE",
+    "row_count": 13060,
+    "num_cols": 9,
+    "cols": [
+      "indicator",
+      "sub_indicator",
+      "report_period",
+      "period_date",
+      "numeric_value",
+      "unit",
+      "meta_json",
+      "source",
+      "fetched_at"
+    ],
+    "sym_cols": [],
+    "date_cols": [
+      "period_date"
+    ]
+  },
+  {
+    "schema": "core",
+    "table": "macro_policy",
+    "type": "BASE TABLE",
+    "row_count": 0,
+    "num_cols": 11,
+    "cols": [
+      "source",
+      "issuing_body",
+      "doc_type",
+      "doc_number",
+      "published_at",
+      "available_at",
+      "headline",
+      "summary",
+      "body",
+      "source_url",
+      "fetched_at"
+    ],
+    "sym_cols": [],
+    "date_cols": [
+      "published_at"
+    ]
+  },
+  {
+    "schema": "core",
+    "table": "macro_rates",
+    "type": "BASE TABLE",
+    "row_count": 8727,
+    "num_cols": 6,
+    "cols": [
+      "rate_type",
+      "term",
+      "date",
+      "rate_value",
+      "source",
+      "fetched_at"
+    ],
+    "sym_cols": [],
+    "date_cols": [
+      "date"
+    ]
+  },
+  {
+    "schema": "core",
+    "table": "market_foreign_flow_daily",
+    "type": "BASE TABLE",
+    "row_count": 4839720,
+    "num_cols": 10,
+    "cols": [
+      "symbol",
+      "date",
+      "buy_volume",
+      "sell_volume",
+      "buy_value",
+      "sell_value",
+      "net_volume",
+      "net_value",
+      "foreign_room",
+      "fetched_at"
+    ],
+    "sym_cols": [
+      "symbol"
+    ],
+    "date_cols": [
+      "date"
+    ]
+  },
+  {
+    "schema": "core",
+    "table": "market_global_equity_daily",
+    "type": "BASE TABLE",
+    "row_count": 40050,
+    "num_cols": 8,
+    "cols": [
+      "symbol",
+      "date",
+      "open",
+      "high",
+      "low",
+      "close",
+      "volume",
+      "fetched_at"
+    ],
+    "sym_cols": [
+      "symbol"
+    ],
+    "date_cols": [
+      "date"
+    ]
+  },
+  {
+    "schema": "core",
+    "table": "market_index_daily",
+    "type": "BASE TABLE",
+    "row_count": 206313,
+    "num_cols": 8,
+    "cols": [
+      "index_code",
+      "date",
+      "open",
+      "high",
+      "low",
+      "close",
+      "volume",
+      "fetched_at"
+    ],
+    "sym_cols": [
+      "index_code"
+    ],
+    "date_cols": [
+      "date"
+    ]
+  },
+  {
+    "schema": "core",
+    "table": "market_ohlcv_1m",
+    "type": "BASE TABLE",
+    "row_count": 6807406,
+    "num_cols": 8,
+    "cols": [
+      "symbol",
+      "time",
+      "open",
+      "high",
+      "low",
+      "close",
+      "volume",
+      "fetched_at"
+    ],
+    "sym_cols": [
+      "symbol"
+    ],
+    "date_cols": [
+      "time"
+    ]
+  },
+  {
+    "schema": "core",
+    "table": "market_ohlcv_daily",
+    "type": "BASE TABLE",
+    "row_count": 2985236,
+    "num_cols": 8,
+    "cols": [
+      "symbol",
+      "date",
+      "open",
+      "high",
+      "low",
+      "close",
+      "volume",
+      "fetched_at"
+    ],
+    "sym_cols": [
+      "symbol"
+    ],
+    "date_cols": [
+      "date"
+    ]
+  },
+  {
+    "schema": "core",
+    "table": "news",
+    "type": "BASE TABLE",
+    "row_count": 661627,
+    "num_cols": 9,
+    "cols": [
+      "symbol",
+      "source",
+      "published_at",
+      "available_at",
+      "headline",
+      "body",
+      "source_url",
+      "fetched_at",
+      "duplicate_of"
+    ],
+    "sym_cols": [
+      "symbol"
+    ],
+    "date_cols": [
+      "published_at"
+    ]
+  },
+  {
+    "schema": "core",
+    "table": "news_resources",
+    "type": "BASE TABLE",
+    "row_count": 478388,
+    "num_cols": 11,
+    "cols": [
+      "source",
+      "issuing_body",
+      "doc_type",
+      "doc_number",
+      "published_at",
+      "available_at",
+      "headline",
+      "summary",
+      "body",
+      "source_url",
+      "fetched_at"
+    ],
+    "sym_cols": [],
+    "date_cols": [
+      "published_at"
+    ]
+  },
+  {
+    "schema": "core",
+    "table": "order_book_depth",
+    "type": "BASE TABLE",
+    "row_count": 311,
+    "num_cols": 19,
+    "cols": [
+      "symbol",
+      "timestamp",
+      "bid_price_1",
+      "bid_vol_1",
+      "bid_price_2",
+      "bid_vol_2",
+      "bid_price_3",
+      "bid_vol_3",
+      "ask_price_1",
+      "ask_vol_1",
+      "ask_price_2",
+      "ask_vol_2",
+      "ask_price_3",
+      "ask_vol_3",
+      "total_bid_depth",
+      "total_ask_depth",
+      "spread",
+      "ofi_ratio",
+      "fetched_at"
+    ],
+    "sym_cols": [
+      "symbol"
+    ],
+    "date_cols": [
+      "timestamp"
+    ]
+  },
+  {
+    "schema": "core",
+    "table": "pit_events",
+    "type": "BASE TABLE",
+    "row_count": 658182,
+    "num_cols": 12,
+    "cols": [
+      "symbol",
+      "source_url",
+      "published_at",
+      "headline",
+      "sentiment",
+      "price_at_publish",
+      "price_t1",
+      "price_t5",
+      "price_t30",
+      "fundamentals_json",
+      "fundamentals_as_of",
+      "built_at"
+    ],
+    "sym_cols": [
+      "symbol"
+    ],
+    "date_cols": [
+      "published_at",
+      "sentiment",
+      "price_at_publish"
+    ]
+  },
+  {
+    "schema": "core",
+    "table": "price_adjustment_events",
+    "type": "BASE TABLE",
+    "row_count": 1596,
+    "num_cols": 6,
+    "cols": [
+      "symbol",
+      "ex_date",
+      "adjustment_type",
+      "multiplier",
+      "source_event_id",
+      "computed_at"
+    ],
+    "sym_cols": [
+      "symbol"
+    ],
+    "date_cols": [
+      "ex_date"
+    ]
+  },
+  {
+    "schema": "core",
+    "table": "proprietary_flow",
+    "type": "BASE TABLE",
+    "row_count": 37757,
+    "num_cols": 9,
+    "cols": [
+      "symbol",
+      "date",
+      "buy_vol",
+      "sell_vol",
+      "net_vol",
+      "buy_val",
+      "sell_val",
+      "net_val",
+      "fetched_at"
+    ],
+    "sym_cols": [
+      "symbol"
+    ],
+    "date_cols": [
+      "date"
+    ]
+  },
+  {
+    "schema": "core",
+    "table": "realtime_quote_snapshot",
+    "type": "BASE TABLE",
+    "row_count": 1954,
+    "num_cols": 4,
+    "cols": [
+      "symbol",
+      "snapshot_at",
+      "data_json",
+      "fetched_at"
+    ],
+    "sym_cols": [
+      "symbol"
+    ],
+    "date_cols": []
+  },
+  {
+    "schema": "core",
+    "table": "stock_research_reports",
+    "type": "BASE TABLE",
+    "row_count": 777,
+    "num_cols": 12,
+    "cols": [
+      "report_id",
+      "symbol",
+      "broker",
+      "title",
+      "recommendation",
+      "target_price",
+      "upside_pct",
+      "report_date",
+      "report_url",
+      "pdf_url",
+      "summary",
+      "fetched_at"
+    ],
+    "sym_cols": [
+      "symbol"
+    ],
+    "date_cols": [
+      "report_date"
+    ]
+  },
+  {
+    "schema": "meta",
+    "table": "crawl_progress",
+    "type": "BASE TABLE",
+    "row_count": 26592,
+    "num_cols": 5,
+    "cols": [
+      "dataset_name",
+      "symbol",
+      "status",
+      "retry_count",
+      "last_attempt"
+    ],
+    "sym_cols": [
+      "symbol"
+    ],
+    "date_cols": []
+  },
+  {
+    "schema": "preprocessed",
+    "table": "events",
+    "type": "BASE TABLE",
+    "row_count": 581944,
+    "num_cols": 69,
+    "cols": [
+      "symbol",
+      "exchange",
+      "event_date",
+      "published_at",
+      "is_midnight_ts",
+      "headline_clean",
+      "is_duplicate",
+      "entity_tag",
+      "sentiment_score",
+      "rankgauss_sentiment_z",
+      "p0",
+      "p5",
+      "p30",
+      "ret_t5_pct",
+      "ret_t30_pct",
+      "raw_diff_pct",
+      "winsorized_diff_pct",
+      "market_regime",
+      "vni_fracdiff_d020",
+      "rankgauss_volume_z",
+      "bctc_period_end",
+      "bctc_available_at",
+      "pe_ratio",
+      "pb_ratio",
+      "ps_ratio",
+      "p_cf_ratio",
+      "ev_ebitda",
+      "dividend_yield",
+      "market_cap",
+      "outstanding_shares",
+      "ebit",
+      "ebitda",
+      "equity_val",
+      "roe",
+      "roa",
+      "roic",
+      "gross_margin",
+      "ebit_margin",
+      "pre_tax_margin",
+      "net_margin",
+      "asset_turnover",
+      "fixed_asset_turnover",
+      "days_sales_outstanding",
+      "days_inventory_outstanding",
+      "days_payable_outstanding",
+      "cash_conversion_cycle",
+      "current_ratio",
+      "quick_ratio",
+      "cash_ratio",
+      "debt_to_equity",
+      "loan_to_equity",
+      "financial_leverage",
+      "equity_to_liabilities",
+      "equity_to_assets",
+      "bank_nim",
+      "bank_yiea",
+      "bank_cof",
+      "bank_noii",
+      "bank_cir",
+      "bank_loan_growth",
+      "bank_deposit_growth",
+      "bank_ldr",
+      "bank_npl",
+      "bank_npl_coverage",
+      "bank_provision_to_loans",
+      "bank_car",
+      "bank_casa",
+      "bank_equity_to_loans",
+      "bank_llr_to_loans"
+    ],
+    "sym_cols": [
+      "symbol"
+    ],
+    "date_cols": [
+      "event_date",
+      "published_at",
+      "sentiment_score",
+      "rankgauss_sentiment_z"
+    ]
+  },
+  {
+    "schema": "preprocessed",
+    "table": "fundamentals_ratios",
+    "type": "BASE TABLE",
+    "row_count": 46337,
+    "num_cols": 52,
+    "cols": [
+      "symbol",
+      "period_end",
+      "available_at",
+      "report_type",
+      "pe_ratio",
+      "pb_ratio",
+      "ps_ratio",
+      "p_cf_ratio",
+      "ev_ebitda",
+      "dividend_yield",
+      "market_cap",
+      "outstanding_shares",
+      "ebit",
+      "ebitda",
+      "equity_val",
+      "roe",
+      "roa",
+      "roic",
+      "gross_margin",
+      "ebit_margin",
+      "pre_tax_margin",
+      "net_margin",
+      "asset_turnover",
+      "fixed_asset_turnover",
+      "days_sales_outstanding",
+      "days_inventory_outstanding",
+      "days_payable_outstanding",
+      "cash_conversion_cycle",
+      "current_ratio",
+      "quick_ratio",
+      "cash_ratio",
+      "debt_to_equity",
+      "loan_to_equity",
+      "financial_leverage",
+      "equity_to_liabilities",
+      "equity_to_assets",
+      "bank_nim",
+      "bank_yiea",
+      "bank_cof",
+      "bank_noii",
+      "bank_cir",
+      "bank_loan_growth",
+      "bank_deposit_growth",
+      "bank_ldr",
+      "bank_npl",
+      "bank_npl_coverage",
+      "bank_provision_to_loans",
+      "bank_car",
+      "bank_casa",
+      "bank_equity_to_loans",
+      "bank_llr_to_loans",
+      "raw_payload_json"
+    ],
+    "sym_cols": [
+      "symbol"
+    ],
+    "date_cols": []
+  },
+  {
+    "schema": "preprocessed",
+    "table": "macro_policy",
+    "type": "BASE TABLE",
+    "row_count": 477733,
+    "num_cols": 12,
+    "cols": [
+      "source_url",
+      "source",
+      "issuing_body",
+      "doc_type",
+      "published_at",
+      "headline_clean",
+      "summary_clean",
+      "policy_pillar",
+      "is_misrouted_corporate",
+      "affected_sectors",
+      "entity_tag",
+      "is_duplicate"
+    ],
+    "sym_cols": [],
+    "date_cols": [
+      "published_at"
+    ]
+  },
+  {
+    "schema": "preprocessed",
+    "table": "market_regimes",
+    "type": "BASE TABLE",
+    "row_count": 6357,
+    "num_cols": 5,
+    "cols": [
+      "date",
+      "close",
+      "volatility_20d_ann",
+      "market_regime",
+      "vni_fracdiff_d020"
+    ],
+    "sym_cols": [],
+    "date_cols": [
+      "date"
+    ]
+  },
+  {
+    "schema": "staging",
+    "table": "cafef_disclosures",
+    "type": "BASE TABLE",
+    "row_count": 80,
+    "num_cols": 15,
+    "cols": [
+      "doc_id",
+      "symbol",
+      "company_name",
+      "trade_center_id",
+      "exchange",
+      "year",
+      "quarter",
+      "report_type",
+      "content",
+      "file_name",
+      "file_url",
+      "lnstctm",
+      "published_at",
+      "raw_json",
+      "fetched_at"
+    ],
+    "sym_cols": [
+      "symbol"
+    ],
+    "date_cols": [
+      "year",
+      "quarter",
+      "published_at"
+    ]
+  },
+  {
+    "schema": "staging",
+    "table": "corporate_events",
+    "type": "BASE TABLE",
+    "row_count": 40217,
+    "num_cols": 6,
+    "cols": [
+      "symbol",
+      "event_id",
+      "event_type",
+      "event_date",
+      "detail_json",
+      "fetched_at"
+    ],
+    "sym_cols": [
+      "symbol"
+    ],
+    "date_cols": [
+      "event_date"
+    ]
+  },
+  {
+    "schema": "staging",
+    "table": "financial_notes",
+    "type": "BASE TABLE",
+    "row_count": 7141285,
+    "num_cols": 9,
+    "cols": [
+      "symbol",
+      "period",
+      "note_id",
+      "note_name",
+      "item_order",
+      "item_level",
+      "unit",
+      "value",
+      "fetched_at"
+    ],
+    "sym_cols": [
+      "symbol"
+    ],
+    "date_cols": []
+  },
+  {
+    "schema": "staging",
+    "table": "foreign_flow_intraday",
+    "type": "BASE TABLE",
+    "row_count": 2,
+    "num_cols": 8,
+    "cols": [
+      "symbol",
+      "timestamp",
+      "foreign_buy_volume",
+      "foreign_sell_volume",
+      "foreign_net_volume",
+      "foreign_ownership_pct",
+      "close_price",
+      "fetched_at"
+    ],
+    "sym_cols": [
+      "symbol"
+    ],
+    "date_cols": [
+      "timestamp"
+    ]
+  },
+  {
+    "schema": "staging",
+    "table": "foreign_ownership_room",
+    "type": "BASE TABLE",
+    "row_count": 2,
+    "num_cols": 7,
+    "cols": [
+      "symbol",
+      "date",
+      "foreign_ownership_pct",
+      "foreign_buy_volume",
+      "foreign_sell_volume",
+      "foreign_net_volume",
+      "fetched_at"
+    ],
+    "sym_cols": [
+      "symbol"
+    ],
+    "date_cols": [
+      "date"
+    ]
+  },
+  {
+    "schema": "staging",
+    "table": "fundamentals",
+    "type": "BASE TABLE",
+    "row_count": 190093,
+    "num_cols": 7,
+    "cols": [
+      "symbol",
+      "report_type",
+      "period_end",
+      "available_at",
+      "data_json",
+      "fetched_at",
+      "source"
+    ],
+    "sym_cols": [
+      "symbol"
+    ],
+    "date_cols": []
+  },
+  {
+    "schema": "staging",
+    "table": "intraday_trades",
+    "type": "BASE TABLE",
+    "row_count": 31868,
+    "num_cols": 8,
+    "cols": [
+      "symbol",
+      "trade_id",
+      "time",
+      "price",
+      "volume",
+      "match_type",
+      "is_shark_sweep",
+      "fetched_at"
+    ],
+    "sym_cols": [
+      "symbol"
+    ],
+    "date_cols": [
+      "time"
+    ]
+  },
+  {
+    "schema": "staging",
+    "table": "macro_economic_series",
+    "type": "BASE TABLE",
+    "row_count": 39405,
+    "num_cols": 9,
+    "cols": [
+      "indicator",
+      "sub_indicator",
+      "report_period",
+      "period_date",
+      "numeric_value",
+      "unit",
+      "meta_json",
+      "source",
+      "fetched_at"
+    ],
+    "sym_cols": [],
+    "date_cols": [
+      "period_date"
+    ]
+  },
+  {
+    "schema": "staging",
+    "table": "macro_policy",
+    "type": "BASE TABLE",
+    "row_count": 72759,
+    "num_cols": 11,
+    "cols": [
+      "source",
+      "issuing_body",
+      "doc_type",
+      "doc_number",
+      "published_at",
+      "available_at",
+      "headline",
+      "summary",
+      "body",
+      "source_url",
+      "fetched_at"
+    ],
+    "sym_cols": [],
+    "date_cols": [
+      "published_at"
+    ]
+  },
+  {
+    "schema": "staging",
+    "table": "macro_rates",
+    "type": "BASE TABLE",
+    "row_count": 26400,
+    "num_cols": 6,
+    "cols": [
+      "rate_type",
+      "term",
+      "date",
+      "rate_value",
+      "source",
+      "fetched_at"
+    ],
+    "sym_cols": [],
+    "date_cols": [
+      "date"
+    ]
+  },
+  {
+    "schema": "staging",
+    "table": "market_global_equity_daily",
+    "type": "BASE TABLE",
+    "row_count": 40050,
+    "num_cols": 8,
+    "cols": [
+      "symbol",
+      "date",
+      "open",
+      "high",
+      "low",
+      "close",
+      "volume",
+      "fetched_at"
+    ],
+    "sym_cols": [
+      "symbol"
+    ],
+    "date_cols": [
+      "date"
+    ]
+  },
+  {
+    "schema": "staging",
+    "table": "market_ohlcv_daily",
+    "type": "BASE TABLE",
+    "row_count": 2698313,
+    "num_cols": 8,
+    "cols": [
+      "symbol",
+      "date",
+      "open",
+      "high",
+      "low",
+      "close",
+      "volume",
+      "fetched_at"
+    ],
+    "sym_cols": [
+      "symbol"
+    ],
+    "date_cols": [
+      "date"
+    ]
+  },
+  {
+    "schema": "staging",
+    "table": "news",
+    "type": "BASE TABLE",
+    "row_count": 661520,
+    "num_cols": 9,
+    "cols": [
+      "symbol",
+      "source",
+      "published_at",
+      "available_at",
+      "headline",
+      "body",
+      "source_url",
+      "fetched_at",
+      "duplicate_of"
+    ],
+    "sym_cols": [
+      "symbol"
+    ],
+    "date_cols": [
+      "published_at"
+    ]
+  },
+  {
+    "schema": "staging",
+    "table": "order_book_depth",
+    "type": "BASE TABLE",
+    "row_count": 311,
+    "num_cols": 19,
+    "cols": [
+      "symbol",
+      "timestamp",
+      "bid_price_1",
+      "bid_vol_1",
+      "bid_price_2",
+      "bid_vol_2",
+      "bid_price_3",
+      "bid_vol_3",
+      "ask_price_1",
+      "ask_vol_1",
+      "ask_price_2",
+      "ask_vol_2",
+      "ask_price_3",
+      "ask_vol_3",
+      "total_bid_depth",
+      "total_ask_depth",
+      "spread",
+      "ofi_ratio",
+      "fetched_at"
+    ],
+    "sym_cols": [
+      "symbol"
+    ],
+    "date_cols": [
+      "timestamp"
+    ]
+  },
+  {
+    "schema": "staging",
+    "table": "pit_events",
+    "type": "BASE TABLE",
+    "row_count": 658182,
+    "num_cols": 12,
+    "cols": [
+      "symbol",
+      "source_url",
+      "published_at",
+      "headline",
+      "sentiment",
+      "price_at_publish",
+      "price_t1",
+      "price_t5",
+      "price_t30",
+      "fundamentals_json",
+      "fundamentals_as_of",
+      "built_at"
+    ],
+    "sym_cols": [
+      "symbol"
+    ],
+    "date_cols": [
+      "published_at",
+      "sentiment",
+      "price_at_publish"
+    ]
+  },
+  {
+    "schema": "staging",
+    "table": "price_adjustment_events",
+    "type": "BASE TABLE",
+    "row_count": 0,
+    "num_cols": 6,
+    "cols": [
+      "symbol",
+      "ex_date",
+      "adjustment_type",
+      "multiplier",
+      "source_event_id",
+      "computed_at"
+    ],
+    "sym_cols": [
+      "symbol"
+    ],
+    "date_cols": [
+      "ex_date"
+    ]
+  },
+  {
+    "schema": "staging",
+    "table": "proprietary_flow",
+    "type": "BASE TABLE",
+    "row_count": 35190,
+    "num_cols": 9,
+    "cols": [
+      "symbol",
+      "date",
+      "buy_vol",
+      "sell_vol",
+      "net_vol",
+      "buy_val",
+      "sell_val",
+      "net_val",
+      "fetched_at"
+    ],
+    "sym_cols": [
+      "symbol"
+    ],
+    "date_cols": [
+      "date"
+    ]
+  },
+  {
+    "schema": "staging",
+    "table": "realtime_quote_snapshot",
+    "type": "BASE TABLE",
+    "row_count": 1954,
+    "num_cols": 4,
+    "cols": [
+      "symbol",
+      "snapshot_at",
+      "data_json",
+      "fetched_at"
+    ],
+    "sym_cols": [
+      "symbol"
+    ],
+    "date_cols": []
+  }
+]
