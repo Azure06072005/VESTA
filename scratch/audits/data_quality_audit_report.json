@@ -1,0 +1,53 @@
+{
+  "audit_timestamp": "2026-09-28 20:36:49",
+  "pillars": {
+    "1_ohlcv": {
+      "ohlcv_1d": {
+        "total_records": 5185989,
+        "logic_errors": 485442,
+        "date_outliers": 0,
+        "duplicate_symbol_date": 0,
+        "abnormal_price_spikes": 3754,
+        "status": "WARNING"
+      },
+      "ohlcv_1m": {
+        "total_records": 22754387,
+        "distinct_symbols": 1482,
+        "logic_errors": 0,
+        "outside_trading_hours": 12380977,
+        "status": "WARNING"
+      }
+    },
+    "2_fundamentals": {
+      "total_records": 439700,
+      "distinct_symbols": 1743,
+      "duplicate_periods": 117607,
+      "lookahead_bias_violations": 0,
+      "balance_sheet_imbalance": 0,
+      "status": "WARNING"
+    },
+    "3_news": {
+      "total_stock_news": 670409,
+      "total_news_resources": 478599,
+      "total_disclosures": 0,
+      "future_dates_news": 0,
+      "future_dates_resources": 0,
+      "empty_headline_news": 0,
+      "duplicate_urls_news": 0,
+      "duplicate_urls_resources": 0,
+      "body_enriched_count": 8798,
+      "body_enriched_rate_pct": 1.31,
+      "status": "PASS"
+    },
+    "4_corporate_actions_and_reference": {
+      "corporate_events": 38803,
+      "price_adjustment_events": 5435,
+      "caf_timeline_entries": 6292,
+      "dim_symbol_count": 1751,
+      "duplicate_events": 0,
+      "orphan_symbols_in_ohlcv": 2189,
+      "invalid_caf_values": 0,
+      "status": "WARNING"
+    }
+  }
+}

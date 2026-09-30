@@ -279,39 +279,14 @@ def crawl_fundamentals_for_symbol(
 ) -> Tuple[str, int]:
     """Cào BCTC (CĐKT, KQKD, LCTT, Ratios) cho một mã cổ phiếu."""
     dataset_name = f"fundamentals_{period}"
-    reports_to_crawl = list(fundamentals.REPORT_TYPES.keys()) if report_type == "all" else [report_type]
-
     for attempt in range(1, max_retries + 1):
         try:
-            total_written = 0
-            any_success = False
-            last_empty_err = None
-
-            for rt in reports_to_crawl:
-                try:
-                    raw_df = fundamentals.fetch_raw(symbol, rt, period=period)
-                    normalized_df = fundamentals.format_melted_statement(raw_df, symbol, rt)
-
-                    def _write_action(con: duckdb.DuckDBPyConnection) -> int:
-                        return fundamentals.write_statements(normalized_df, con=con)
-
-                    cnt = writer.execute_with_retry(_write_action)
-                    total_written += cnt
-                    any_success = True
-                except EmptyResultError as ere:
-                    last_empty_err = ere
-                    continue
-                except Exception as ex_rt:
-                    logger.debug("Lỗi mục %s cho %s: %s", rt, symbol, ex_rt)
-
-            if any_success:
-                record_progress(writer, dataset_name, symbol, status="success", retry_count=attempt - 1)
-                return "success", total_written
-            elif last_empty_err is not None:
-                record_progress(writer, dataset_name, symbol, status="empty", retry_count=attempt - 1)
-                return "empty", 0
-            else:
-                raise RuntimeError(f"Không có mục BCTC nào thành công cho {symbol}")
+            cnt = fundamentals.run(symbol, report_type=report_type, period=period)
+            record_progress(writer, dataset_name, symbol, status="success", retry_count=attempt - 1)
+            return "success", cnt
+        except EmptyResultError:
+            record_progress(writer, dataset_name, symbol, status="empty", retry_count=attempt - 1)
+            return "empty", 0
 
         except Exception as e:
             err_msg = str(e)

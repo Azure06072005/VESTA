@@ -78,8 +78,8 @@ def test_orphan_adjustment_event_raises_validation_error(tmp_path):
     _seed_dim_symbol(con, ["FPT"])
     # No matching core.corporate_events row for this source_event_id.
     con.execute(
-        "INSERT INTO core.price_adjustment_events VALUES "
-        "('FPT', '2026-01-01', 'dividend', 0.95, 'NONEXISTENT_EVENT_ID', '2026-01-01 00:00:00')"
+        "INSERT INTO core.price_adjustment_events (symbol, ex_date, adjustment_type, multiplier, cumulative_adjustment_factor, source_event_ids, computed_at) VALUES "
+        "('FPT', '2026-01-01', 'dividend', 0.95, 0.95, 'NONEXISTENT_EVENT_ID', '2026-01-01 00:00:00')"
     )
     with pytest.raises(vcr.ValidationError, match="no matching corporate_events row"):
         vcr.validate_or_raise(con)
@@ -93,8 +93,8 @@ def test_adjustment_event_with_real_corporate_event_passes(tmp_path):
         "('FPT', 'EVT1', 'DIVIDEND', '2026-01-01', '{}', '2026-01-01 00:00:00')"
     )
     con.execute(
-        "INSERT INTO core.price_adjustment_events VALUES "
-        "('FPT', '2026-01-01', 'dividend', 0.95, 'EVT1', '2026-01-01 00:00:00')"
+        "INSERT INTO core.price_adjustment_events (symbol, ex_date, adjustment_type, multiplier, cumulative_adjustment_factor, source_event_ids, computed_at) VALUES "
+        "('FPT', '2026-01-01', 'dividend', 0.95, 0.95, 'EVT1', '2026-01-01 00:00:00')"
     )
     vcr.validate_or_raise(con)  # must not raise
 

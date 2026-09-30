@@ -138,22 +138,10 @@ def run_forward_catchup(sources: list[str] | None = None, staging_db: str = DEFA
             logger.error(f"Lỗi forward crawl Vietstock: {e}")
             results["vietstock"] = 0
 
-    # 3. Tuổi Trẻ Forward
+    # 3. Tuổi Trẻ Forward (DECOMMISSIONED)
     if "tuoitre" in target_sources:
-        try:
-            logger.info("=== [FORWARD] Cào Tuổi Trẻ (5 trang mới nhất) ===")
-            from crawlers.tuoitre_crawler import run_tuoitre_crawler
-            res_tt = run_tuoitre_crawler(
-                mode="deep",
-                start_page=1,
-                max_pages=5,
-                zones=[11, 89, 3],
-                db_path=staging_db,
-            )
-            results["tuoitre"] = res_tt.get("total_written", 0)
-        except Exception as e:
-            logger.error(f"Lỗi forward crawl Tuổi Trẻ: {e}")
-            results["tuoitre"] = 0
+        logger.warning("[POLICY] Bỏ qua Báo Tuổi Trẻ: Nguồn này đã bị DỪNG VĨNH VIỄN theo Ethical Crawling Policy (403 Forbidden / Anti-bot).")
+        results["tuoitre"] = 0
 
     # 4. VnEconomy Forward (2026-09-09 -> 2026-09-12)
     if "vneconomy" in target_sources:
@@ -188,22 +176,10 @@ def run_backward_backfill(sources: list[str] | None = None, staging_db: str = DE
     results: dict[str, int] = {}
     target_sources = set(sources) if sources else {"tuoitre", "thoibaonganhang"}
 
-    # 1. Tuổi Trẻ: Lùi từ trang 4,200 về trang 5,004 (2006 -> 2003)
+    # 1. Tuổi Trẻ (DECOMMISSIONED)
     if "tuoitre" in target_sources:
-        try:
-            logger.info("=== [BACKWARD] Cào Báo Tuổi Trẻ vét cạn trang 4,200 đến 5,004 (2006 -> 2003) ===")
-            from crawlers.tuoitre_crawler import run_tuoitre_crawler
-            res_tt = run_tuoitre_crawler(
-                mode="deep",
-                start_page=4200,
-                max_pages=805,  # 4200 + 805 = 5005
-                zones=[11, 89],
-                db_path=staging_db,
-            )
-            results["tuoitre"] = res_tt.get("total_written", 0)
-        except Exception as e:
-            logger.error(f"Lỗi backward crawl Tuổi Trẻ: {e}")
-            results["tuoitre"] = 0
+        logger.warning("[POLICY] Bỏ qua Báo Tuổi Trẻ: Nguồn này đã bị DỪNG VĨNH VIỄN theo Ethical Crawling Policy (403 Forbidden / Anti-bot).")
+        results["tuoitre"] = 0
 
     # 2. Thời báo Ngân hàng: Cào 150 trang lịch sử
     if "thoibaonganhang" in target_sources:

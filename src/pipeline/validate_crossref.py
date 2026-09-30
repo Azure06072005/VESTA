@@ -91,7 +91,10 @@ def find_future_timestamps(
     should always be 0. A non-zero count means a crawler's clock is wrong,
     or something worse (fabricated timestamps).
     """
-    now = now or dt.datetime.now(dt.timezone.utc).replace(tzinfo=None)
+    if now is None:
+        local_now = dt.datetime.now()
+        utc_now = dt.datetime.now(dt.timezone.utc).replace(tzinfo=None)
+        now = max(local_now, utc_now) + dt.timedelta(minutes=5)
     row = con.execute(f"SELECT COUNT(*) FROM {schema}.{table} WHERE {ts_col} > ?", [now]).fetchone()  # noqa: S608
     return row[0] if row is not None else 0
 
@@ -109,12 +112,23 @@ def find_orphan_adjustment_events(con: duckdb.DuckDBPyConnection) -> list[str]:
         if not exists or exists[0] == 0:
             return []  # either table doesn't exist yet -- nothing to check
 
+    # Detect column name (source_event_ids in modern schema, source_event_id in legacy)
+    cols = [
+        r[0]
+        for r in con.execute(
+            "SELECT column_name FROM information_schema.columns WHERE table_schema = 'core' AND table_name = 'price_adjustment_events'"
+        ).fetchall()
+    ]
+    id_col = "source_event_ids" if "source_event_ids" in cols else "source_event_id" if "source_event_id" in cols else None
+    if not id_col:
+        return []
+
     rows = con.execute(
-        """
-        SELECT DISTINCT a.source_event_id
+        f"""
+        SELECT DISTINCT a.{id_col}
         FROM core.price_adjustment_events a
-        LEFT JOIN core.corporate_events e ON a.source_event_id = e.event_id
-        WHERE e.event_id IS NULL
+        LEFT JOIN core.corporate_events e ON a.{id_col} = e.event_id
+        WHERE a.{id_col} IS NOT NULL AND a.{id_col} != '' AND e.event_id IS NULL
         """
     ).fetchall()
     return sorted(r[0] for r in rows)

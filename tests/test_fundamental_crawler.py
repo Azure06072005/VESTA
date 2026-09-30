@@ -218,7 +218,8 @@ def test_run_with_report_type_all_aggregates_across_report_types(tmp_path, monke
 
     total = fundamentals.run("FPT")
 
-    assert set(call_log) == set(fundamentals.REPORT_TYPES)
+    primary_types = {rt for rt in fundamentals.REPORT_TYPES if rt != "financial_health"}
+    assert set(call_log) == primary_types
     assert total > 0
 
     written_types = {
@@ -226,6 +227,59 @@ def test_run_with_report_type_all_aggregates_across_report_types(tmp_path, monke
         for r in con.execute("SELECT DISTINCT report_type FROM core.fundamentals WHERE symbol = 'FPT'").fetchall()
     }
     assert written_types == {"income_statement", "cash_flow", "ratio"}
+
+
+def test_financial_health_computation():
+    """Verifies that quantitative financial health scores (Piotroski F-Score & Altman Z-Score)
+    are calculated accurately from financial statements."""
+    bs_data = {
+        "100": 10000.0,  # Total Assets
+        "110": 4000.0,   # Current Assets
+        "310": 2000.0,   # Current Liabilities
+        "300": 3000.0,   # Total Liabilities
+        "400": 7000.0,   # Equity
+        "421": 1500.0,   # Retained Earnings
+    }
+    is_data = {
+        "10": 8000.0,    # Net Revenue
+        "20": 3000.0,    # Gross Profit
+        "50": 1200.0,    # EBIT / PBT
+        "60": 1000.0,    # Net Income
+    }
+    cf_data = {
+        "HDKD": 1500.0,  # CFO > Net Income (high accrual quality)
+    }
+
+    p = dt.date(2026, 6, 30)
+    now = dt.datetime.now(dt.timezone.utc).replace(tzinfo=None)
+
+    bs_df = pd.DataFrame([{
+        "symbol": "FPT", "report_type": "balance_sheet", "period_end": p,
+        "available_at": p + dt.timedelta(days=30),
+        "data_json": json.dumps(bs_data), "fetched_at": now, "source": "cafef"
+    }])
+    is_df = pd.DataFrame([{
+        "symbol": "FPT", "report_type": "income_statement", "period_end": p,
+        "available_at": p + dt.timedelta(days=30),
+        "data_json": json.dumps(is_data), "fetched_at": now, "source": "cafef"
+    }])
+    cf_df = pd.DataFrame([{
+        "symbol": "FPT", "report_type": "cash_flow", "period_end": p,
+        "available_at": p + dt.timedelta(days=30),
+        "data_json": json.dumps(cf_data), "fetched_at": now, "source": "cafef"
+    }])
+
+    health_df = fundamentals._compute_financial_health_scores("FPT", bs_df, is_df, cf_df)
+    assert not health_df.empty
+    assert len(health_df) == 1
+    assert health_df.iloc[0]["report_type"] == "financial_health"
+    
+    payload = json.loads(health_df.iloc[0]["data_json"])
+    assert "piotroski_f_score" in payload
+    assert payload["piotroski_f_score"] >= 4  # Net income > 0, CFO > 0, CFO > NI, ROA > 0
+    assert "altman_z_score" in payload
+    assert payload["altman_z_score"] > 2.0  # Safe or Grey zone
+    assert payload["z_score_zone"] in ["Safe", "Grey", "Distress"]
 
 
 def test_run_with_report_type_all_raises_only_if_every_type_is_empty(tmp_path, monkeypatch):

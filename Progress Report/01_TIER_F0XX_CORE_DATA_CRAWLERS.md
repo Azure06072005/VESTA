@@ -144,6 +144,13 @@ flowchart TD
 #### 5. Đề Xuất Phương Pháp Cải Tiến
 - Tích hợp kiến trúc bản sao đọc độc lập (**DuckDB Snapshot / Read-Replica strategy**), tách tiến trình đọc phân tích ML (PhoBERT/Multimodal) ra khỏi tiến trình cào ghi EOD để triệt tiêu xung đột lock PID.
 
+#### 6. Thành Phần & File Phụ Thuộc (File Dependencies)
+- `configs/duckdb_schema.sql` (Schema DDL phân tầng cho `staging`, `core`, `meta`)
+- `src/etl/db.py` (Khởi tạo kết nối, cơ chế retry lock và schema bootstrap)
+- `init.sh` (Script thiết lập môi trường và cấu trúc thư mục)
+- `requirements.txt` (Khai báo ghim phiên bản các gói phụ thuộc hệ thống)
+- `tests/test_db_bootstrap.py` (Bộ kiểm thử khởi tạo CSDL và toàn vẹn schema)
+
 ---
 
 ### F001: Reference Crawler: dim_symbol Master Data
@@ -165,6 +172,15 @@ flowchart TD
 
 #### 5. Đề Xuất Phương Pháp Cải Tiến
 - Xây dựng từ điển ánh xạ ngành ICB 4 cấp (Supersector, Sector, Subsector) tĩnh dựa trên quyết định niêm yết chính thức của HOSE/HNX thay vì phụ thuộc vào string trả về của vendor.
+
+#### 6. Thành Phần & File Phụ Thuộc (File Dependencies)
+- `src/crawlers/dim_symbol.py` (Bộ cào danh mục mã chứng khoán HOSE, HNX, UPCOM)
+- `src/crawlers/dim_icb.py` (Cấu trúc phân loại ngành cấp 1 đến 4 chuẩn ICB)
+- `src/crawlers/symbol_exchange_history.py` (Theo dõi lịch sử thay đổi sàn giao dịch)
+- `configs/icb_classification.json` (Từ điển cấu trúc 4 cấp ngành ICB chuẩn hóa)
+- `tests/test_dim_symbol.py` (Bộ kiểm thử tính toàn vẹn danh mục mã)
+- `tests/test_dim_icb.py` (Bộ kiểm thử ánh xạ mã phân cấp ngành ICB)
+- `tests/test_symbol_exchange_history.py` (Bộ kiểm thử lịch sử chuyển sàn và lookup PIT)
 
 ---
 
@@ -188,6 +204,10 @@ flowchart TD
 #### 5. Đề Xuất Phương Pháp Cải Tiến
 - Tách nhóm 750 mã OTC thành rổ phân tích riêng biệt (OTC-Subuniverse), gắn cờ `tradeable_flag = False` trong bài toán backtest để không làm nhiễu tín hiệu thực thi của rổ cổ phiếu chính.
 
+#### 6. Thành Phần & File Phụ Thuộc (File Dependencies)
+- `src/crawlers/cafef_symbol_directory.py` (Bộ cào và phân tích danh bạ doanh nghiệp CafeF)
+- `tests/test_cafef_symbol_directory.py` (Bộ kiểm thử đối chiếu chéo danh mục doanh nghiệp)
+
 ---
 
 ### F002: Market OHLCV Daily Crawler
@@ -209,6 +229,12 @@ flowchart TD
 
 #### 5. Đề Xuất Phương Pháp Cải Tiến
 - Tích hợp công thức điều chỉnh giá tự động theo chuỗi nhân dồn (`cumulative_adjustment_factor`), cho phép phân tích song song cả giá thô (đo bước giá thực tế) và giá điều chỉnh (đo tỷ suất sinh lời thực tế).
+
+#### 6. Thành Phần & File Phụ Thuộc (File Dependencies)
+- `src/crawlers/market_ohlcv.py` (Bộ cào nến ngày OHLCV toàn diện và incremental)
+- `src/crawlers/intraday_ohlcv.py` (Thu thập dữ liệu khớp lệnh và bước giá trong phiên)
+- `src/etl/adjustments.py` (Thuật toán điều chỉnh giá sau sự kiện doanh nghiệp)
+- `tests/test_market_crawler.py` (Bộ kiểm thử chuỗi giá lịch sử và kiểm tra zero missing bars)
 
 ---
 
@@ -232,6 +258,11 @@ flowchart TD
 #### 5. Đề Xuất Phương Pháp Cải Tiến
 - Bổ sung crawler cào trực tiếp URL gốc của bài báo để lấy toàn văn (Full-text HTML extractor), kết hợp SimHash để khử trùng lặp.
 
+#### 6. Thành Phần & File Phụ Thuộc (File Dependencies)
+- `src/crawlers/vnstock_news.py` (Bộ cào tin tức doanh nghiệp vnstock)
+- `src/etl/news_dedup.py` (Thuật toán lọc và khử trùng lặp tin tức theo tiêu đề/thời gian)
+- `tests/test_vnstock_news_crawler.py` (Bộ kiểm thử nạp tin tức vnstock)
+
 ---
 
 ### F004: CafeF News Crawler (Secondary Source)
@@ -253,6 +284,12 @@ flowchart TD
 
 #### 5. Đề Xuất Phương Pháp Cải Tiến
 - Sử dụng thuật toán nhận diện tin tài trợ PR (`sponsored_content_detector`) dựa trên thẻ tag cuối bài và cụm từ quy ước để phân loại nguồn tin khách quan.
+
+#### 6. Thành Phần & File Phụ Thuộc (File Dependencies)
+- `src/crawlers/cafef_news.py` (Bộ cào tin tức CafeF phân loại theo mã cổ phiếu)
+- `src/crawlers/crawl_policy.py` (Rào cản đạo đức Ethical Crawling, Denylist và Rate Pacing)
+- `tests/test_cafef_crawler.py` (Bộ kiểm thử crawler CafeF)
+- `tests/test_crawl_policy.py` (Bộ kiểm thử rào cản từ chối site bị cấm và làm sạch ngày tháng)
 
 ---
 
@@ -276,6 +313,10 @@ flowchart TD
 #### 5. Đề Xuất Phương Pháp Cải Tiến
 - Nén văn bản toàn văn bằng thuật toán zstandard trước khi lưu vào DuckDB blob, giúp tiết kiệm 70% dung lượng đĩa.
 
+#### 6. Thành Phần & File Phụ Thuộc (File Dependencies)
+- `src/crawlers/cafef_article_body.py` (Module bóc tách toàn văn thân bài viết DOM từ HTML CafeF)
+- `tests/test_cafef_article_body.py` (Bộ kiểm thử trích xuất body bài báo)
+
 ---
 
 ### F004c: CafeF Editorial Category Crawler & Orchestrator
@@ -297,6 +338,12 @@ flowchart TD
 
 #### 5. Đề Xuất Phương Pháp Cải Tiến
 - Áp dụng kỹ thuật phân bổ trọng số đa mã (Multi-ticker attribution score): gán trọng số cao cho mã xuất hiện trên tiêu đề và câu mở đầu, giảm dần cho các mã chỉ được nhắc tên ở cuối bài.
+
+#### 6. Thành Phần & File Phụ Thuộc (File Dependencies)
+- `src/crawlers/cafef_category_news.py` (Crawler các chuyên mục tin tức tài chính biên tập tổng hợp)
+- `src/crawlers/cafef_category_orchestrator.py` (Bộ điều phối chuyên mục CafeF và trích xuất mã tự động)
+- `src/crawlers/crawl_cafef_disclosures.py` (Thu thập tin công bố thông tin doanh nghiệp CafeF)
+- `tests/test_cafef_category_orchestrator.py` (Bộ kiểm thử nhận diện mã và điều phối cào chuyên mục)
 
 ---
 
@@ -320,6 +367,10 @@ flowchart TD
 #### 5. Đề Xuất Phương Pháp Cải Tiến
 - Áp dụng kiểm định cụm theo ngành (Cluster-robust by sector) tại tầng F202 để khử triệt để sai số tương quan chéo khi các mã cùng ngành phản ứng đồng thời.
 
+#### 6. Thành Phần & File Phụ Thuộc (File Dependencies)
+- `src/pipeline/sector_news_matcher.py` (Engine ánh xạ tin tức cấp ngành sang danh sách mã chứng khoán ICB)
+- `tests/test_sector_news_matcher.py` (Bộ kiểm thử tính chính xác của từ khóa ngành và phân bổ mã)
+
 ---
 
 ### F005: Fundamental Crawler Suite (5 Sheets)
@@ -340,7 +391,14 @@ flowchart TD
 - **Nhược điểm:** Sự cố API gốc từng gây khuyết thiếu tạm thời bảng CĐKT ở một số mã (đã được khắc phục triệt để bằng gói Sponsor và crawler bổ sung).
 
 #### 5. Đề Xuất Phương Pháp Cải Tiến
-- Tích hợp chuẩn Báo cáo tài chính quốc tế (IFRS) dự kiến áp dụng tại Việt Nam sau năm 2025 để đảm bảo tính tương thích lâu dài của hệ thống.
+- **Đã chuyển sang Danh mục Future Work (Kế hoạch dài hạn):** Tích hợp chuẩn Báo cáo tài chính quốc tế (IFRS) dự kiến áp dụng tại Việt Nam sau năm 2025 để đảm bảo tính tương thích lâu dài của hệ thống.
+- **Tách biệt tầng xử lý (Data Preprocessing Pipeline):** Quy tắc căn chỉnh Point-in-Time (PIT) theo ngày phát hành báo cáo kiểm toán thực tế được chuyển giao cho pipeline tiền xử lý `src/pipeline/pit_join.py` (F102) đảm nhiệm, giữ cho crawler F005 thuần túy là bộ thu nạp dữ liệu gốc (As-Reported) tối giản và bất biến.
+
+#### 6. Thành Phần & File Phụ Thuộc (File Dependencies)
+- `src/crawlers/fundamentals.py` (Suite cào BCTC 5 bảng: CĐKT, KQKD, LCTT, Chỉ số tài chính, Sức khỏe tài chính)
+- `src/crawlers/master_fundamentals_crawler.py` (Bộ điều phối cào BCTC hàng loạt toàn thị trường)
+- `src/etl/vas_dictionary.py` (Từ điển ánh xạ và chuẩn hóa mã định danh chỉ tiêu BCTC theo chuẩn VAS)
+- `tests/test_fundamental_crawler.py` (Bộ kiểm thử nạp BCTC và kiểm tra toàn vẹn chuỗi thời gian quý)
 
 ---
 
@@ -364,27 +422,40 @@ flowchart TD
 #### 5. Đề Xuất Phương Pháp Cải Tiến
 - Bổ sung trường `payout_delay_days` (độ trễ chi trả thực tế) để mô hình hóa rủi ro thanh khoản của các doanh nghiệp chậm trả cổ tức tiền mặt.
 
+#### 6. Thành Phần & File Phụ Thuộc (File Dependencies)
+- `src/crawlers/corporate_events.py` (Bộ cào lịch sử sự kiện doanh nghiệp, cổ tức, quyền mua)
+- `src/crawlers/update_corporate_events.py` (Script cập nhật gia số sự kiện doanh nghiệp định kỳ)
+- `tests/test_corporate_events.py` (Bộ kiểm thử trích xuất và lưu trữ sự kiện doanh nghiệp)
+
 ---
 
 ### F007: Insights/Analytics Snapshot Crawler & Retention Policy
 
 #### 1. Báo cáo Chi Tiết
-- **Mục tiêu:** Thu thập dữ liệu phân tích định giá định kỳ (P/E band, P/B band, định chế nắm giữ) và thiết lập chính sách lưu trữ ảnh chụp nhanh EOD (Snapshot Retention Policy).
-- **Cơ chế:** Cơ chế ghi đè thông minh snapshot hàng ngày, lưu vết lịch sử theo `snapshot_date`, tự động dọn dẹp các bản ghi nháp quá 90 ngày.
+- **Mục tiêu:** Thu thập dữ liệu bảng giá snapshot thời gian thực và định chế định giá tức thời (P/E, P/B, EPS, Vốn hóa), thiết lập chính sách lưu trữ tích lũy bất biến (ACCUMULATE Retention Policy).
+- **Kiến trúc Nâng cấp Direct REST API (2026-09-27):** Loại bỏ hoàn toàn sự phụ thuộc vào thư viện `vnstock` và `VNSTOCK_API_KEY`. Chuyển sang kết nối trực tiếp đến **Vietcap Direct REST API** (`POST https://trading.vietcap.com.vn/api/price/symbols/getList`) cung cấp cấu trúc MultiIndex 82+ cột với sổ lệnh Level 2 độ sâu Top 3 Giá & Khối lượng Dư mua / Dư bán. Tích hợp kênh dự phòng tự động CafeF Realtime Prices (`RealtimePricesHeader.ashx`) và trích xuất định giá tức thời từ CafeF Financial Indicators (`ChiSoTaiChinh.ashx`).
 
 #### 2. Kết Quả Thực Nghiệm & Bằng Chứng Số Liệu
-- **Lệnh nghiệm thu:** `pytest tests/test_snapshot_retention.py -v`.
-- **Bằng chứng số liệu:** Lưu trữ ổn định chuỗi định giá snapshot EOD cho toàn bộ danh mục VN30 và các ngành chủ lực. Xử lý triệt để việc rút lại các tuyên bố chưa được kiểm chứng độc lập ở các đợt rà soát trước đó.
+- **Lệnh nghiệm thu:** `pytest tests/test_snapshot_retention.py -v` (11/11 tests pass trong 0.67s).
+- **Cập nhật dữ liệu thực tế (Live Execution 2026-09-27):** Đã kích hoạt crawler quét toàn thị trường thông qua CLI (`--category snapshots --symbols all`), thu thập và nạp thành công **+1.522 mã cổ phiếu niêm yết** (toàn bộ HOSE, HNX, UPCOM) trong **2,10 giây**.
+- **Quy mô dữ liệu hiện tại:** Bảng `core.realtime_quote_snapshot` đã mở rộng từ 1.954 bản ghi lên **3.476 bản ghi**, mỗi bản ghi lưu trữ đầy đủ **134 trường dữ liệu JSON** với độ sâu sổ lệnh Level 2 đồng bộ theo thời gian thực.
 
 #### 3. Đầu Ra & Tác Động Hệ Thống
-- Cung cấp mức định giá P/E, P/B tại đúng thời điểm tin tức xuất hiện để làm biến kiểm soát bối cảnh định giá (Valuation Anchor).
+- Cung cấp mức định giá P/E, P/B và cấu trúc sổ lệnh (Order Book Depth) tại đúng thời điểm tin tức xuất hiện để làm biến kiểm soát bối cảnh định giá (Valuation Anchor) và phát hiện lệnh quét ẩn (Shark Sweep) của dòng tiền tạo lập.
 
 #### 4. Ưu Điểm & Nhược Điểm
-- **Ưu điểm:** Lưu vết được trạng thái định giá tức thời của thị trường mà không phải tính toán hồi cứu phức tạp.
-- **Nhược điểm:** Dữ liệu snapshot chỉ bắt đầu có từ thời điểm hệ thống bắt đầu cào, không thể hồi cứu sâu về các năm 2007-2015.
+- **Ưu điểm:** Tốc độ siêu nhanh (quét toàn bộ 1.522 mã trong 2,1s), độ phủ 100% thị trường, không tốn chi phí API key, duy trì dữ liệu 24/7 cả ngoài giờ giao dịch.
+- **Nhược điểm:** Dữ liệu snapshot cao tần có thể làm tăng dung lượng CSDL nếu lưu trữ không nén qua nhiều năm.
 
 #### 5. Đề Xuất Phương Pháp Cải Tiến
-- Tái lập chuỗi định giá quá khứ bằng cách tính trực tiếp từ vốn hóa thị trường chia cho lợi nhuận 4 quý gần nhất (TTM) từ bảng `core.fundamentals`.
+- Áp dụng chính sách lưu trữ phân tầng (Tiered Retention): Lưu trữ toàn bộ snapshot chi tiết trong Hot Tier (0-90 ngày), sau đó chạy định kỳ tác vụ bảo trì ETL tổng hợp thành tóm tắt ngày cho Cold Tier lưu trữ dài hạn trong DuckDB.
+
+#### 6. Thành Phần & File Phụ Thuộc (File Dependencies)
+- `src/crawlers/snapshots.py` (Bộ cào snapshot định giá & sổ lệnh Level 2 Vietcap Direct REST API)
+- `src/crawlers/market_insights.py` (Module phân tích bối cảnh thị trường và định giá tức thời)
+- `src/crawlers/order_book_depth.py` (Trích xuất cấu trúc và độ sâu sổ lệnh)
+- `tests/test_snapshot_retention.py` (Bộ kiểm thử chính sách lưu trữ tích lũy ACCUMULATE và fallback)
+- `tests/test_market_insights.py` (Bộ kiểm thử các hàm tính toán market insights)
 
 ---
 
@@ -407,6 +478,11 @@ flowchart TD
 #### 5. Đề Xuất Phương Pháp Cải Tiến
 - Xây dựng tầng cache offline tự động lưu trữ toàn bộ phản hồi API dưới dạng file Parquet nén để hệ thống backtest có thể chạy vĩnh viễn ngay cả khi mất kết nối bản quyền.
 
+#### 6. Thành Phần & File Phụ Thuộc (File Dependencies)
+- `src/crawlers/snapshots.py` (Tích hợp các hàm cào dữ liệu chuyên sâu gói Sponsor)
+- `src/etl/daily_crawler_orchestrator.py` (Tổng điều phối các luồng cào dữ liệu đa tầng)
+- `tests/test_snapshot_retention.py` (Bộ kiểm thử tích hợp snapshot)
+
 ---
 
 ### F008: Retry & Reconciliation Module
@@ -427,7 +503,18 @@ flowchart TD
 - **Nhược điểm:** Tăng thời gian chạy tổng thể của pipeline khi gặp lỗi diện rộng ở phía server nguồn.
 
 #### 5. Đề Xuất Phương Pháp Cải Tiến
-- Tích hợp cảnh báo tự động qua Telegram/Discord Bot khi một job chuyển sang trạng thái `DEAD_LETTER` quá 5 lần.
+- **Đã Nghiên Cứu & Triển Khai Hoàn Tất (IMPLEMENTED): Phân loại lỗi Dead-Letter Queue (DLQ Categorization):**
+  * Đã mở rộng `src/etl/retry_failed_jobs.py` với các lớp ngoại lệ `PermanentError` và các tập mã lỗi: `PERMANENT_HTTP_STATUSES = {400, 404, 410, 422}`, `TRANSIENT_HTTP_STATUSES = {408, 429, 500, 502, 503, 504}`.
+  * Thêm hàm `classify_error(exc)` phân định chính xác giữa lỗi mạng tạm thời (Transient - cần retry với exponential backoff) và lỗi vĩnh viễn (Permanent - 404 Not Found, sai mã, payload hỏng).
+  * Lỗi vĩnh viễn được chuyển ngay lập tức vào hàng đợi `dead_letter` thông qua `record_permanent_failure()`, triệt tiêu hoàn toàn việc lãng phí ngân sách thử lại và tránh nguy cơ bị khóa API.
+  * Toàn bộ 9/9 test cases trong `tests/test_retry_module.py` đã vượt qua 100%.
+- **Chuyển sang Future Work (Dài hạn):** Tích hợp webhook cảnh báo tức thời qua Telegram/Discord Bot khi một job bị ghi nhận vào Dead-Letter Queue.
+
+#### 6. Thành Phần & File Phụ Thuộc (File Dependencies)
+- `src/etl/retry_failed_jobs.py` (Cơ chế phân loại Transient vs Permanent, DLQ và Exponential Backoff)
+- `src/crawlers/boundary_manager.py` (Bộ quản lý mốc thời gian và điểm chốt dữ liệu cào)
+- `src/crawlers/db_writer.py` (Cơ chế ghi DuckDB an toàn, khóa concurrency fallback)
+- `tests/test_retry_module.py` (Bộ kiểm thử khôi phục lỗi, phân loại lỗi và Dead-letter Queue)
 
 ---
 
@@ -449,7 +536,28 @@ flowchart TD
 - **Nhược điểm:** Yêu cầu nhiều phiên kiểm toán đối chiếu chéo tốn thời gian.
 
 #### 5. Đề Xuất Phương Pháp Cải Tiến
-- Tự động hóa cổng kiểm toán F009 thành một bộ script CI/CD chạy định kỳ vào mỗi cuối tuần (Weekly Audit Runner).
+- **Chuyển Giao Sang Tầng Tiền Xử Lý Dữ Liệu (Data Preprocessing - Tier F1xx/F2xx):**
+  * Khuyến nghị về chuẩn hóa mã hóa ký tự (Text Encoding / Unicode Normalization NFKC / thư viện `ftfy`) để làm sạch lỗi font, ký tự rác HTML và dấu tiếng Việt tổ hợp thuộc về quy trình **Tiền Xử Lý Dữ Liệu (Data Preprocessing)** trước khi đưa vào mô hình NLP/PhoBERT hoặc ghép nối Point-in-Time, không thuộc phạm vi crawler thu thập dữ liệu thô.
+  * Khuyến nghị này đã được chuyển giao chính thức sang Pipeline tiền xử lý `src/pipeline/build_full_preprocessed_database.py` và các module của Tier F1xx (`F101`, `F102`).
+- **Chuyển sang Future Work (Dài hạn):** Tự động hóa cổng kiểm toán F009 thành một bộ script CI/CD chạy định kỳ vào mỗi cuối tuần (Weekly Audit Runner).
+
+#### 6. Thành Phần & File Phụ Thuộc (File Dependencies)
+- `src/etl/migrations.py` (Module kiểm soát di chuyển schema và toàn vẹn bảng)
+- `src/etl/batch_orchestrator.py` (Bộ điều phối kiểm toán và cào dữ liệu theo đợt)
+- `src/etl/daily_crawler_orchestrator.py` (Điều phối cào dữ liệu toàn diện hàng ngày)
+- `src/pipeline/validate_crossref.py` (Engine kiểm toán đối chiếu chéo liên bảng CSDL)
+- `tests/test_batch_orchestrator.py` (Bộ kiểm thử điều phối theo lô)
+- `tests/test_crossref_validation.py` (Bộ kiểm thử kiểm toán đối chiếu chéo)
 
 ---
 *Báo cáo phân tầng F0xx đã hoàn thành và nghiệm thu đầy đủ 15/15 tính năng.*
+
+## Danh Mục Hướng Phát Triển Tương Lai (Future Work Roadmap)
+
+1. **Tích hợp Chuẩn Báo cáo Tài chính Quốc tế (IFRS):**
+   - *Bối cảnh:* Lộ trình áp dụng IFRS tại Việt Nam theo Đề án của Bộ Tài chính dự kiến triển khai mở rộng sau năm 2025.
+   - *Giải pháp kiến trúc:* Xây dựng bộ từ điển chuyển đổi chuẩn hóa (GAAP/VAS -> IFRS Schema Parser) và mô-đun chuẩn hóa tiền tệ/định dạng chỉ tiêu quốc tế trước khi nạp vào hồ dữ liệu, đảm bảo mô hình định lượng không bị lệch lạc cấu trúc khi các doanh nghiệp niêm yết chuyển đổi chế độ kế toán.
+2. **Weekly CI/CD Audit Runner (F009 Automation):**
+   - Tự động hóa cổng kiểm toán F009 thành bộ công cụ kiểm tra tự động định kỳ vào mỗi cuối tuần để phát hiện sớm các hiện tượng trôi dạt dữ liệu (data drift) hoặc lệch chuẩn mã chứng khoán.
+3. **Telegram/Discord Real-time Dead-Letter Alerting (F008 Alerting):**
+   - Cảnh báo tức thời cho đội ngũ vận hành khi một job cào mạng rơi vào hàng đợi Dead-letter quá ngưỡng quy định.

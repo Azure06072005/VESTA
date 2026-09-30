@@ -16,7 +16,19 @@ import duckdb
 DB_PATH = pathlib.Path(
     os.environ.get(
         "VESTA_DB_PATH",
-        pathlib.Path(__file__).resolve().parents[2] / "db" / "vesta.duckdb",
+        pathlib.Path(__file__).resolve().parents[2] / "db" / "vesta_snapshot.duckdb",
+    )
+)
+INTRADAY_DB_PATH = pathlib.Path(
+    os.environ.get(
+        "VESTA_INTRADAY_DB_PATH",
+        pathlib.Path(__file__).resolve().parents[2] / "db" / "vesta_intraday_1m.duckdb",
+    )
+)
+NEWS_DB_PATH = pathlib.Path(
+    os.environ.get(
+        "VESTA_NEWS_DB_PATH",
+        pathlib.Path(__file__).resolve().parents[2] / "db" / "vesta_news.duckdb",
     )
 )
 SCHEMA_SQL_PATH = (
@@ -50,6 +62,42 @@ def connect(db_path: pathlib.Path | str = DB_PATH, read_only: bool = False) -> d
     db_path = pathlib.Path(db_path)
     db_path.parent.mkdir(parents=True, exist_ok=True)
     return duckdb.connect(str(db_path), read_only=read_only)
+
+
+def connect_intraday(db_path: pathlib.Path | str = INTRADAY_DB_PATH, read_only: bool = False) -> duckdb.DuckDBPyConnection:
+    """Open a connection to the dedicated VESTA 1-minute intraday database."""
+    db_path = pathlib.Path(db_path)
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    return duckdb.connect(str(db_path), read_only=read_only)
+
+
+def attach_intraday(con: duckdb.DuckDBPyConnection, db_path: pathlib.Path | str = INTRADAY_DB_PATH, read_only: bool = True) -> None:
+    """Attach the intraday database as 'intraday' to an existing connection."""
+    db_path = pathlib.Path(db_path)
+    if db_path.exists():
+        mode = " (READ_ONLY)" if read_only else ""
+        try:
+            con.execute(f"ATTACH IF NOT EXISTS '{db_path}' AS intraday{mode};")
+        except Exception:
+            pass
+
+
+def connect_news(db_path: pathlib.Path | str = NEWS_DB_PATH, read_only: bool = False) -> duckdb.DuckDBPyConnection:
+    """Open a connection to the dedicated VESTA news database (core.news, core.news_resources)."""
+    db_path = pathlib.Path(db_path)
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    return duckdb.connect(str(db_path), read_only=read_only)
+
+
+def attach_news(con: duckdb.DuckDBPyConnection, db_path: pathlib.Path | str = NEWS_DB_PATH, read_only: bool = True) -> None:
+    """Attach the news database as 'news_db' to an existing connection."""
+    db_path = pathlib.Path(db_path)
+    if db_path.exists():
+        mode = " (READ_ONLY)" if read_only else ""
+        try:
+            con.execute(f"ATTACH IF NOT EXISTS '{db_path}' AS news_db{mode};")
+        except Exception:
+            pass
 
 
 def bootstrap_schema(db_path: pathlib.Path | str = DB_PATH) -> duckdb.DuckDBPyConnection:

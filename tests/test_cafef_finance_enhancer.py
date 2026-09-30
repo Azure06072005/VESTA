@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import datetime as dt
 import json
-from unittest.mock import MagicMock, patch
 
 import duckdb
 import pytest
@@ -124,3 +123,96 @@ def test_save_batch(temp_duckdb):
     assert row[0] == "FPT"
     assert row[1] == "income_statement"
     assert "5000000.0" in row[2]
+
+
+def test_normalize_financial_dict_balance_sheet():
+    """Kiểm tra bóc tách và chuẩn hóa tự động các chỉ tiêu bảng CĐKT sang tiếng Anh."""
+    from src.etl.vas_dictionary import normalize_financial_dict
+
+    raw_metrics = {
+        "100": 5000000.0,
+        "TỔNG CỘNG TÀI SẢN": 5000000.0,
+        "110": 2000000.0,
+        "TÀI SẢN NGẮN HẠN": 2000000.0,
+        "Tiền và tương đương tiền": 500000.0,
+        "Hàng tồn kho": 800000.0,
+        "300": 3000000.0,
+        "Nợ phải trả": 3000000.0,
+        "Nợ ngắn hạn": 1500000.0,
+        "400": 2000000.0,
+        "Vốn chủ sở hữu": 2000000.0,
+    }
+    normalized = normalize_financial_dict(raw_metrics, "balance_sheet")
+
+    # Giữ nguyên bản gốc tiếng Việt và code
+    assert normalized["TỔNG CỘNG TÀI SẢN"] == 5000000.0
+    assert normalized["100"] == 5000000.0
+
+    # Chuẩn hóa bổ sung key tiếng Anh tương ứng vnstock_data
+    assert normalized["total_assets"] == 5000000.0
+    assert normalized["current_assets"] == 2000000.0
+    assert normalized["cash_and_equivalents"] == 500000.0
+    assert normalized["inventories"] == 800000.0
+    assert normalized["liabilities"] == 3000000.0
+    assert normalized["current_liabilities"] == 1500000.0
+    assert normalized["owners_equity"] == 2000000.0
+
+
+def test_normalize_financial_dict_income_statement():
+    """Kiểm tra chuẩn hóa KQKD sang tiếng Anh."""
+    from src.etl.vas_dictionary import normalize_financial_dict
+
+    raw_metrics = {
+        "Doanh thu thuần": 1200000.0,
+        "Giá vốn hàng bán": 800000.0,
+        "Lợi nhuận gộp": 400000.0,
+        "Chi phí tài chính": 50000.0,
+        "Chi phí bán hàng": 70000.0,
+        "Lợi nhuận sau thuế": 250000.0,
+        "Lãi cơ bản trên cổ phiếu (EPS)": 3500.0,
+    }
+    normalized = normalize_financial_dict(raw_metrics, "income_statement")
+
+    assert normalized["net_revenue"] == 1200000.0
+    assert normalized["cogs"] == 800000.0
+    assert normalized["gross_profit"] == 400000.0
+    assert normalized["financial_expenses"] == 50000.0
+    assert normalized["selling_expenses"] == 70000.0
+    assert normalized["net_profit_after_tax"] == 250000.0
+    assert normalized["eps"] == 3500.0
+
+
+def test_downstream_ml_feature_compatibility():
+    """Kiểm tra dữ liệu chuẩn hóa của CafeFFinanceEnhancer tương thích 1:1 với ml_features.py."""
+    from src.pipeline.ml_features import extract_fundamental_features
+
+    raw_val = {
+        "templace": [
+            {"code": "P/E", "name": "P/E"},
+            {"code": "P/B", "name": "P/B"},
+            {"code": "ROE", "name": "ROE (%)"},
+        ],
+        "data": [
+            {
+                "symbol": "MBB",
+                "year": 2026,
+                "quater": 2,
+                "time": "Q2-2026",
+                "data": [
+                    {"code": "P/E", "value": 6.5},
+                    {"code": "P/B", "value": 1.1},
+                    {"code": "ROE", "value": 22.4},
+                ]
+            }
+        ]
+    }
+    enhancer = CafeFFinanceEnhancer(duckdb_path=":memory:")
+    records = enhancer.parse_and_normalize("MBB", "ratio", raw_val)
+
+    assert len(records) == 1
+    # Bóc tách bằng hàm downstream của pipeline machine learning
+    features = extract_fundamental_features(records[0]["data_json"])
+    assert features["pe_ratio"] == 6.5
+    assert features["pb_ratio"] == 1.1
+    assert features["roe"] == 22.4
+

@@ -20,16 +20,12 @@ Mô tả:
 from __future__ import annotations
 
 import argparse
-import datetime as dt
 import logging
 import re
 import sys
 import time
 from pathlib import Path
-from typing import Any
-from urllib.parse import urljoin
 
-from bs4 import BeautifulSoup
 import duckdb
 import pandas as pd
 import requests
@@ -37,13 +33,10 @@ import requests
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from etl import db
-from crawlers.thuvienphapluat_crawler import parse_tvpl_article, parse_tvpl_listing
-from crawlers.luatvietnam_crawler import parse_lvn_article, parse_lvn_listing
 from crawlers.thoibaotaichinh_crawler import parse_tbtc_article, parse_tbtc_listing
-from crawlers.vietnamfinance_crawler import parse_vnf_article, parse_vnf_listing
+from crawlers.vietnamfinance_crawler import parse_vnf_article
 from crawlers.vntextile_crawler import parse_vitas_article, parse_vitas_listing
-from crawlers.vnpca_crawler import parse_vnpca_article, parse_vnpca_listing
-from crawlers.vfaea_crawler import parse_vfaea_article, parse_vfaea_listing
+from crawlers.vnpca_crawler import parse_vnpca_article
 from crawlers.vra_crawler import parse_vra_article, parse_vra_listing
 
 logger = logging.getLogger("historical_backfill")
@@ -130,105 +123,14 @@ class HistoricalBackfillManager:
     # ==================== NHÓM A: PHÁP LÝ & BÁO CHÍ TÀI CHÍNH ====================
 
     def backfill_thuvienphapluat(self, max_shards: int = 10, max_articles: int | None = None) -> int:
-        """Cào vét toàn bộ lịch sử Thư Viện Pháp Luật qua hệ thống sitemap shards."""
-        logger.info("=== [Nhóm A - 1/4] Bắt đầu cào Thư Viện Pháp Luật (thuvienphapluat.vn) ===")
-        con = db.connect(self.db_path, read_only=False)
-        existing = load_existing_urls_by_source(con, "thuvienphapluat")
-
-        index_resp = self._get_with_circuit_breaker("https://thuvienphapluat.vn/resitemap.xml")
-        if not index_resp:
-            logger.warning("-> Thư Viện Pháp Luật Circuit Breaker kích hoạt tại sitemap index. Chuyển site tiếp theo.")
-            con.close()
-            return 0
-
-        shards = re.findall(r"<loc>(.*?)</loc>", index_resp.text)
-        if max_shards:
-            shards = shards[:max_shards]
-        total_ingested = 0
-
-        for s_idx, shard_url in enumerate(shards, 1):
-            logger.info(f"-> TVPL Shard {s_idx}/{len(shards)}: {shard_url}")
-            shard_resp = self._get_with_circuit_breaker(shard_url)
-            if not shard_resp:
-                logger.warning(f"-> Circuit Breaker tại shard {shard_url}. Dừng cào TVPL và chuyển sang site khác.")
-                break
-
-            urls = re.findall(r"<loc>(.*?)</loc>", shard_resp.text)
-            legal_urls = [
-                u for u in urls
-                if "/chinh-sach-phap-luat-moi/" in u and u not in existing
-            ]
-            if max_articles and total_ingested + len(legal_urls) > max_articles:
-                legal_urls = legal_urls[: max_articles - total_ingested]
-
-            records = []
-            for u in legal_urls:
-                time.sleep(self.delay)
-                resp = self._get_with_circuit_breaker(u)
-                if not resp:
-                    logger.warning("-> TVPL Circuit Breaker kích hoạt khi tải bài viết. Dừng TVPL.")
-                    break
-                rec = parse_tvpl_article(resp.text, u)
-                if rec:
-                    records.append(rec)
-                    existing.add(u)
-                    if len(records) >= 10:
-                        n = write_macro_policy_batch(con, pd.DataFrame(records))
-                        total_ingested += n
-                        records = []
-
-            if records:
-                n = write_macro_policy_batch(con, pd.DataFrame(records))
-                total_ingested += n
-
-            if max_articles and total_ingested >= max_articles:
-                break
-
-        con.close()
-        logger.info(f"=== Hoàn tất TVPL: +{total_ingested} văn bản/chính sách mới ===")
-        return total_ingested
+        """Thư Viện Pháp Luật đã bị DỪNG VĨNH VIỄN theo chính sách Ethical Crawling (403 Forbidden)."""
+        logger.warning("[POLICY] Bỏ qua cào Thư Viện Pháp Luật (thuvienphapluat.vn): Đã gỡ bỏ vĩnh viễn.")
+        return 0
 
     def backfill_luatvietnam(self, max_articles: int | None = None) -> int:
-        """Cào vét toàn bộ các bài viết phổ biến pháp luật kinh tế từ Luật Việt Nam."""
-        logger.info("=== [Nhóm A - 2/4] Bắt đầu cào Luật Việt Nam (luatvietnam.vn) ===")
-        con = db.connect(self.db_path, read_only=False)
-        existing = load_existing_urls_by_source(con, "luatvietnam")
-
-        resp = self._get_with_circuit_breaker("https://luatvietnam.vn/tin-phap-luat.html")
-        if not resp:
-            logger.warning("-> Luật Việt Nam Circuit Breaker kích hoạt. Chuyển site tiếp theo.")
-            con.close()
-            return 0
-
-        articles = parse_lvn_listing(resp.text)
-        new_items = [a for a in articles if a["url"] not in existing]
-        if max_articles:
-            new_items = new_items[:max_articles]
-
-        records = []
-        total_ingested = 0
-        for it in new_items:
-            time.sleep(self.delay)
-            art_resp = self._get_with_circuit_breaker(it["url"])
-            if not art_resp:
-                logger.warning("-> Luật Việt Nam Circuit Breaker kích hoạt. Dừng LVN.")
-                break
-            rec = parse_lvn_article(art_resp.text, it["url"], fallback_title=it["title"])
-            if rec:
-                records.append(rec)
-                existing.add(it["url"])
-                if len(records) >= 10:
-                    n = write_macro_policy_batch(con, pd.DataFrame(records))
-                    total_ingested += n
-                    records = []
-
-        if records:
-            n = write_macro_policy_batch(con, pd.DataFrame(records))
-            total_ingested += n
-
-        con.close()
-        logger.info(f"=== Hoàn tất Luật Việt Nam: +{total_ingested} chính sách mới ===")
-        return total_ingested
+        """Luật Việt Nam đã bị DỪNG VĨNH VIỄN theo chính sách Ethical Crawling (403/429 Forbidden)."""
+        logger.warning("[POLICY] Bỏ qua cào Luật Việt Nam (luatvietnam.vn): Đã gỡ bỏ vĩnh viễn.")
+        return 0
 
     def backfill_thoibaotaichinh(self, max_pages: int = 50, max_articles: int | None = None) -> int:
         """Cào vét Thời báo Tài chính Việt Nam qua toàn bộ phân trang tài chính & chứng khoán."""
@@ -420,48 +322,9 @@ class HistoricalBackfillManager:
         return total_ingested
 
     def backfill_vfaea(self, max_pages: int = 30, max_articles: int | None = None) -> int:
-        """Cào vét toàn bộ phân trang ngành Phân bón VFAEA."""
-        logger.info("=== [Nhóm B - 3/4] Bắt đầu cào Hiệp hội Phân bón VFAEA (vfaea.vn) ===")
-        con = db.connect(self.db_path, read_only=False)
-        existing = load_existing_urls_by_source(con, "vfaea")
-
-        total_ingested = 0
-        for page in range(1, max_pages + 1):
-            page_url = f"https://vfaea.vn/tin-tuc/page/{page}/" if page > 1 else "https://vfaea.vn/tin-tuc/"
-            logger.info(f"-> Đang tải trang VFAEA: {page_url}")
-            resp = self._get_with_circuit_breaker(page_url)
-            if not resp:
-                logger.warning(f"-> VFAEA Circuit Breaker kích hoạt tại {page_url}. Dừng site này.")
-                break
-
-            articles = parse_vfaea_listing(resp.text)
-            if not articles:
-                logger.info(f"   Trang {page} rỗng. Đã tới cuối phân trang VFAEA.")
-                break
-
-            new_items = [a for a in articles if a["url"] not in existing]
-            records = []
-            for it in new_items:
-                time.sleep(self.delay)
-                art_resp = self._get_with_circuit_breaker(it["url"])
-                if not art_resp:
-                    break
-                rec = parse_vfaea_article(art_resp.text, it["url"], fallback_title=it["title"])
-                if rec:
-                    records.append(rec)
-                    existing.add(it["url"])
-
-            if records:
-                n = write_macro_policy_batch(con, pd.DataFrame(records))
-                total_ingested += n
-                logger.info(f"   [VFAEA p={page}] Đã lưu +{n} bài viết phân bón.")
-
-            if max_articles and total_ingested >= max_articles:
-                break
-
-        con.close()
-        logger.info(f"=== Hoàn tất VFAEA: +{total_ingested} bài viết phân bón ===")
-        return total_ingested
+        """Hiệp hội Phân bón VFAEA đã bị DỪNG VĨNH VIỄN theo chính sách Ethical Crawling (403 Forbidden)."""
+        logger.warning("[POLICY] Bỏ qua cào VFAEA (vfaea.org.vn): Đã gỡ bỏ vĩnh viễn.")
+        return 0
 
     def backfill_vra(self, max_articles: int | None = None) -> int:
         """Cào vét tin ngành Cao su VRA."""
@@ -516,8 +379,7 @@ class HistoricalBackfillManager:
             logger.info("==========================================================")
             logger.info(">>> TIẾN TRÌNH 1: BẮT ĐẦU CÀO VÉT TOÀN DIỆN NHÓM A <<<")
             logger.info("==========================================================")
-            results["thuvienphapluat"] = self.backfill_thuvienphapluat(max_shards=15, max_articles=max_art)
-            results["luatvietnam"] = self.backfill_luatvietnam(max_articles=max_art)
+            # thuvienphapluat và luatvietnam đã DỪNG VĨNH VIỄN theo Ethical Crawling Policy
             results["thoibaotaichinh"] = self.backfill_thoibaotaichinh(max_pages=30, max_articles=max_art)
             results["vietnamfinance"] = self.backfill_vietnamfinance(max_articles=max_art)
 
@@ -527,7 +389,7 @@ class HistoricalBackfillManager:
             logger.info("==========================================================")
             results["vntextile"] = self.backfill_vntextile(max_pages=25, max_articles=max_art)
             results["vnpca"] = self.backfill_vnpca(max_articles=max_art)
-            results["vfaea"] = self.backfill_vfaea(max_pages=25, max_articles=max_art)
+            # vfaea đã DỪNG VĨNH VIỄN theo Ethical Crawling Policy
             results["vra"] = self.backfill_vra(max_articles=max_art)
 
         return results

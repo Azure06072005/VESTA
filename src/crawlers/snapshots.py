@@ -1,113 +1,211 @@
-"""F007 (SCOPE SHRUNK 2026-08-14, see DECISIONS.md): realtime quote
-snapshot crawler only.
+"""F007: Realtime quote snapshot & market analytics crawler.
 
-Original spec called for 4 sub-features: market valuation history,
-technical/flow screener, gainer/loser/volume rankings, realtime quote.
-Confirmed live 2026-08-13/14 against the installed COMMUNITY package
-(`vnstock==4.0.5`):
-- `Insights` class does not exist anywhere in that package (confirmed
-  absent -- an earlier report's `Insights.ranking.gainer()` claim was
-  hallucinated, see DECISIONS.md 2026-08-11 entry).
-- A full survey of every top-level vnstock class (Trading, Retail, Fund,
-  Quote, Market, Broker, Reference) found no confirmed method for
-  valuation history, a technical/flow screener, or gainer/loser/volume
-  rankings.
-- `Trading(source='VCI').price_board(symbols_list=[...])` IS a real,
-  confirmed-callable method and plausibly covers "realtime quote" -- this
-  is the one piece of F007 this module implements. The other 3
-  sub-features are deferred, not built here -- see DECISIONS.md.
-
-UPDATE 2026-08-26 -- POSSIBLY SUPERSEDED, NOT YET ACTED ON: DECISIONS.md's
-2026-08-26 entry reports that a separate PROPRIETARY package
-(`vnstock_data==3.2.7`, a paid Sponsor-tier extension, distinct from the
-community `vnstock` surveyed above) does provide an `Insights` class with
-`ranking`/`screener`/`sentiment`/`flow` submodules, and that `gainer()`,
-`breadth()`, and `filter()` were called live and returned data. That
-finding does NOT yet meet this project's own evidence standard (a pasted
-raw stdout dump -- shapes, column names, sample rows -- the way every
-other confirmed schema in this repo was established, e.g. F002's OHLCV
-columns or this file's own 82-column MultiIndex discovery above). Until
-that raw output is pasted and reviewed, F007's SCOPE AND STATE ARE
-UNCHANGED -- this module still implements realtime-quote-only, and no
-code here has been written against `Insights`/`Analytics`/`Macro`. Do not
-assume the 4-sub-feature original spec is restorable until that
-verification gap is closed; see the tracking entry for this at F007b in
-feature_list.json (state: active, not started) and the 2026-08-26
-DECISIONS.md addendum.
-
-CONFIRMED SCHEMA (2026-08-14, real discovery output pasted by Tran Dieu,
-replaces the flat-DataFrame first guess): `price_board()` returns an
-82-column MultiIndex DataFrame across 3 top-level categories: 'listing'
-(symbol, ceiling, floor, ref_price, exchange, trading_status, ...),
-'bid_ask' (bid_1..3_price/volume, ask_1..3_price/volume, bid_count,
-ask_count, ...), 'match' (match_price, match_vol, accumulated_volume,
-foreign_buy_volume, foreign_sell_volume, highest, lowest, ATO/ATC price
-fields, ...). The symbol column lives at ('listing', 'symbol').
-normalize_snapshot() flattens the MultiIndex to 'category_field' string
-keys (e.g. 'listing_symbol', 'bid_ask_bid_1_price') before serializing
-each row to JSON, so no data is lost and no field name needs to be
-individually mapped -- the full 82-column row is preserved.
+Architecture Upgrade (2026-09-27):
+- Transitioned to Direct REST API architecture (Zero vnstock / Zero API Key).
+- Primary Source: Vietcap Direct REST API (https://trading.vietcap.com.vn/api/price/symbols/getList)
+  Returns confirmed 82+ column MultiIndex structure (listing, bid_ask, match) with full Top 3 Bid/Ask depth.
+- Fallback Source: CafeF Realtime Prices API (https://cafef.vn/du-lieu/Ajax/PageNew/RealtimePricesHeader.ashx)
+- Valuation Extension: CafeF Financial Indicators API (ChiSoTaiChinh.ashx) for real-time P/E, P/B, EPS.
+- Retention: ACCUMULATE policy (one row per (symbol, snapshot_at), never overwritten).
 """
 from __future__ import annotations
 
 import datetime as dt
 import json
-import os
-import sys
+import logging
 import pathlib
-
-import pandas as pd
+import re
+import sys
+import urllib.parse
+import urllib.request
+from typing import Any
 
 import duckdb
+import pandas as pd
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 from etl import db  # noqa: E402
 from etl.retry_failed_jobs import EmptyResultError  # noqa: E402
 
-REQUIRED_ENV_VAR = "VNSTOCK_API_KEY"
+logger = logging.getLogger("snapshots")
 
-# CONFIRMED live 2026-08-14: the real symbol column after flattening the
-# MultiIndex is 'listing_symbol'. Aliases kept for robustness against a
-# flat (non-MultiIndex) response, e.g. in offline/synthetic test data.
+# CONFIRMED live: the real symbol column after flattening the MultiIndex is 'listing_symbol'.
+# Aliases kept for robustness against a flat (non-MultiIndex) response.
 SYMBOL_COLUMN_ALIASES = ["listing_symbol", "symbol", "ticker"]
-
 SNAPSHOT_COLUMNS = ["symbol", "snapshot_at", "data_json", "fetched_at"]
 
+DEFAULT_HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
+    "Accept": "application/json, text/plain, */*",
+}
 
-def _authenticate() -> None:
-    db.load_env()
-    api_key = os.environ.get(REQUIRED_ENV_VAR)
-    if not api_key:
-        raise RuntimeError(
-            f"{REQUIRED_ENV_VAR} is not set. Export it before running this "
-            f"crawler -- credentials never go in code or configs/."
-        )
-    try:
-        import vnstock_data as vs
-    except ImportError:
-        import vnstock as vs  # type: ignore[no-redef]
 
-    if hasattr(vs, "change_api_key"):
-        vs.change_api_key(api_key)
+def _camel_to_snake(s: str) -> str:
+    """Converts camelCase string to snake_case."""
+    return re.sub(r"(?<!^)(?=[A-Z])", "_", s).lower()
+
+
+def fetch_raw_vietcap(symbols: list[str], timeout: int = 12) -> pd.DataFrame:
+    """Direct REST call to Vietcap Securities price board API.
+    Zero vnstock dependency, zero API key requirement.
+    """
+    url = "https://trading.vietcap.com.vn/api/price/symbols/getList"
+    headers = {
+        **DEFAULT_HEADERS,
+        "Content-Type": "application/json",
+        "Referer": "https://trading.vietcap.com.vn/",
+        "Origin": "https://trading.vietcap.com.vn/",
+    }
+    payload = json.dumps({"symbols": [s.upper() for s in symbols]}).encode("utf-8")
+    req = urllib.request.Request(url, data=payload, headers=headers, method="POST")
+
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        raw_items = json.loads(resp.read().decode("utf-8"))
+
+    if not raw_items or not isinstance(raw_items, list):
+        raise EmptyResultError(f"Vietcap API returned no data for symbols: {symbols}")
+
+    rows: list[dict[str, Any]] = []
+    for item in raw_items:
+        row: dict[str, Any] = {}
+        for k, v in item.get("listingInfo", {}).items():
+            row[f"listing_{k}"] = v
+        for k, v in item.get("matchPrice", {}).items():
+            row[f"match_{k}"] = v
+        bid_ask = item.get("bidAsk", {})
+        for k, v in bid_ask.items():
+            if k not in ("bidPrices", "askPrices"):
+                row[f"bidAsk_{k}"] = v
+        for i, b in enumerate(bid_ask.get("bidPrices", []), 1):
+            row[f"bidAsk_bid_{i}_price"] = b.get("price")
+            row[f"bidAsk_bid_{i}_volume"] = b.get("volume")
+        for i, a in enumerate(bid_ask.get("askPrices", []), 1):
+            row[f"bidAsk_ask_{i}_price"] = a.get("price")
+            row[f"bidAsk_ask_{i}_volume"] = a.get("volume")
+        rows.append(row)
+
+    df = pd.DataFrame(rows)
+    df.columns = pd.MultiIndex.from_tuples([
+        tuple(_camel_to_snake(p) for p in col.split("_", 1)) for col in df.columns
+    ])
+
+    if ("listing", "board") in df.columns:
+        df = df.rename(columns={"board": "exchange"}, level=1)
+
+    df.attrs["source"] = "VIETCAP_DIRECT"
+    return df
+
+
+def fetch_raw_cafef(symbols: list[str], timeout: int = 10) -> pd.DataFrame:
+    """Direct REST call to CafeF Realtime Prices API as fallback.
+    Zero vnstock dependency, zero API key requirement.
+    """
+    if len(symbols) > 50:
+        frames = []
+        for i in range(0, len(symbols), 50):
+            chunk = symbols[i : i + 50]
+            try:
+                df_chunk = fetch_raw_cafef(chunk, timeout=timeout)
+                frames.append(df_chunk)
+            except Exception as e:
+                logger.warning("CafeF chunk %d-%d failed: %s", i, i + len(chunk), e)
+        if not frames:
+            raise EmptyResultError(f"CafeF returned no valid items for symbols: {symbols}")
+        res = pd.concat(frames, ignore_index=True)
+        res.attrs["source"] = "CAFEF_DIRECT"
+        return res
+
+    sym_str = ";".join(s.upper() for s in symbols)
+    url = f"https://cafef.vn/du-lieu/Ajax/PageNew/RealtimePricesHeader.ashx?symbols={urllib.parse.quote(sym_str)}"
+    headers = {
+        **DEFAULT_HEADERS,
+        "Referer": "https://cafef.vn/du-lieu/",
+    }
+    req = urllib.request.Request(url, headers=headers, method="GET")
+
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        data = json.loads(resp.read().decode("utf-8"))
+
+    if not data or not isinstance(data, dict):
+        raise EmptyResultError(f"CafeF returned empty prices for symbols: {symbols}")
+
+    rows: list[dict[str, Any]] = []
+    for sym in symbols:
+        sym_upper = sym.upper()
+        item = data.get(sym_upper)
+        if not item:
+            continue
+        # Convert CafeF units (in thousands VND) to full VND units to match Vietcap standard
+        multiplier = 1000.0 if (item.get("Price") or 0) < 1000 else 1.0
+        row: dict[str, Any] = {
+            "listing_symbol": item.get("Symbol"),
+            "listing_ref_price": (item.get("RefPrice") or 0) * multiplier,
+            "listing_ceiling": (item.get("CeilingPrice") or 0) * multiplier,
+            "listing_floor": (item.get("FloorPrice") or 0) * multiplier,
+            "match_match_price": (item.get("Price") or 0) * multiplier,
+            "match_accumulated_volume": item.get("Volume"),
+            "match_high_price": (item.get("HighPrice") or 0) * multiplier,
+            "match_low_price": (item.get("LowPrice") or 0) * multiplier,
+            "match_foreign_buy_volume": item.get("ForeignBuyVolume"),
+            "match_foreign_sell_volume": item.get("ForeignSellVolume"),
+            "bid_ask_bid_1_price": (item.get("BidPrice01") or 0) * multiplier,
+            "bid_ask_bid_1_volume": item.get("BidVolume01"),
+            "bid_ask_bid_2_price": (item.get("BidPrice02") or 0) * multiplier,
+            "bid_ask_bid_2_volume": item.get("BidVolume02"),
+            "bid_ask_bid_3_price": (item.get("BidPrice03") or 0) * multiplier,
+            "bid_ask_bid_3_volume": item.get("BidVolume03"),
+            "bid_ask_ask_1_price": (item.get("AskPrice01") or 0) * multiplier,
+            "bid_ask_ask_1_volume": item.get("AskVolume01"),
+            "bid_ask_ask_2_price": (item.get("AskPrice02") or 0) * multiplier,
+            "bid_ask_ask_2_volume": item.get("AskVolume02"),
+            "bid_ask_ask_3_price": (item.get("AskPrice03") or 0) * multiplier,
+            "bid_ask_ask_3_volume": item.get("AskVolume03"),
+        }
+        rows.append(row)
+
+    if not rows:
+        raise EmptyResultError(f"CafeF returned no valid items for symbols: {symbols}")
+
+    df = pd.DataFrame(rows)
+    df.columns = pd.MultiIndex.from_tuples([
+        tuple(p for p in col.split("_", 1)) for col in df.columns
+    ])
+    df.attrs["source"] = "CAFEF_DIRECT"
+    return df
+
+
+def fetch_valuation_snapshot(symbol: str, timeout: int = 8) -> dict[str, Any]:
+    """Fetches real-time market valuation metrics (P/E, P/B, EPS, Market Cap) from CafeF.
+    Zero vnstock dependency, zero API key requirement.
+    """
+    url = f"https://cafef.vn/du-lieu/Ajax/PageNew/ChiSoTaiChinh.ashx?Symbol={urllib.parse.quote(symbol.upper())}"
+    headers = {
+        **DEFAULT_HEADERS,
+        "Referer": f"https://cafef.vn/du-lieu/{symbol.lower()}.chn",
+    }
+    req = urllib.request.Request(url, headers=headers, method="GET")
+
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        parsed = json.loads(resp.read().decode("utf-8"))
+
+    result: dict[str, Any] = {"symbol": symbol.upper(), "fetched_at": dt.datetime.now(dt.timezone.utc).isoformat()}
+    for item in parsed.get("Data", []):
+        code = item.get("Code")
+        val = item.get("Value")
+        if code and val:
+            result[code] = val
+    return result
 
 
 def fetch_raw(symbols: list[str]) -> pd.DataFrame:
-    """Live network call. Requires VNSTOCK_API_KEY to be set.
-
-    Returns whatever vnstock's price_board() gives back, untouched
-    (including its MultiIndex columns) -- flattening happens in
-    normalize_snapshot() so that logic stays testable without network
-    access.
+    """Fetches live realtime price board.
+    Zero vnstock dependency: calls Vietcap Direct REST API with automatic CafeF fallback.
     """
-    _authenticate()
     try:
-        import vnstock_data as vs
-    except ImportError:
-        import vnstock as vs  # type: ignore[no-redef]
-
-    trading = vs.Trading(source="VCI")
-    result: pd.DataFrame = trading.price_board(symbols_list=symbols)
-    return result
+        return fetch_raw_vietcap(symbols)
+    except Exception as e:
+        logger.warning("Vietcap Direct API fetch failed (%s), falling back to CafeF...", e)
+        return fetch_raw_cafef(symbols)
 
 
 def _flatten_columns(df: pd.DataFrame) -> pd.DataFrame:
@@ -134,9 +232,7 @@ def normalize_snapshot(raw_df: pd.DataFrame) -> pd.DataFrame:
         raise EmptyResultError(
             "fetch_raw returned an empty DataFrame -- F008-compatible: "
             "recorded as genuine emptiness via record_empty(), NOT "
-            "retried. (Could also indicate all requested symbols were "
-            "invalid; if this fires unexpectedly, verify the symbol list "
-            "first before assuming it's a transient API issue.)"
+            "retried."
         )
 
     flat_df = _flatten_columns(raw_df)
@@ -146,11 +242,10 @@ def normalize_snapshot(raw_df: pd.DataFrame) -> pd.DataFrame:
         raise ValueError(
             f"Could not find a symbol column among {SYMBOL_COLUMN_ALIASES} "
             f"in fetched (flattened) price board data. Columns present: "
-            f"{list(flat_df.columns)}. Run discover_price_board_schema.py "
-            f"against a live key to confirm the real column name."
+            f"{list(flat_df.columns)}."
         )
 
-    # Drop rows where the symbol is missing (API returned invalid/empty row for a missing symbol)
+    # Drop rows where the symbol is missing
     flat_df = flat_df.dropna(subset=[symbol_col])
     if flat_df.empty:
         raise EmptyResultError("fetch_raw returned only empty/missing symbols.")
@@ -160,7 +255,7 @@ def normalize_snapshot(raw_df: pd.DataFrame) -> pd.DataFrame:
 
     out = pd.DataFrame(
         {
-            "symbol": flat_df[symbol_col].astype(str),
+            "symbol": flat_df[symbol_col].astype(str).str.upper(),
             "snapshot_at": snapshot_at,
             "data_json": [_row_to_json(r) for r in records],
         }
@@ -171,72 +266,75 @@ def normalize_snapshot(raw_df: pd.DataFrame) -> pd.DataFrame:
     if dupes:
         raise ValueError(
             f"normalize_snapshot produced {dupes} duplicate (symbol, "
-            f"snapshot_at) row(s) -- likely the same symbol appeared "
-            f"twice in one price_board() response, refusing to write "
-            f"ambiguous data."
+            f"snapshot_at) row(s) -- refusing to write ambiguous data."
         )
 
     return out[SNAPSHOT_COLUMNS]
 
 
-def _row_to_json(row: "dict[object, object]") -> str:
+def _row_to_json(row: dict[object, object]) -> str:
     def _default(o: object) -> str:
         return str(o)
 
     return json.dumps(row, default=_default, ensure_ascii=False)
 
 
-def write_snapshot(df: pd.DataFrame, con: "duckdb.DuckDBPyConnection | None" = None) -> int:
+def write_snapshot(df: pd.DataFrame, con: duckdb.DuckDBPyConnection | None = None) -> int:
     """Validate + write to staging, then promote to core. ACCUMULATE
     retention (DECISIONS.md 2026-08-14): never deletes prior snapshots for
     a symbol -- only guards against re-inserting the exact same
-    (symbol, snapshot_at) key, which in practice won't collide since
-    snapshot_at is a real-time timestamp captured at fetch time.
+    (symbol, snapshot_at) key.
     """
     missing = set(SNAPSHOT_COLUMNS) - set(df.columns)
     if missing:
         raise ValueError(f"Snapshot DataFrame missing columns: {missing}")
 
-    con = con or db.bootstrap_schema()
-    con.register("snapshot_df", df[SNAPSHOT_COLUMNS])
-    con.execute(
-        "INSERT INTO staging.realtime_quote_snapshot SELECT * FROM snapshot_df "
-        "WHERE NOT EXISTS ("
-        "  SELECT 1 FROM staging.realtime_quote_snapshot s "
-        "  WHERE s.symbol = snapshot_df.symbol AND s.snapshot_at = snapshot_df.snapshot_at"
-        ")"
-    )
-    con.execute(
-        "INSERT INTO core.realtime_quote_snapshot SELECT * FROM snapshot_df "
-        "WHERE NOT EXISTS ("
-        "  SELECT 1 FROM core.realtime_quote_snapshot s "
-        "  WHERE s.symbol = snapshot_df.symbol AND s.snapshot_at = snapshot_df.snapshot_at"
-        ")"
-    )
-    con.unregister("snapshot_df")
+    should_close = False
+    if con is None:
+        con = db.bootstrap_schema()
+        should_close = True
+
+    try:
+        con.register("snapshot_df", df[SNAPSHOT_COLUMNS])
+        con.execute(
+            "INSERT INTO staging.realtime_quote_snapshot SELECT * FROM snapshot_df "
+            "WHERE NOT EXISTS ("
+            "  SELECT 1 FROM staging.realtime_quote_snapshot s "
+            "  WHERE s.symbol = snapshot_df.symbol AND s.snapshot_at = snapshot_df.snapshot_at"
+            ")"
+        )
+        con.execute(
+            "INSERT INTO core.realtime_quote_snapshot SELECT * FROM snapshot_df "
+            "WHERE NOT EXISTS ("
+            "  SELECT 1 FROM core.realtime_quote_snapshot s "
+            "  WHERE s.symbol = snapshot_df.symbol AND s.snapshot_at = snapshot_df.snapshot_at"
+            ")"
+        )
+        con.unregister("snapshot_df")
+    finally:
+        if should_close:
+            con.close()
 
     return len(df)
 
 
-def run(symbols: "list[str] | str") -> int:
+def run(symbols: list[str] | str, con: duckdb.DuckDBPyConnection | None = None) -> int:
     """Entry point: fetch live, normalize, write. Returns row count written.
 
-    Accepts either a single symbol (str, normalized to a 1-element list --
-    makes this orchestrator-compatible, since batch_orchestrator calls
-    crawl_fn(symbol) with a bare string) or a list of symbols for a
+    Accepts either a single symbol (str) or a list of symbols for a
     genuine multi-symbol price-board snapshot in one call.
     """
     if isinstance(symbols, str):
         symbols = [symbols]
     raw = fetch_raw(symbols)
     normalized = normalize_snapshot(raw)
-    return write_snapshot(normalized)
+    return write_snapshot(normalized, con=con)
 
 
 if __name__ == "__main__":
     import argparse
 
-    parser = argparse.ArgumentParser(description="F007: crawl a realtime price-board snapshot")
+    parser = argparse.ArgumentParser(description="F007: crawl a realtime price-board snapshot via Direct REST API")
     parser.add_argument("symbols", nargs="+", help="One or more ticker symbols")
     args = parser.parse_args()
 

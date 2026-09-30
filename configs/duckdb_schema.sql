@@ -41,17 +41,239 @@ CREATE TABLE IF NOT EXISTS core.dim_symbol (
 -- core.dim_symbol_cafef (F001b): CafeF company directory cross-reference source.
 -- Covers OTC equities and unlisted historical tickers not present in vnstock's dim_symbol.
 CREATE TABLE IF NOT EXISTS core.dim_symbol_cafef (
-    symbol       VARCHAR NOT NULL PRIMARY KEY,
-    org_name     VARCHAR NOT NULL,
-    exchange     VARCHAR NOT NULL,
-    center_id    INTEGER NOT NULL,
-    is_vn30      BOOLEAN NOT NULL,
-    is_hnx30     BOOLEAN NOT NULL,
-    slug_base    VARCHAR NOT NULL,
-    source       VARCHAR NOT NULL DEFAULT 'cafef',
-    fetched_at   TIMESTAMP NOT NULL,
-    raw_json     VARCHAR NOT NULL
+    symbol         VARCHAR NOT NULL PRIMARY KEY,
+    org_name       VARCHAR NOT NULL,
+    exchange       VARCHAR NOT NULL,
+    center_id      INTEGER NOT NULL,
+    is_vn30        BOOLEAN NOT NULL,
+    is_hnx30       BOOLEAN NOT NULL,
+    slug_base      VARCHAR NOT NULL,
+    source         VARCHAR NOT NULL DEFAULT 'cafef',
+    fetched_at     TIMESTAMP NOT NULL,
+    raw_json       VARCHAR NOT NULL,
+    tradeable_flag BOOLEAN NOT NULL DEFAULT FALSE,
+    subuniverse    VARCHAR NOT NULL DEFAULT 'OTC'
 );
+
+ALTER TABLE core.dim_symbol_cafef ADD COLUMN IF NOT EXISTS tradeable_flag BOOLEAN DEFAULT FALSE;
+ALTER TABLE core.dim_symbol_cafef ADD COLUMN IF NOT EXISTS subuniverse VARCHAR DEFAULT 'OTC';
+
+-- core.v_symbol_universe (F001b Recommendation):
+-- Unified symbol universe with explicit subuniverse tagging.
+-- Liquid quantitative models MUST filter `WHERE tradeable_flag = TRUE`
+-- to exclude the 750 illiquid OTC tickers and prevent execution noise.
+CREATE OR REPLACE VIEW core.v_symbol_universe AS
+SELECT 
+    symbol, 
+    organ_name as org_name, 
+    exchange, 
+    is_delisted,
+    TRUE as tradeable_flag, 
+    'LISTED' as subuniverse,
+    'vnstock' as source,
+    fetched_at
+FROM core.dim_symbol
+UNION ALL
+SELECT 
+    symbol, 
+    org_name, 
+    exchange, 
+    TRUE as is_delisted,
+    tradeable_flag, 
+    subuniverse,
+    source,
+    fetched_at
+FROM core.dim_symbol_cafef;
+
+-- F001 Recommendation: Static 4-tier ICB industry hierarchy mapping
+CREATE TABLE IF NOT EXISTS core.dim_icb_hierarchy (
+    icb_code            VARCHAR NOT NULL PRIMARY KEY,
+    level               INTEGER NOT NULL,
+    icb_name_vi         VARCHAR NOT NULL,
+    icb_name_en         VARCHAR NOT NULL,
+    parent_code         VARCHAR,
+    industry_code       VARCHAR NOT NULL,
+    industry_name_vi    VARCHAR NOT NULL,
+    industry_name_en    VARCHAR NOT NULL,
+    supersector_code    VARCHAR,
+    supersector_name_vi VARCHAR,
+    supersector_name_en VARCHAR,
+    sector_code         VARCHAR,
+    sector_name_vi      VARCHAR,
+    sector_name_en      VARCHAR,
+    subsector_code      VARCHAR,
+    subsector_name_vi   VARCHAR,
+    subsector_name_en   VARCHAR,
+    updated_at          TIMESTAMP NOT NULL
+);
+
+-- F001 Recommendation: Continuous symbol exchange migration history
+CREATE TABLE IF NOT EXISTS core.symbol_exchange_history (
+    symbol          VARCHAR NOT NULL,
+    exchange        VARCHAR NOT NULL,
+    start_date      DATE NOT NULL,
+    end_date        DATE,
+    is_current      BOOLEAN NOT NULL,
+    listing_price   DOUBLE,
+    event_note      VARCHAR,
+    source          VARCHAR NOT NULL DEFAULT 'HOSE/HNX/CompanyOverview',
+    created_at      TIMESTAMP NOT NULL,
+    PRIMARY KEY (symbol, exchange, start_date)
+);
+
+-- F001c: Index constituents & group rooms mapping (VN30, VN100, VNMID, VNSML, VNSI, VNX50, HNX30, VNDIAMOND, VNFINLEAD, VNFINSELECT, HOSE Sector Indices)
+CREATE TABLE IF NOT EXISTS core.dim_index_metadata (
+    index_code          VARCHAR NOT NULL PRIMARY KEY,
+    index_name          VARCHAR NOT NULL,
+    exchange            VARCHAR NOT NULL,    -- 'HOSE' | 'HNX' | 'VNX'
+    category            VARCHAR NOT NULL,    -- 'BENCHMARK' | 'MARKET_CAP' | 'ESG' | 'THEMATIC' | 'SECTOR'
+    description         VARCHAR,
+    rebalance_cycle     VARCHAR,            -- 'QUARTERLY' | 'SEMI_ANNUALLY' | 'ANNUALLY'
+    created_at          TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS core.dim_index_constituents (
+    index_code          VARCHAR NOT NULL,
+    symbol              VARCHAR NOT NULL,
+    weight              DOUBLE,              -- index weighting % if available
+    rank                INTEGER,             -- constituent rank by market cap/liquidity
+    effective_date      DATE NOT NULL,       -- effective rebalancing date
+    is_current          BOOLEAN NOT NULL DEFAULT TRUE,
+    source              VARCHAR NOT NULL DEFAULT 'SSI_IBOARD', -- 'SSI_IBOARD' | 'KBS' | 'HOSE'
+    fetched_at          TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (index_code, symbol, effective_date)
+);
+
+CREATE OR REPLACE VIEW core.v_active_index_constituents AS
+SELECT 
+    c.index_code,
+    m.index_name,
+    m.category,
+    m.exchange,
+    c.symbol,
+    s.organ_name,
+    c.weight,
+    c.rank,
+    c.effective_date,
+    c.source
+FROM core.dim_index_constituents c
+JOIN core.dim_index_metadata m ON c.index_code = m.index_code
+LEFT JOIN core.dim_symbol s ON c.symbol = s.symbol
+WHERE c.is_current = TRUE;
+
+-- F002: Market OHLCV daily bars (raw payload preserving)
+CREATE TABLE IF NOT EXISTS core.market_ohlcv_daily (
+    symbol      VARCHAR NOT NULL,
+    date        DATE NOT NULL,
+    open        DOUBLE NOT NULL,
+    high        DOUBLE NOT NULL,
+    low         DOUBLE NOT NULL,
+    close       DOUBLE NOT NULL,
+    volume      BIGINT NOT NULL,
+    fetched_at  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (symbol, date)
+);
+
+-- F002 Recommendation: Corporate Actions & Ex-Dividend Price Adjustment Factors
+CREATE TABLE IF NOT EXISTS core.price_adjustment_events (
+    symbol                       VARCHAR NOT NULL,
+    ex_date                      DATE NOT NULL,
+    adjustment_type              VARCHAR NOT NULL,     -- 'CASH_DIVIDEND' | 'STOCK_DIVIDEND' | 'COMBINED'
+    cash_dividend                DOUBLE,               -- D (nghìn VNĐ/cổ phiếu)
+    stock_dividend_ratio         DOUBLE,               -- alpha (ví dụ 0.15 = 15%)
+    cum_close_price              DOUBLE,               -- P_close (giá đóng cửa ngày T-1)
+    ex_reference_price           DOUBLE,               -- P_ex (giá tham chiếu ngày GDKHQ)
+    multiplier                   DOUBLE NOT NULL,      -- f = P_ex / P_close (hệ số điều chỉnh bước đơn)
+    cumulative_adjustment_factor DOUBLE NOT NULL,      -- CAF (chuỗi nhân dồn)
+    source_event_ids             VARCHAR,
+    computed_at                  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (symbol, ex_date)
+);
+
+-- F002 Recommendation: Continuous Timeline of Cumulative Adjustment Factors (CAF)
+CREATE TABLE IF NOT EXISTS core.symbol_caf_timeline (
+    symbol      VARCHAR NOT NULL,
+    start_date  DATE NOT NULL,
+    end_date    DATE NOT NULL,
+    caf         DOUBLE NOT NULL,
+    PRIMARY KEY (symbol, start_date)
+);
+
+-- F002 Recommendation: Dual-Mode Market OHLCV Analytical View (Raw & Adjusted Prices)
+CREATE OR REPLACE VIEW core.v_market_ohlcv_dual AS
+SELECT 
+    m.symbol,
+    m.date,
+    -- 1. Giá điều chỉnh (Vendor-Adjusted Prices dùng cho tính tỷ suất sinh lời thực tế)
+    m.open as adj_open,
+    m.high as adj_high,
+    m.low as adj_low,
+    m.close as adj_close,
+    m.volume as adj_volume,
+    -- 2. Hệ số nhân dồn tích lũy (Cumulative Adjustment Factor)
+    COALESCE(c.caf, 1.0) as caf,
+    -- 3. Giá thô nguyên bản (Raw Unadjusted Prices dùng cho đo bước giá & biên độ trần/sàn)
+    ROUND(m.open / COALESCE(c.caf, 1.0), 2) as raw_open,
+    ROUND(m.high / COALESCE(c.caf, 1.0), 2) as raw_high,
+    ROUND(m.low / COALESCE(c.caf, 1.0), 2) as raw_low,
+    ROUND(m.close / COALESCE(c.caf, 1.0), 2) as raw_close,
+    ROUND(m.volume * COALESCE(c.caf, 1.0), 0) as raw_volume,
+    m.fetched_at
+FROM core.market_ohlcv_daily m
+LEFT JOIN core.symbol_caf_timeline c
+  ON m.symbol = c.symbol 
+ AND m.date >= c.start_date 
+ AND m.date < c.end_date;
+
+-- F002b: High-Frequency 1-Minute Intraday Bar Table & Meta Progress
+CREATE TABLE IF NOT EXISTS core.market_ohlcv_1m (
+    symbol      VARCHAR NOT NULL,
+    time        TIMESTAMP NOT NULL,
+    open        DOUBLE NOT NULL,
+    high        DOUBLE NOT NULL,
+    low         DOUBLE NOT NULL,
+    close       DOUBLE NOT NULL,
+    volume      BIGINT NOT NULL,
+    fetched_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (symbol, time)
+);
+
+CREATE TABLE IF NOT EXISTS meta.crawl_progress_1m (
+    symbol          VARCHAR PRIMARY KEY,
+    earliest_time   TIMESTAMP,
+    latest_time     TIMESTAMP,
+    total_bars      INTEGER NOT NULL DEFAULT 0,
+    trading_days    INTEGER NOT NULL DEFAULT 0,
+    is_complete_3y  BOOLEAN DEFAULT FALSE,
+    last_status     VARCHAR,
+    updated_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- F002b: Dual-Mode 1-Minute OHLCV Analytical View (Raw & Adjusted Intraday Prices)
+CREATE OR REPLACE VIEW core.v_market_ohlcv_1m_dual AS
+SELECT 
+    m.symbol,
+    m.time,
+    -- 1. Giá điều chỉnh (Vendor-Adjusted Prices dùng cho tính tỷ suất sinh lời thực tế)
+    m.open as adj_open,
+    m.high as adj_high,
+    m.low as adj_low,
+    m.close as adj_close,
+    m.volume as adj_volume,
+    -- 2. Hệ số nhân dồn tích lũy (Cumulative Adjustment Factor)
+    COALESCE(c.caf, 1.0) as caf,
+    -- 3. Giá thô nguyên bản (Raw Unadjusted Prices dùng cho đo bước giá & biên độ trần/sàn)
+    ROUND(m.open / COALESCE(c.caf, 1.0), 2) as raw_open,
+    ROUND(m.high / COALESCE(c.caf, 1.0), 2) as raw_high,
+    ROUND(m.low / COALESCE(c.caf, 1.0), 2) as raw_low,
+    ROUND(m.close / COALESCE(c.caf, 1.0), 2) as raw_close,
+    ROUND(m.volume * COALESCE(c.caf, 1.0), 0) as raw_volume,
+    m.fetched_at
+FROM core.market_ohlcv_1m m
+LEFT JOIN core.symbol_caf_timeline c
+  ON m.symbol = c.symbol 
+ AND CAST(m.time AS DATE) >= c.start_date 
+ AND CAST(m.time AS DATE) < c.end_date;
 
 -- F004d: Sector master & news signal tables
 CREATE TABLE IF NOT EXISTS core.dim_sector (
@@ -646,5 +868,134 @@ CREATE TABLE IF NOT EXISTS meta.continuous_training_history (
     checkpoint_path        VARCHAR,
     metadata_json          VARCHAR
 );
+
+-- ============================================================================
+-- F007b: Market Insights, Screener, Index Valuation & Market Breadth Tables
+-- ============================================================================
+
+-- staging/core.market_screener_snapshot: Multi-factor quantitative screening snapshots
+CREATE TABLE IF NOT EXISTS staging.market_screener_snapshot (
+    symbol                   VARCHAR NOT NULL,
+    snapshot_date            DATE NOT NULL,
+    exchange                 VARCHAR,
+    price                    DOUBLE,
+    reference_price          DOUBLE,
+    ceiling_price            DOUBLE,
+    floor_price              DOUBLE,
+    price_change_percent     DOUBLE,
+    market_cap               DOUBLE,
+    accumulated_value        DOUBLE,
+    accumulated_volume       DOUBLE,
+    stock_strength           DOUBLE,
+    data_json                VARCHAR,
+    source                   VARCHAR NOT NULL DEFAULT 'VIETCAP_IQ_DIRECT',
+    fetched_at               TIMESTAMP NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS core.market_screener_snapshot (
+    symbol                   VARCHAR NOT NULL,
+    snapshot_date            DATE NOT NULL,
+    exchange                 VARCHAR,
+    price                    DOUBLE,
+    reference_price          DOUBLE,
+    ceiling_price            DOUBLE,
+    floor_price              DOUBLE,
+    price_change_percent     DOUBLE,
+    market_cap               DOUBLE,
+    accumulated_value        DOUBLE,
+    accumulated_volume       DOUBLE,
+    stock_strength           DOUBLE,
+    data_json                VARCHAR,
+    source                   VARCHAR NOT NULL DEFAULT 'VIETCAP_IQ_DIRECT',
+    fetched_at               TIMESTAMP NOT NULL,
+    PRIMARY KEY (symbol, snapshot_date)
+);
+
+-- staging/core.index_valuation_series: Historical daily valuation ratios (P/E, P/B) for indices
+CREATE TABLE IF NOT EXISTS staging.index_valuation_series (
+    index_code    VARCHAR NOT NULL,
+    ratio_code    VARCHAR NOT NULL,
+    report_date   DATE NOT NULL,
+    ratio_value   DOUBLE NOT NULL,
+    source        VARCHAR NOT NULL DEFAULT 'VNDIRECT_FINFO_DIRECT',
+    fetched_at    TIMESTAMP NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS core.index_valuation_series (
+    index_code    VARCHAR NOT NULL,
+    ratio_code    VARCHAR NOT NULL,
+    report_date   DATE NOT NULL,
+    ratio_value   DOUBLE NOT NULL,
+    source        VARCHAR NOT NULL DEFAULT 'VNDIRECT_FINFO_DIRECT',
+    fetched_at    TIMESTAMP NOT NULL,
+    PRIMARY KEY (index_code, ratio_code, report_date)
+);
+
+-- staging/core.market_breadth_series: Historical market breadth time series
+CREATE TABLE IF NOT EXISTS staging.market_breadth_series (
+    exchange               VARCHAR NOT NULL,
+    trade_date             DATE NOT NULL,
+    pe                     DOUBLE,
+    pb                     DOUBLE,
+    above_ma20_pct         DOUBLE,
+    above_ma50_pct         DOUBLE,
+    above_ma200_pct        DOUBLE,
+    avg_20d_above_ma50_pct DOUBLE,
+    position_line          DOUBLE,
+    close_index            DOUBLE,
+    source                 VARCHAR NOT NULL DEFAULT 'ASEAN_SC_DIRECT',
+    fetched_at             TIMESTAMP NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS core.market_breadth_series (
+    exchange               VARCHAR NOT NULL,
+    trade_date             DATE NOT NULL,
+    pe                     DOUBLE,
+    pb                     DOUBLE,
+    above_ma20_pct         DOUBLE,
+    above_ma50_pct         DOUBLE,
+    above_ma200_pct        DOUBLE,
+    avg_20d_above_ma50_pct DOUBLE,
+    position_line          DOUBLE,
+    close_index            DOUBLE,
+    source                 VARCHAR NOT NULL DEFAULT 'ASEAN_SC_DIRECT',
+    fetched_at             TIMESTAMP NOT NULL,
+    PRIMARY KEY (exchange, trade_date)
+);
+
+-- staging/core.market_sentiment_snapshot: Fear & Greed and market sentiment snapshots
+CREATE TABLE IF NOT EXISTS staging.market_sentiment_snapshot (
+    exchange           VARCHAR NOT NULL,
+    snapshot_date      DATE NOT NULL,
+    fear_greed_score   DOUBLE,
+    advances           INTEGER,
+    declines           INTEGER,
+    no_change          INTEGER,
+    mfi                DOUBLE,
+    rsi                DOUBLE,
+    index_change       DOUBLE,
+    volume_change      DOUBLE,
+    raw_json           VARCHAR,
+    source             VARCHAR NOT NULL DEFAULT 'ASEAN_SC_DIRECT',
+    fetched_at         TIMESTAMP NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS core.market_sentiment_snapshot (
+    exchange           VARCHAR NOT NULL,
+    snapshot_date      DATE NOT NULL,
+    fear_greed_score   DOUBLE,
+    advances           INTEGER,
+    declines           INTEGER,
+    no_change          INTEGER,
+    mfi                DOUBLE,
+    rsi                DOUBLE,
+    index_change       DOUBLE,
+    volume_change      DOUBLE,
+    raw_json           VARCHAR,
+    source             VARCHAR NOT NULL DEFAULT 'ASEAN_SC_DIRECT',
+    fetched_at         TIMESTAMP NOT NULL,
+    PRIMARY KEY (exchange, snapshot_date)
+);
+
 
 

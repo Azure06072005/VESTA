@@ -1,0 +1,1021 @@
+{
+  "core.macro_policy": {
+    "rows": 847,
+    "columns": [
+      {
+        "column": "source",
+        "type": "VARCHAR",
+        "nullable": "NO",
+        "null_count": 0,
+        "pct_null": "0.00%"
+      },
+      {
+        "column": "issuing_body",
+        "type": "VARCHAR",
+        "nullable": "NO",
+        "null_count": 0,
+        "pct_null": "0.00%"
+      },
+      {
+        "column": "doc_type",
+        "type": "VARCHAR",
+        "nullable": "YES",
+        "null_count": 0,
+        "pct_null": "0.00%"
+      },
+      {
+        "column": "doc_number",
+        "type": "VARCHAR",
+        "nullable": "YES",
+        "null_count": 715,
+        "pct_null": "84.42%"
+      },
+      {
+        "column": "published_at",
+        "type": "TIMESTAMP",
+        "nullable": "NO",
+        "null_count": 0,
+        "pct_null": "0.00%"
+      },
+      {
+        "column": "available_at",
+        "type": "TIMESTAMP",
+        "nullable": "NO",
+        "null_count": 0,
+        "pct_null": "0.00%"
+      },
+      {
+        "column": "headline",
+        "type": "VARCHAR",
+        "nullable": "NO",
+        "null_count": 0,
+        "pct_null": "0.00%"
+      },
+      {
+        "column": "summary",
+        "type": "VARCHAR",
+        "nullable": "YES",
+        "null_count": 230,
+        "pct_null": "27.15%"
+      },
+      {
+        "column": "body",
+        "type": "VARCHAR",
+        "nullable": "YES",
+        "null_count": 0,
+        "pct_null": "0.00%"
+      },
+      {
+        "column": "source_url",
+        "type": "VARCHAR",
+        "nullable": "NO",
+        "null_count": 0,
+        "pct_null": "0.00%"
+      },
+      {
+        "column": "fetched_at",
+        "type": "TIMESTAMP",
+        "nullable": "NO",
+        "null_count": 0,
+        "pct_null": "0.00%"
+      }
+    ]
+  },
+  "core.news": {
+    "rows": 670409,
+    "columns": [
+      {
+        "column": "symbol",
+        "type": "VARCHAR",
+        "nullable": "NO",
+        "null_count": 0,
+        "pct_null": "0.00%"
+      },
+      {
+        "column": "source",
+        "type": "VARCHAR",
+        "nullable": "NO",
+        "null_count": 0,
+        "pct_null": "0.00%"
+      },
+      {
+        "column": "published_at",
+        "type": "TIMESTAMP",
+        "nullable": "NO",
+        "null_count": 0,
+        "pct_null": "0.00%"
+      },
+      {
+        "column": "available_at",
+        "type": "TIMESTAMP",
+        "nullable": "NO",
+        "null_count": 0,
+        "pct_null": "0.00%"
+      },
+      {
+        "column": "headline",
+        "type": "VARCHAR",
+        "nullable": "NO",
+        "null_count": 0,
+        "pct_null": "0.00%"
+      },
+      {
+        "column": "body",
+        "type": "VARCHAR",
+        "nullable": "YES",
+        "null_count": 659169,
+        "pct_null": "98.32%"
+      },
+      {
+        "column": "source_url",
+        "type": "VARCHAR",
+        "nullable": "NO",
+        "null_count": 0,
+        "pct_null": "0.00%"
+      },
+      {
+        "column": "fetched_at",
+        "type": "TIMESTAMP",
+        "nullable": "NO",
+        "null_count": 0,
+        "pct_null": "0.00%"
+      },
+      {
+        "column": "duplicate_of",
+        "type": "VARCHAR",
+        "nullable": "YES",
+        "null_count": 670409,
+        "pct_null": "100.00%"
+      }
+    ]
+  },
+  "core.news_resources": {
+    "rows": 478599,
+    "columns": [
+      {
+        "column": "source",
+        "type": "VARCHAR",
+        "nullable": "NO",
+        "null_count": 0,
+        "pct_null": "0.00%"
+      },
+      {
+        "column": "issuing_body",
+        "type": "VARCHAR",
+        "nullable": "NO",
+        "null_count": 0,
+        "pct_null": "0.00%"
+      },
+      {
+        "column": "doc_type",
+        "type": "VARCHAR",
+        "nullable": "YES",
+        "null_count": 0,
+        "pct_null": "0.00%"
+      },
+      {
+        "column": "doc_number",
+        "type": "VARCHAR",
+        "nullable": "YES",
+        "null_count": 462486,
+        "pct_null": "96.63%"
+      },
+      {
+        "column": "published_at",
+        "type": "TIMESTAMP",
+        "nullable": "NO",
+        "null_count": 0,
+        "pct_null": "0.00%"
+      },
+      {
+        "column": "available_at",
+        "type": "TIMESTAMP",
+        "nullable": "NO",
+        "null_count": 0,
+        "pct_null": "0.00%"
+      },
+      {
+        "column": "headline",
+        "type": "VARCHAR",
+        "nullable": "NO",
+        "null_count": 0,
+        "pct_null": "0.00%"
+      },
+      {
+        "column": "summary",
+        "type": "VARCHAR",
+        "nullable": "YES",
+        "null_count": 37342,
+        "pct_null": "7.80%"
+      },
+      {
+        "column": "body",
+        "type": "VARCHAR",
+        "nullable": "YES",
+        "null_count": 152,
+        "pct_null": "0.03%"
+      },
+      {
+        "column": "source_url",
+        "type": "VARCHAR",
+        "nullable": "NO",
+        "null_count": 0,
+        "pct_null": "0.00%"
+      },
+      {
+        "column": "fetched_at",
+        "type": "TIMESTAMP",
+        "nullable": "NO",
+        "null_count": 0,
+        "pct_null": "0.00%"
+      }
+    ]
+  },
+  "core.sector_news_signal": {
+    "rows": 15531,
+    "columns": [
+      {
+        "column": "source_url",
+        "type": "VARCHAR",
+        "nullable": "NO",
+        "null_count": 0,
+        "pct_null": "0.00%"
+      },
+      {
+        "column": "sector_id",
+        "type": "INTEGER",
+        "nullable": "NO",
+        "null_count": 0,
+        "pct_null": "0.00%"
+      },
+      {
+        "column": "sector_name",
+        "type": "VARCHAR",
+        "nullable": "NO",
+        "null_count": 0,
+        "pct_null": "0.00%"
+      },
+      {
+        "column": "matched_keyword",
+        "type": "VARCHAR",
+        "nullable": "NO",
+        "null_count": 0,
+        "pct_null": "0.00%"
+      },
+      {
+        "column": "match_tier",
+        "type": "VARCHAR",
+        "nullable": "NO",
+        "null_count": 0,
+        "pct_null": "0.00%"
+      },
+      {
+        "column": "market_anchor",
+        "type": "VARCHAR",
+        "nullable": "NO",
+        "null_count": 0,
+        "pct_null": "0.00%"
+      },
+      {
+        "column": "fetched_at",
+        "type": "TIMESTAMP",
+        "nullable": "NO",
+        "null_count": 0,
+        "pct_null": "0.00%"
+      }
+    ]
+  },
+  "meta.continuous_training_history": {
+    "rows": 0,
+    "columns": [
+      {
+        "column": "training_run_id",
+        "type": "VARCHAR",
+        "nullable": "NO",
+        "null_count": 0,
+        "pct_null": "0.00%"
+      },
+      {
+        "column": "triggered_at",
+        "type": "TIMESTAMP",
+        "nullable": "NO",
+        "null_count": 0,
+        "pct_null": "0.00%"
+      },
+      {
+        "column": "trigger_reason",
+        "type": "VARCHAR",
+        "nullable": "NO",
+        "null_count": 0,
+        "pct_null": "0.00%"
+      },
+      {
+        "column": "samples_count",
+        "type": "INTEGER",
+        "nullable": "NO",
+        "null_count": 0,
+        "pct_null": "0.00%"
+      },
+      {
+        "column": "epochs",
+        "type": "INTEGER",
+        "nullable": "NO",
+        "null_count": 0,
+        "pct_null": "0.00%"
+      },
+      {
+        "column": "train_loss_start",
+        "type": "DOUBLE",
+        "nullable": "YES",
+        "null_count": 0,
+        "pct_null": "0.00%"
+      },
+      {
+        "column": "train_loss_final",
+        "type": "DOUBLE",
+        "nullable": "YES",
+        "null_count": 0,
+        "pct_null": "0.00%"
+      },
+      {
+        "column": "prev_val_accuracy",
+        "type": "DOUBLE",
+        "nullable": "YES",
+        "null_count": 0,
+        "pct_null": "0.00%"
+      },
+      {
+        "column": "shadow_val_accuracy",
+        "type": "DOUBLE",
+        "nullable": "YES",
+        "null_count": 0,
+        "pct_null": "0.00%"
+      },
+      {
+        "column": "prev_val_brier",
+        "type": "DOUBLE",
+        "nullable": "YES",
+        "null_count": 0,
+        "pct_null": "0.00%"
+      },
+      {
+        "column": "shadow_val_brier",
+        "type": "DOUBLE",
+        "nullable": "YES",
+        "null_count": 0,
+        "pct_null": "0.00%"
+      },
+      {
+        "column": "is_promoted",
+        "type": "BOOLEAN",
+        "nullable": "NO",
+        "null_count": 0,
+        "pct_null": "0.00%"
+      },
+      {
+        "column": "checkpoint_path",
+        "type": "VARCHAR",
+        "nullable": "YES",
+        "null_count": 0,
+        "pct_null": "0.00%"
+      },
+      {
+        "column": "metadata_json",
+        "type": "VARCHAR",
+        "nullable": "YES",
+        "null_count": 0,
+        "pct_null": "0.00%"
+      }
+    ]
+  },
+  "meta.crawl_progress": {
+    "rows": 7091,
+    "columns": [
+      {
+        "column": "dataset_name",
+        "type": "VARCHAR",
+        "nullable": "NO",
+        "null_count": 0,
+        "pct_null": "0.00%"
+      },
+      {
+        "column": "symbol",
+        "type": "VARCHAR",
+        "nullable": "NO",
+        "null_count": 0,
+        "pct_null": "0.00%"
+      },
+      {
+        "column": "status",
+        "type": "VARCHAR",
+        "nullable": "NO",
+        "null_count": 0,
+        "pct_null": "0.00%"
+      },
+      {
+        "column": "retry_count",
+        "type": "INTEGER",
+        "nullable": "NO",
+        "null_count": 0,
+        "pct_null": "0.00%"
+      },
+      {
+        "column": "last_attempt",
+        "type": "TIMESTAMP",
+        "nullable": "YES",
+        "null_count": 0,
+        "pct_null": "0.00%"
+      }
+    ]
+  },
+  "meta.crawl_progress_1m": {
+    "rows": 0,
+    "columns": [
+      {
+        "column": "symbol",
+        "type": "VARCHAR",
+        "nullable": "NO",
+        "null_count": 0,
+        "pct_null": "0.00%"
+      },
+      {
+        "column": "earliest_time",
+        "type": "TIMESTAMP",
+        "nullable": "YES",
+        "null_count": 0,
+        "pct_null": "0.00%"
+      },
+      {
+        "column": "latest_time",
+        "type": "TIMESTAMP",
+        "nullable": "YES",
+        "null_count": 0,
+        "pct_null": "0.00%"
+      },
+      {
+        "column": "total_bars",
+        "type": "INTEGER",
+        "nullable": "NO",
+        "null_count": 0,
+        "pct_null": "0.00%"
+      },
+      {
+        "column": "trading_days",
+        "type": "INTEGER",
+        "nullable": "NO",
+        "null_count": 0,
+        "pct_null": "0.00%"
+      },
+      {
+        "column": "is_complete_3y",
+        "type": "BOOLEAN",
+        "nullable": "YES",
+        "null_count": 0,
+        "pct_null": "0.00%"
+      },
+      {
+        "column": "last_status",
+        "type": "VARCHAR",
+        "nullable": "YES",
+        "null_count": 0,
+        "pct_null": "0.00%"
+      },
+      {
+        "column": "updated_at",
+        "type": "TIMESTAMP",
+        "nullable": "YES",
+        "null_count": 0,
+        "pct_null": "0.00%"
+      }
+    ]
+  },
+  "meta.model_drift_telemetry": {
+    "rows": 0,
+    "columns": [
+      {
+        "column": "run_id",
+        "type": "VARCHAR",
+        "nullable": "NO",
+        "null_count": 0,
+        "pct_null": "0.00%"
+      },
+      {
+        "column": "audit_timestamp",
+        "type": "TIMESTAMP",
+        "nullable": "NO",
+        "null_count": 0,
+        "pct_null": "0.00%"
+      },
+      {
+        "column": "window_size",
+        "type": "INTEGER",
+        "nullable": "NO",
+        "null_count": 0,
+        "pct_null": "0.00%"
+      },
+      {
+        "column": "rolling_directional_accuracy_t5",
+        "type": "DOUBLE",
+        "nullable": "YES",
+        "null_count": 0,
+        "pct_null": "0.00%"
+      },
+      {
+        "column": "rolling_brier_score_t5",
+        "type": "DOUBLE",
+        "nullable": "YES",
+        "null_count": 0,
+        "pct_null": "0.00%"
+      },
+      {
+        "column": "rolling_spearman_ic_t5",
+        "type": "DOUBLE",
+        "nullable": "YES",
+        "null_count": 0,
+        "pct_null": "0.00%"
+      },
+      {
+        "column": "rolling_spearman_ic_t30",
+        "type": "DOUBLE",
+        "nullable": "YES",
+        "null_count": 0,
+        "pct_null": "0.00%"
+      },
+      {
+        "column": "total_evaluated",
+        "type": "INTEGER",
+        "nullable": "NO",
+        "null_count": 0,
+        "pct_null": "0.00%"
+      },
+      {
+        "column": "total_pending",
+        "type": "INTEGER",
+        "nullable": "NO",
+        "null_count": 0,
+        "pct_null": "0.00%"
+      },
+      {
+        "column": "circuit_breaker_status",
+        "type": "VARCHAR",
+        "nullable": "NO",
+        "null_count": 0,
+        "pct_null": "0.00%"
+      },
+      {
+        "column": "alert_message",
+        "type": "VARCHAR",
+        "nullable": "YES",
+        "null_count": 0,
+        "pct_null": "0.00%"
+      }
+    ]
+  },
+  "meta.prediction_feedback_log": {
+    "rows": 0,
+    "columns": [
+      {
+        "column": "prediction_id",
+        "type": "VARCHAR",
+        "nullable": "NO",
+        "null_count": 0,
+        "pct_null": "0.00%"
+      },
+      {
+        "column": "created_at",
+        "type": "TIMESTAMP",
+        "nullable": "NO",
+        "null_count": 0,
+        "pct_null": "0.00%"
+      },
+      {
+        "column": "symbol",
+        "type": "VARCHAR",
+        "nullable": "NO",
+        "null_count": 0,
+        "pct_null": "0.00%"
+      },
+      {
+        "column": "headline",
+        "type": "VARCHAR",
+        "nullable": "NO",
+        "null_count": 0,
+        "pct_null": "0.00%"
+      },
+      {
+        "column": "source",
+        "type": "VARCHAR",
+        "nullable": "YES",
+        "null_count": 0,
+        "pct_null": "0.00%"
+      },
+      {
+        "column": "source_trust_weight",
+        "type": "DOUBLE",
+        "nullable": "NO",
+        "null_count": 0,
+        "pct_null": "0.00%"
+      },
+      {
+        "column": "raw_sentiment_score",
+        "type": "DOUBLE",
+        "nullable": "NO",
+        "null_count": 0,
+        "pct_null": "0.00%"
+      },
+      {
+        "column": "consistent_alpha_score",
+        "type": "DOUBLE",
+        "nullable": "NO",
+        "null_count": 0,
+        "pct_null": "0.00%"
+      },
+      {
+        "column": "sentiment_class",
+        "type": "VARCHAR",
+        "nullable": "NO",
+        "null_count": 0,
+        "pct_null": "0.00%"
+      },
+      {
+        "column": "p_star_neg",
+        "type": "DOUBLE",
+        "nullable": "NO",
+        "null_count": 0,
+        "pct_null": "0.00%"
+      },
+      {
+        "column": "p_star_neu",
+        "type": "DOUBLE",
+        "nullable": "NO",
+        "null_count": 0,
+        "pct_null": "0.00%"
+      },
+      {
+        "column": "p_star_pos",
+        "type": "DOUBLE",
+        "nullable": "NO",
+        "null_count": 0,
+        "pct_null": "0.00%"
+      },
+      {
+        "column": "violation_score",
+        "type": "DOUBLE",
+        "nullable": "NO",
+        "null_count": 0,
+        "pct_null": "0.00%"
+      },
+      {
+        "column": "is_consistent",
+        "type": "BOOLEAN",
+        "nullable": "NO",
+        "null_count": 0,
+        "pct_null": "0.00%"
+      },
+      {
+        "column": "is_duplicate",
+        "type": "BOOLEAN",
+        "nullable": "NO",
+        "null_count": 0,
+        "pct_null": "0.00%"
+      },
+      {
+        "column": "action_recommendation",
+        "type": "VARCHAR",
+        "nullable": "NO",
+        "null_count": 0,
+        "pct_null": "0.00%"
+      },
+      {
+        "column": "regime_safe_to_trade",
+        "type": "BOOLEAN",
+        "nullable": "NO",
+        "null_count": 0,
+        "pct_null": "0.00%"
+      },
+      {
+        "column": "matched_shareholder",
+        "type": "VARCHAR",
+        "nullable": "YES",
+        "null_count": 0,
+        "pct_null": "0.00%"
+      },
+      {
+        "column": "event_date",
+        "type": "DATE",
+        "nullable": "YES",
+        "null_count": 0,
+        "pct_null": "0.00%"
+      },
+      {
+        "column": "realized_price_t0",
+        "type": "DOUBLE",
+        "nullable": "YES",
+        "null_count": 0,
+        "pct_null": "0.00%"
+      },
+      {
+        "column": "realized_price_t1",
+        "type": "DOUBLE",
+        "nullable": "YES",
+        "null_count": 0,
+        "pct_null": "0.00%"
+      },
+      {
+        "column": "realized_price_t5",
+        "type": "DOUBLE",
+        "nullable": "YES",
+        "null_count": 0,
+        "pct_null": "0.00%"
+      },
+      {
+        "column": "realized_price_t30",
+        "type": "DOUBLE",
+        "nullable": "YES",
+        "null_count": 0,
+        "pct_null": "0.00%"
+      },
+      {
+        "column": "return_t1",
+        "type": "DOUBLE",
+        "nullable": "YES",
+        "null_count": 0,
+        "pct_null": "0.00%"
+      },
+      {
+        "column": "return_t5",
+        "type": "DOUBLE",
+        "nullable": "YES",
+        "null_count": 0,
+        "pct_null": "0.00%"
+      },
+      {
+        "column": "return_t30",
+        "type": "DOUBLE",
+        "nullable": "YES",
+        "null_count": 0,
+        "pct_null": "0.00%"
+      },
+      {
+        "column": "direction_hit_t5",
+        "type": "INTEGER",
+        "nullable": "YES",
+        "null_count": 0,
+        "pct_null": "0.00%"
+      },
+      {
+        "column": "brier_score_t5",
+        "type": "DOUBLE",
+        "nullable": "YES",
+        "null_count": 0,
+        "pct_null": "0.00%"
+      },
+      {
+        "column": "is_backfilled",
+        "type": "BOOLEAN",
+        "nullable": "NO",
+        "null_count": 0,
+        "pct_null": "0.00%"
+      },
+      {
+        "column": "backfilled_at",
+        "type": "TIMESTAMP",
+        "nullable": "YES",
+        "null_count": 0,
+        "pct_null": "0.00%"
+      }
+    ]
+  },
+  "staging.macro_policy": {
+    "rows": 563,
+    "columns": [
+      {
+        "column": "source",
+        "type": "VARCHAR",
+        "nullable": "NO",
+        "null_count": 0,
+        "pct_null": "0.00%"
+      },
+      {
+        "column": "issuing_body",
+        "type": "VARCHAR",
+        "nullable": "NO",
+        "null_count": 0,
+        "pct_null": "0.00%"
+      },
+      {
+        "column": "doc_type",
+        "type": "VARCHAR",
+        "nullable": "YES",
+        "null_count": 0,
+        "pct_null": "0.00%"
+      },
+      {
+        "column": "doc_number",
+        "type": "VARCHAR",
+        "nullable": "YES",
+        "null_count": 447,
+        "pct_null": "79.40%"
+      },
+      {
+        "column": "published_at",
+        "type": "TIMESTAMP",
+        "nullable": "NO",
+        "null_count": 0,
+        "pct_null": "0.00%"
+      },
+      {
+        "column": "available_at",
+        "type": "TIMESTAMP",
+        "nullable": "NO",
+        "null_count": 0,
+        "pct_null": "0.00%"
+      },
+      {
+        "column": "headline",
+        "type": "VARCHAR",
+        "nullable": "NO",
+        "null_count": 0,
+        "pct_null": "0.00%"
+      },
+      {
+        "column": "summary",
+        "type": "VARCHAR",
+        "nullable": "YES",
+        "null_count": 230,
+        "pct_null": "40.85%"
+      },
+      {
+        "column": "body",
+        "type": "VARCHAR",
+        "nullable": "YES",
+        "null_count": 0,
+        "pct_null": "0.00%"
+      },
+      {
+        "column": "source_url",
+        "type": "VARCHAR",
+        "nullable": "NO",
+        "null_count": 0,
+        "pct_null": "0.00%"
+      },
+      {
+        "column": "fetched_at",
+        "type": "TIMESTAMP",
+        "nullable": "NO",
+        "null_count": 0,
+        "pct_null": "0.00%"
+      }
+    ]
+  },
+  "staging.news": {
+    "rows": 670302,
+    "columns": [
+      {
+        "column": "symbol",
+        "type": "VARCHAR",
+        "nullable": "NO",
+        "null_count": 0,
+        "pct_null": "0.00%"
+      },
+      {
+        "column": "source",
+        "type": "VARCHAR",
+        "nullable": "NO",
+        "null_count": 0,
+        "pct_null": "0.00%"
+      },
+      {
+        "column": "published_at",
+        "type": "TIMESTAMP",
+        "nullable": "NO",
+        "null_count": 0,
+        "pct_null": "0.00%"
+      },
+      {
+        "column": "available_at",
+        "type": "TIMESTAMP",
+        "nullable": "NO",
+        "null_count": 0,
+        "pct_null": "0.00%"
+      },
+      {
+        "column": "headline",
+        "type": "VARCHAR",
+        "nullable": "NO",
+        "null_count": 0,
+        "pct_null": "0.00%"
+      },
+      {
+        "column": "body",
+        "type": "VARCHAR",
+        "nullable": "YES",
+        "null_count": 669450,
+        "pct_null": "99.87%"
+      },
+      {
+        "column": "source_url",
+        "type": "VARCHAR",
+        "nullable": "NO",
+        "null_count": 0,
+        "pct_null": "0.00%"
+      },
+      {
+        "column": "fetched_at",
+        "type": "TIMESTAMP",
+        "nullable": "NO",
+        "null_count": 0,
+        "pct_null": "0.00%"
+      },
+      {
+        "column": "duplicate_of",
+        "type": "VARCHAR",
+        "nullable": "YES",
+        "null_count": 670302,
+        "pct_null": "100.00%"
+      }
+    ]
+  },
+  "staging.news_resources": {
+    "rows": 0,
+    "columns": [
+      {
+        "column": "source",
+        "type": "VARCHAR",
+        "nullable": "YES",
+        "null_count": 0,
+        "pct_null": "0.00%"
+      },
+      {
+        "column": "issuing_body",
+        "type": "VARCHAR",
+        "nullable": "YES",
+        "null_count": 0,
+        "pct_null": "0.00%"
+      },
+      {
+        "column": "doc_type",
+        "type": "VARCHAR",
+        "nullable": "YES",
+        "null_count": 0,
+        "pct_null": "0.00%"
+      },
+      {
+        "column": "doc_number",
+        "type": "VARCHAR",
+        "nullable": "YES",
+        "null_count": 0,
+        "pct_null": "0.00%"
+      },
+      {
+        "column": "published_at",
+        "type": "TIMESTAMP",
+        "nullable": "YES",
+        "null_count": 0,
+        "pct_null": "0.00%"
+      },
+      {
+        "column": "available_at",
+        "type": "TIMESTAMP",
+        "nullable": "YES",
+        "null_count": 0,
+        "pct_null": "0.00%"
+      },
+      {
+        "column": "headline",
+        "type": "VARCHAR",
+        "nullable": "YES",
+        "null_count": 0,
+        "pct_null": "0.00%"
+      },
+      {
+        "column": "summary",
+        "type": "VARCHAR",
+        "nullable": "YES",
+        "null_count": 0,
+        "pct_null": "0.00%"
+      },
+      {
+        "column": "body",
+        "type": "VARCHAR",
+        "nullable": "YES",
+        "null_count": 0,
+        "pct_null": "0.00%"
+      },
+      {
+        "column": "source_url",
+        "type": "VARCHAR",
+        "nullable": "YES",
+        "null_count": 0,
+        "pct_null": "0.00%"
+      },
+      {
+        "column": "fetched_at",
+        "type": "TIMESTAMP",
+        "nullable": "YES",
+        "null_count": 0,
+        "pct_null": "0.00%"
+      }
+    ]
+  }
+}

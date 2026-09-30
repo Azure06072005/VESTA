@@ -1,0 +1,66 @@
+{
+  "status": "SUCCESS",
+  "elapsed_seconds": 35.36,
+  "db_path": "db/vesta_snapshot.duckdb",
+  "size_bytes": 11699236864,
+  "size_gb": 10.9,
+  "total_tables": 104,
+  "total_rows": 84003091,
+  "merge_log": [
+    {
+      "table": "meta.prediction_feedback_log",
+      "inserted": 682,
+      "total": 682,
+      "duplicates": 0
+    },
+    {
+      "table": "core.market_ohlcv_daily",
+      "before": 2983100,
+      "inserted": 2202889,
+      "after": 5185989,
+      "duplicates": 0
+    },
+    {
+      "table": "staging.market_ohlcv_daily",
+      "before": 2696177,
+      "inserted": 2151431,
+      "after": 4847608,
+      "duplicates": 0
+    },
+    {
+      "table": "core.market_ohlcv_1m",
+      "before": 6807406,
+      "inserted": 1008,
+      "after": 6808414,
+      "duplicates": 0
+    },
+    {
+      "table": "core.news",
+      "before": 661627,
+      "inserted": 7937,
+      "after": 669564,
+      "duplicates": 0
+    },
+    {
+      "table": "staging.news",
+      "before": 661520,
+      "inserted": 7937,
+      "after": 669457,
+      "duplicates": 0
+    },
+    {
+      "table": "core.macro_policy",
+      "before": 126,
+      "inserted": 477730,
+      "after": 477856,
+      "duplicates": 0
+    },
+    {
+      "table": "meta.crawl_progress",
+      "before": 26592,
+      "inserted": 536,
+      "after": 27128,
+      "duplicates": 0
+    }
+  ]
+}

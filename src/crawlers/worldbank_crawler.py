@@ -20,15 +20,24 @@ import pandas as pd
 import requests
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from etl import db
 
 logger = logging.getLogger(__name__)
 
-# Danh mục các chỉ số vĩ mô cốt lõi cho thị trường Việt Nam
+# Danh mục 20 chỉ số vĩ mô cốt lõi cho thị trường Việt Nam từ World Bank Open Data
 WORLDBANK_INDICATORS: dict[str, dict[str, str]] = {
     "NY.GDP.MKTP.KD.ZG": {
         "name": "Tăng trưởng GDP thực tế hàng năm (GDP growth annual %)",
         "unit": "%",
+        "category": "Tăng trưởng kinh tế",
+    },
+    "NY.GDP.MKTP.CD": {
+        "name": "Tổng sản phẩm nội địa danh nghĩa (GDP current US$)",
+        "unit": "USD",
+        "category": "Tăng trưởng kinh tế",
+    },
+    "NY.GDP.PCAP.CD": {
+        "name": "GDP bình quân đầu người (GDP per capita current US$)",
+        "unit": "USD/người",
         "category": "Tăng trưởng kinh tế",
     },
     "FP.CPI.TOTL.ZG": {
@@ -41,6 +50,11 @@ WORLDBANK_INDICATORS: dict[str, dict[str, str]] = {
         "unit": "% GDP",
         "category": "Đầu tư quốc tế",
     },
+    "BX.KLT.DINV.CD.WD": {
+        "name": "Dòng vốn FDI ròng danh nghĩa (Foreign direct investment net inflows BoP)",
+        "unit": "USD",
+        "category": "Đầu tư quốc tế",
+    },
     "NE.EXP.GNFS.ZS": {
         "name": "Xuất khẩu hàng hóa và dịch vụ (Exports of goods and services % of GDP)",
         "unit": "% GDP",
@@ -51,10 +65,65 @@ WORLDBANK_INDICATORS: dict[str, dict[str, str]] = {
         "unit": "% GDP",
         "category": "Ngoại thương",
     },
+    "BN.CAB.XOKA.GD.ZS": {
+        "name": "Cán cân tài khoản vãng lai (Current account balance % of GDP)",
+        "unit": "% GDP",
+        "category": "Ngoại thương",
+    },
     "FR.INR.LNDP": {
         "name": "Mặt bằng lãi suất cho vay bình quân (Lending interest rate %)",
         "unit": "%",
         "category": "Tiền tệ & Lãi suất",
+    },
+    "FR.INR.DPST": {
+        "name": "Lãi suất tiền gửi tiết kiệm bình quân (Deposit interest rate %)",
+        "unit": "%",
+        "category": "Tiền tệ & Lãi suất",
+    },
+    "FM.LBL.BMNY.ZG": {
+        "name": "Tăng trưởng cung tiền rộng M2 (Broad money growth annual %)",
+        "unit": "%",
+        "category": "Tiền tệ & Lãi suất",
+    },
+    "GC.DOD.TOTL.GD.ZS": {
+        "name": "Nợ công chính phủ trên GDP (Central government debt total % of GDP)",
+        "unit": "% GDP",
+        "category": "Tài khóa & Nợ công",
+    },
+    "FI.RES.TOTL.CD": {
+        "name": "Tổng dự trữ ngoại hối bao gồm vàng (Total reserves including gold current US$)",
+        "unit": "USD",
+        "category": "Dự trữ ngoại hối",
+    },
+    "SL.UEM.TOTL.ZS": {
+        "name": "Tỷ lệ thất nghiệp lực lượng lao động (Unemployment % of labor force)",
+        "unit": "%",
+        "category": "Lao động & Việc làm",
+    },
+    "SP.POP.TOTL": {
+        "name": "Tổng quy mô dân số (Population total)",
+        "unit": "người",
+        "category": "Dân số & Xã hội",
+    },
+    "NV.IND.TOTL.ZS": {
+        "name": "Tỷ trọng công nghiệp trong GDP (Industry value added % of GDP)",
+        "unit": "% GDP",
+        "category": "Cơ cấu kinh tế",
+    },
+    "NV.AGR.TOTL.ZS": {
+        "name": "Tỷ trọng nông nghiệp trong GDP (Agriculture value added % of GDP)",
+        "unit": "% GDP",
+        "category": "Cơ cấu kinh tế",
+    },
+    "NV.SRV.TOTL.ZS": {
+        "name": "Tỷ trọng ngành dịch vụ trong GDP (Services value added % of GDP)",
+        "unit": "% GDP",
+        "category": "Cơ cấu kinh tế",
+    },
+    "GC.REV.XGRT.GD.ZS": {
+        "name": "Thu ngân sách nhà nước trên GDP (Revenue excluding grants % of GDP)",
+        "unit": "% GDP",
+        "category": "Tài khóa & Nợ công",
     },
 }
 
@@ -124,7 +193,7 @@ def transform_wb_record(raw: dict[str, Any], indicator_code: str, meta: dict[str
 class WorldBankCrawler:
     """Trình thu thập dữ liệu vĩ mô Việt Nam từ World Bank API."""
 
-    def __init__(self, duckdb_path: str = "d:/VESTA/db/vesta.duckdb"):
+    def __init__(self, duckdb_path: str = "db/vesta_snapshot.duckdb"):
         self.duckdb_path = duckdb_path
 
     def save_batch(self, records: list[dict[str, Any]]) -> int:
@@ -155,7 +224,7 @@ class WorldBankCrawler:
                 """)
                 con.close()
                 return len(df)
-            except Exception as e:
+            except Exception:
                 time.sleep((attempt + 1) * 1.5)
         return len(df)
 

@@ -81,6 +81,13 @@ def parse_article_body(html: str, url: str) -> dict:
 
     container = soup.find("div", class_=BODY_CONTAINER_CLASS)
     if container is None:
+        container = soup.find("div", class_="contentdetail")
+    if container is None:
+        container = soup.find("div", id="newscontent")
+    if container is None:
+        container = soup.find("div", class_="content")
+
+    if container is None:
         raise ValueError(
             f"No '{BODY_CONTAINER_CLASS}' container found for {url!r}. "
             f"This selector was confirmed live 2026-09-02 -- if it stops "
@@ -90,6 +97,10 @@ def parse_article_body(html: str, url: str) -> dict:
 
     paragraphs = [p.get_text(strip=True) for p in container.find_all("p")]
     body_text = "\n\n".join(p for p in paragraphs if p)
+
+    # Nếu không có thẻ <p> mà có text trong container (du-lieu):
+    if not body_text:
+        body_text = container.get_text("\n\n", strip=True)
 
     if not body_text:
         raise ValueError(f"Body container found but contained no paragraph text for {url!r}.")

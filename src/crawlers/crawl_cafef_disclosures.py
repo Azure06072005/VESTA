@@ -21,7 +21,9 @@ import pandas as pd
 
 sys.stdout.reconfigure(encoding="utf-8")
 
-CANONICAL_DB_PATH = "db/vesta.duckdb"
+from etl import db
+
+CANONICAL_DB_PATH = str(db.NEWS_DB_PATH)
 HAR_PATH = "scratch/har/cafef/cafef_du-lieu_thong-tin-bctc.har"
 API_BASE_URL = "https://cafef.vn/du-lieu/ajax/ajaxcongbothongtin.ashx"
 
@@ -196,15 +198,17 @@ def ingest_from_har(har_path: str = HAR_PATH) -> int:
     return len(df)
 
 
-def crawl_live_disclosures(max_pages: int = 5, symbol: str = "", delay: float = 0.8) -> int:
+def crawl_live_disclosures(max_pages: int = 5, symbol: str = "", delay: float = 0.8, db_path: Optional[str] = None) -> int:
     """
-    Crawls live disclosures from CafeF API and saves to main database.
+    Crawls live disclosures from CafeF API and saves to dedicated news database.
     param max_pages: Number of pages to crawl
     param symbol: Specific symbol or empty string for all market
     param delay: Delay in seconds between requests to avoid rate limits
+    param db_path: Target DuckDB path (defaults to db.NEWS_DB_PATH)
     """
-    print(f"\n>>> [2/2] Crawling live disclosures from CafeF API (Pages: 1 to {max_pages}, Symbol='{symbol}')...")
-    con = duckdb.connect(CANONICAL_DB_PATH)
+    target = db_path or CANONICAL_DB_PATH
+    print(f"\n>>> [2/2] Crawling live disclosures from CafeF API (Pages: 1 to {max_pages}, Symbol='{symbol}', DB='{os.path.basename(target)}')...")
+    con = duckdb.connect(target)
     init_disclosure_tables(con)
 
     total_inserted = 0

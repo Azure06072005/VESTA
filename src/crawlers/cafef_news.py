@@ -33,20 +33,18 @@ loudly (see parse_articles) rather than silently returning nothing.
 from __future__ import annotations
 
 import datetime as dt
-import os
 import pathlib
 import re
 import sys
 import time
 import urllib.robotparser
 
+import duckdb
 import pandas as pd
 import requests
 from bs4 import BeautifulSoup
 
 PROJECT_ROOT = pathlib.Path(__file__).resolve().parents[2]
-
-import duckdb
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 from etl import db  # noqa: E402
@@ -55,6 +53,12 @@ SOURCE_NAME = "cafef"
 BASE_URL = "https://cafef.vn"
 ROBOTS_URL = "https://cafef.vn/robots.txt"
 USER_AGENT = "VESTA-research-bot/1.0 (+contact: dulieu research project, non-commercial)"
+
+VN30_SYMBOLS = {
+    "ACB", "BCM", "BID", "BVH", "CTG", "FPT", "GAS", "GVR", "HDB", "HPG",
+    "MBB", "MSN", "MWG", "PLX", "POW", "SAB", "SHB", "SSB", "SSI", "STB",
+    "TCB", "TPB", "VCB", "VHM", "VIB", "VIC", "VJC", "VNM", "VPB", "VRE",
+}
 
 # Adjusted to 0.5s for efficiency since paginated historical crawls are heavy.
 # No Crawl-delay is specified in robots.txt.
@@ -131,18 +135,23 @@ def fetch_page(symbol: str, page_index: int) -> str:
     return text
 
 
-def parse_articles(html: str, symbol: str) -> pd.DataFrame:
-    """Pure transform: parse raw HTML into (headline, source_url,
-    published_at) rows. No network access -- fully unit-testable against
-    saved/synthetic HTML fixtures.
+def fetch_article_body_safe(url: str) -> str | None:
+    """Tải và trích xuất thân bài bài viết CafeF an toàn từ selector div.detail-content."""
+    try:
+        from crawlers.cafef_article_body import fetch_article_html, parse_article_body
+        html = fetch_article_html(url)
+        parsed = parse_article_body(html, url)
+        return parsed.get("body")
+    except Exception:
+        return None
 
-    Raises ValueError (NOT EmptyResultError) if zero article links are
-    found -- deliberately NOT treated as F008 "genuine emptiness", since
-    for an actively-traded symbol like a real listed company, zero
-    results much more likely means PARSE_LINK_PATTERN/PARSE_DATE_PATTERN
-    stopped matching real markup (a parsing bug) than that the company
-    genuinely has zero news ever. Treating that as EmptyResultError would
-    let a broken scraper silently mark itself "done" instead of alerting.
+
+def parse_articles(html: str, symbol: str, enrich_body: bool = False) -> pd.DataFrame:
+    """Pure transform: parse raw HTML into (headline, source_url,
+    published_at) rows.
+    
+    Nếu enrich_body=True và bài viết thuộc dải 2023-2026:
+    Tự động cào toàn văn thân bài (body content) cho cổ phiếu VN30.
     """
     soup = BeautifulSoup(html, "html.parser")
     links = soup.find_all("a", href=True)
@@ -159,9 +168,6 @@ def parse_articles(html: str, symbol: str) -> pd.DataFrame:
         if not headline:
             continue
 
-        # Look for a date in this link's own surrounding text, or its
-        # parent element's text (covers both markup shapes observed live:
-        # date text as a sibling, or date+link inside the same <li>).
         search_text = link.parent.get_text(" ", strip=True) if link.parent else ""
         date_match = PARSE_DATE_PATTERN.search(search_text)
         if not date_match:
@@ -176,16 +182,23 @@ def parse_articles(html: str, symbol: str) -> pd.DataFrame:
         except Exception:
             published_at = dt.datetime.now()
 
-        rows.append({"headline": headline, "source_url": href, "published_at": published_at})
+        body_content = None
+        # Kiểm tra điều kiện cào body: VN30 trong dải năm 2023 - 2026
+        if enrich_body and (2023 <= published_at.year <= 2026):
+            body_content = fetch_article_body_safe(href)
+
+        rows.append({
+            "headline": headline,
+            "source_url": href,
+            "published_at": published_at,
+            "body": body_content,
+        })
 
     if not rows:
         raise ValueError(
             f"parse_articles found zero matching article links for "
             f"symbol={symbol!r}. This most likely means PARSE_LINK_PATTERN "
-            f"or PARSE_DATE_PATTERN no longer match cafef.vn's real markup "
-            f"(selector drift), not that this symbol genuinely has no "
-            f"news -- treated as a parsing failure, not F008 genuine "
-            f"emptiness. Inspect the raw HTML and update the patterns."
+            f"or PARSE_DATE_PATTERN no longer match cafef.vn's real markup."
         )
 
     df = pd.DataFrame(rows).drop_duplicates(subset=["source_url"], keep="first")
@@ -197,8 +210,7 @@ def parse_articles(html: str, symbol: str) -> pd.DataFrame:
             "published_at": df["published_at"],
             "available_at": df["published_at"],
             "headline": df["headline"],
-            "body": None,  # KNOWN GAP: article body is on a separate page
-            # per article, not fetched by this crawler -- see DECISIONS.md.
+            "body": df["body"],
             "source_url": df["source_url"],
         }
     )
@@ -208,9 +220,8 @@ def parse_articles(html: str, symbol: str) -> pd.DataFrame:
 
 
 def write_news(df: pd.DataFrame, con: "duckdb.DuckDBPyConnection | None" = None) -> int:
-    """Shares core.news/staging.news with F003 -- same shared schema
-    (DECISIONS.md 'Dual news source' entry), same idempotent dedup-by-
-    source_url write pattern.
+    """Lưu bài viết vào db/vesta_news.duckdb (core.news và staging.news).
+    Idempotent deduplication theo source_url.
     """
     if df.empty:
         return 0
@@ -219,7 +230,7 @@ def write_news(df: pd.DataFrame, con: "duckdb.DuckDBPyConnection | None" = None)
     if missing:
         raise ValueError(f"News DataFrame missing columns: {missing}")
 
-    con = con or db.bootstrap_schema()
+    con = con or db.connect_news()
     urls = df["source_url"].unique().tolist()
 
     cols_sql = ", ".join(NEWS_COLUMNS)
@@ -235,7 +246,7 @@ def write_news(df: pd.DataFrame, con: "duckdb.DuckDBPyConnection | None" = None)
 
 
 def get_existing_urls(symbol: str, con: "duckdb.DuckDBPyConnection | None" = None) -> set[str]:
-    """Lấy danh sách URL đã có trong core.news để nhận diện đường biên dữ liệu cũ."""
+    """Lấy danh sách URL đã có trong core.news của vesta_news.duckdb."""
     if con is not None:
         try:
             rows = con.execute("SELECT source_url FROM core.news WHERE upper(symbol) = ?", [symbol.strip().upper()]).fetchall()
@@ -243,29 +254,35 @@ def get_existing_urls(symbol: str, con: "duckdb.DuckDBPyConnection | None" = Non
         except Exception:
             pass
 
-    # Fallback kết nối read_only an toàn
-    for db_path_str in [os.environ.get("VESTA_DB_PATH"), str(PROJECT_ROOT / "db" / "vesta_snapshot.duckdb"), str(PROJECT_ROOT / "db" / "vesta.duckdb")]:
-        if db_path_str and os.path.exists(db_path_str):
-            try:
-                con_ro = duckdb.connect(db_path_str, read_only=True)
-                rows = con_ro.execute("SELECT source_url FROM core.news WHERE upper(symbol) = ?", [symbol.strip().upper()]).fetchall()
-                con_ro.close()
-                return {r[0] for r in rows if r[0]}
-            except Exception:
-                pass
+    try:
+        con_ro = db.connect_news(read_only=True)
+        rows = con_ro.execute("SELECT source_url FROM core.news WHERE upper(symbol) = ?", [symbol.strip().upper()]).fetchall()
+        con_ro.close()
+        return {r[0] for r in rows if r[0]}
+    except Exception:
+        pass
     return set()
 
 
-def run(symbol: str, incremental: bool = True, force: bool = False, max_pages: int = 100) -> int:
+def run(
+    symbol: str,
+    incremental: bool = True,
+    force: bool = False,
+    max_pages: int = 100,
+    crawl_body: bool | None = None,
+    con: "duckdb.DuckDBPyConnection | None" = None,
+) -> int:
     """Entry point: fetch paginated history, parse, and write. Returns total rows written.
     
-    Nếu incremental=True (mặc định) và force=False:
-        - Tải các URL đã có trong core.news của mã này.
-        - Khi gặp bài viết đã tồn tại (chạm đường biên dữ liệu cũ < 2026-09-14),
-          chỉ lưu các bài mới của 4 ngày gần nhất và DỪNG NGAY LẬP TỨC (không cào lại lịch sử 2007).
+    Quy tắc cào thân bài (Body Content):
+    - Nếu crawl_body=None (mặc định): Tự động bật crawl_body=True cho rổ VN30 (2023 - 2026).
+    - Các mã ngoài VN30 hoặc các năm trước 2023: chỉ lưu headline (body = None).
     """
     symbol = symbol.strip().upper()
-    con = db.bootstrap_schema()
+    is_vn30 = symbol in VN30_SYMBOLS
+    enrich_body = is_vn30 if crawl_body is None else bool(crawl_body)
+
+    con = con or db.connect_news()
     existing_urls = get_existing_urls(symbol, con) if (incremental and not force) else set()
     
     page_index = 1
@@ -275,11 +292,9 @@ def run(symbol: str, incremental: bool = True, force: bool = False, max_pages: i
         html = fetch_page(symbol, page_index)
         
         try:
-            parsed = parse_articles(html, symbol)
+            parsed = parse_articles(html, symbol, enrich_body=enrich_body)
         except ValueError as e:
             if "found zero matching article links" in str(e):
-                # If page 1 fails, it might mean bad symbol or selector drift.
-                # If page > 1 fails, it just means we reached the end of history.
                 if page_index == 1:
                     from etl.retry_failed_jobs import EmptyResultError
                     raise EmptyResultError(f"No news found on page 1 for {symbol}") from e
@@ -292,11 +307,9 @@ def run(symbol: str, incremental: bool = True, force: bool = False, max_pages: i
         if existing_urls:
             new_df = parsed[~parsed["source_url"].isin(existing_urls)]
             if len(new_df) < len(parsed):
-                # Đã chạm vào đường biên dữ liệu cũ (ví dụ trước 2026-09-14)
                 if not new_df.empty:
                     written = write_news(new_df, con=con)
                     total_written += written
-                # DỪNG LẠI NGAY LẬP TỨC: Toàn bộ các trang sau đều là tin cũ hơn!
                 break
             else:
                 written = write_news(new_df, con=con)
@@ -310,12 +323,66 @@ def run(symbol: str, incremental: bool = True, force: bool = False, max_pages: i
     return total_written
 
 
+def backfill_vn30_bodies(
+    symbols: list[str] | None = None,
+    start_year: int = 2023,
+    end_year: int = 2026,
+    batch_size: int = 50,
+) -> int:
+    """Cào bù thân bài (body content) cho các bài viết VN30 trong CSDL từ start_year đến end_year."""
+    con = db.connect_news(read_only=False)
+    target_symbols = [s.upper().strip() for s in (symbols or list(VN30_SYMBOLS))]
+    
+    sym_placeholders = ", ".join(["?"] * len(target_symbols))
+    query = f"""
+        SELECT symbol, source_url, headline, published_at
+        FROM core.news
+        WHERE upper(symbol) IN ({sym_placeholders})
+          AND published_at >= ?
+          AND published_at <= ?
+          AND (body IS NULL OR trim(body) = '')
+        ORDER BY published_at DESC
+    """
+    params = target_symbols + [f"{start_year}-01-01", f"{end_year}-12-31 23:59:59"]
+    rows = con.execute(query, params).fetchall()
+    
+    print(f"Tìm thấy {len(rows):,} bài viết VN30 ({start_year}-{end_year}) cần cào bù body...")
+    if not rows:
+        con.close()
+        return 0
+
+    updated = 0
+    for idx, (sym, url, title, pub_dt) in enumerate(rows, 1):
+        try:
+            body = fetch_article_body_safe(url)
+            if body:
+                con.execute("UPDATE core.news SET body = ? WHERE source_url = ?", [body, url])
+                updated += 1
+                if updated % 10 == 0 or idx == len(rows):
+                    print(f"  [{idx}/{len(rows)}] Đã nạp body cho [{sym}]: {title[:50]}... ({len(body)} ký tự)")
+            else:
+                # Ghi nhận không có body
+                con.execute("UPDATE core.news SET body = 'EMPTY' WHERE source_url = ?", [url])
+        except Exception as e:
+            print(f"  [!] Lỗi cào body cho {url}: {e}")
+        time.sleep(REQUEST_DELAY_SECONDS)
+
+    con.close()
+    return updated
+
+
 if __name__ == "__main__":
     import argparse
 
-    parser = argparse.ArgumentParser(description="F004: scrape cafef.vn news for one symbol")
-    parser.add_argument("symbol")
+    parser = argparse.ArgumentParser(description="F004: Scrape cafef.vn news with VN30 body enrichment")
+    parser.add_argument("symbol", nargs="?", default="FPT", help="Symbol to crawl or 'VN30'")
+    parser.add_argument("--backfill", action="store_true", help="Cào bù body cho các bài viết VN30 (2023-2026)")
+    parser.add_argument("--pages", type=int, default=5, help="Số trang cần cào")
     args = parser.parse_args()
 
-    n = run(args.symbol)
-    print(f"F004 cafef_news: wrote {n} rows for {args.symbol} to core.news")
+    if args.backfill:
+        cnt = backfill_vn30_bodies()
+        print(f"Hoàn thành cào bù body: {cnt} bài viết VN30.")
+    else:
+        n = run(args.symbol, max_pages=args.pages)
+        print(f"F004 cafef_news: wrote {n} rows for {args.symbol} to vesta_news.duckdb")

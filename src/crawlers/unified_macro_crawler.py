@@ -7,7 +7,6 @@ passes cleanly, and crawls all reachable sources into `staging.macro_policy` and
 
 from __future__ import annotations
 
-import argparse
 import datetime as dt
 import logging
 import re
@@ -27,7 +26,7 @@ import pandas as pd
 # Add project root and src to sys.path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from etl import db
+from crawlers.crawl_policy import validate_and_clean_article
 
 sys.stdout.reconfigure(encoding='utf-8')
 
@@ -347,26 +346,28 @@ def crawl_chinhphu_vn(max_articles: int = 50) -> list[dict[str, Any]]:
     return records
 
 
-def try_crawl_rejected_site(name: str, url: str) -> None:
-    """Tries fetching a rejected site (Bloomberg, Reuters, WSJ, VOV) and cleanly passes on rejection."""
-    logger.info(f">>> [{name.upper()}] Thử nghiệm cào: {url}")
-    code, content, err = fetch_url(url, timeout=7)
-    if code in (401, 403, 429) or err:
-        logger.warning(f"[{name.upper()}] Bị chặn/Từ chối truy cập ({err or f'HTTP {code}'}). PASS và tiếp tục trang khác theo yêu cầu.")
-        return
-    logger.info(f"[{name.upper()}] Phản hồi bất ngờ: HTTP {code}")
-
-
 # =====================================================================
-# DATABASE WRITER
+# DATABASE WRITER WITH ETHICAL POLICY FILTERING
 # =====================================================================
 
-def write_to_db(records: list[dict[str, Any]], duckdb_path: str = "d:/VESTA/db/vesta_latest_backup.duckdb") -> int:
-    """Idempotently writes crawled records to staging and core macro_policy."""
+DEFAULT_TARGET_DB_PATH = "d:/VESTA/db/vesta_snapshot.duckdb"
+
+def write_to_db(records: list[dict[str, Any]], duckdb_path: str = DEFAULT_TARGET_DB_PATH) -> int:
+    """Idempotently writes crawled records to staging and core macro_policy with policy validation."""
     if not records:
         return 0
 
-    df = pd.DataFrame(records)
+    valid_records = []
+    for r in records:
+        cleaned = validate_and_clean_article(r)
+        if cleaned:
+            valid_records.append(cleaned)
+
+    if not valid_records:
+        logger.info("Toàn bộ bản ghi không vượt qua bộ lọc kiểm duyệt chính sách cào (bị cấm hoặc thiếu nội dung).")
+        return 0
+
+    df = pd.DataFrame(valid_records)
     required_cols = [
         "source",
         "issuing_body",
@@ -382,12 +383,11 @@ def write_to_db(records: list[dict[str, Any]], duckdb_path: str = "d:/VESTA/db/v
     ]
     df = df[required_cols]
 
-    try:
-        con = duckdb.connect(duckdb_path, read_only=False)
-    except Exception as e:
-        backup_path = "db/vesta_latest_backup.duckdb"
-        logger.info(f"DB chính bị khóa ({e}). Ghi vào backup: {backup_path}")
-        con = duckdb.connect(backup_path, read_only=False)
+    target_file = duckdb_path
+    if not Path(target_file).exists():
+        if Path("d:/VESTA/db/vesta.duckdb").exists():
+            target_file = "d:/VESTA/db/vesta.duckdb"
+    con = duckdb.connect(target_file, read_only=False)
     try:
         # Write staging
         con.register("df_staging", df)
@@ -405,30 +405,23 @@ def write_to_db(records: list[dict[str, Any]], duckdb_path: str = "d:/VESTA/db/v
         con.unregister("df_core")
         after_count = con.execute("SELECT count(*) FROM core.macro_policy").fetchone()[0]
         new_inserted = after_count - before_count
-        logger.info(f"Ghi thành công vào DuckDB: {len(df)} bản ghi staging, {new_inserted} bản ghi core mới (Deduplicated).")
+        logger.info(f"Ghi thành công vào DuckDB: {len(df)} bản ghi hợp lệ, {new_inserted} bản ghi core mới (Deduplicated).")
         return new_inserted
     finally:
         con.close()
 
 
 def run_pipeline() -> dict[str, Any]:
-    """Runs the full combined A + B crawl pipeline."""
+    """Runs the full combined A + B crawl pipeline (tuân thủ Ethical Crawling, bỏ qua hoàn toàn các trang bị cấm)."""
     print("=========================================================================")
-    print(">>> KHỞI CHẠY PIPELINE CÀO KẾT HỢP NHÓM A & B (BỎ QUA TRANG BỊ CHẶN) <<<")
+    print(">>> KHỞI CHẠY PIPELINE CÀO KẾT HỢP NHÓM A & B (CHUẨN HÓA ĐẠO ĐỨC) <<<")
     print("=========================================================================")
 
     results = {}
     all_new_records = []
 
-    # 1. Thử nghiệm các trang bị chặn đã biết (Reuters, Bloomberg, WSJ, VOV) để kiểm chứng cơ chế PASS
-    print("\n--- 1. KIỂM TRA CÁC TRANG BỊ CHẶN (CHECK REJECT & PASS) ---")
-    try_crawl_rejected_site("reuters", "https://www.reuters.com/arc/outboundfeeds/sitemap/?outputType=xml")
-    try_crawl_rejected_site("bloomberg", "https://www.bloomberg.com/sitemaps/news/2026-9.xml")
-    try_crawl_rejected_site("wsj", "https://www.wsj.com/sitemap.xml")
-    try_crawl_rejected_site("vov", "https://vov.vn/kinh-te/post1330042.vov")
-
-    # 2. Cào các trang khả dụng trong Nhóm B (Tài chính quốc tế)
-    print("\n--- 2. CÀO NHÓM B: TÀI CHÍNH QUỐC TẾ KHẢ DỤNG ---")
+    # 1. Cào các trang khả dụng trong Nhóm B (Tài chính quốc tế)
+    print("\n--- 1. CÀO NHÓM B: TÀI CHÍNH QUỐC TẾ KHẢ DỤNG (YAHOO FINANCE) ---")
     yahoo_records = crawl_yahoo_finance(max_articles=50)
     results["yahoo_finance"] = len(yahoo_records)
     all_new_records.extend(yahoo_records)
@@ -447,31 +440,10 @@ def run_pipeline() -> dict[str, Any]:
     results["vietnam_gov"] = len(chinhphu_records)
     all_new_records.extend(chinhphu_records)
 
-    # 3.1 Cào Báo chí Kinh tế & Đời sống Đại chúng (Tiền Phong & Tuổi Trẻ)
-    print("\n--- 3.1 BÁO CHÍ KINH TẾ & THỊ TRƯỜNG CHỦ LỰC (TIỀN PHONG & TUỔI TRẺ) ---")
-    try:
-        from src.crawlers.tienphong_crawler import crawl_tienphong_deep, get_safe_db_connection
-        con_tp = get_safe_db_connection()
-        try:
-            tp_cnt = crawl_tienphong_deep(con_tp, start_page=1, max_pages=2, target_zones=[3, 166])
-            results["tienphong"] = tp_cnt
-            logger.info(f"[TIENPHONG] Thu thập thành công {tp_cnt} bài viết.")
-        finally:
-            con_tp.close()
-    except Exception as e:
-        logger.warning(f"[TIENPHONG] Lỗi cào tin: {e}")
-
-    try:
-        from src.crawlers.tuoitre_crawler import crawl_tuoitre_deep, get_safe_db_connection
-        con_tt = get_safe_db_connection()
-        try:
-            tt_cnt = crawl_tuoitre_deep(con_tt, start_page=1, max_pages=2, target_zones=[11, 89])
-            results["tuoitre"] = tt_cnt
-            logger.info(f"[TUOITRE] Thu thập thành công {tt_cnt} bài viết.")
-        finally:
-            con_tt.close()
-    except Exception as e:
-        logger.warning(f"[TUOITRE] Lỗi cào tin: {e}")
+    # 3.1 Báo chí cấm theo Ethical Crawling Policy (Tiền Phong & Tuổi Trẻ) - DECOMMISSIONED
+    logger.warning("[POLICY] Bỏ qua tienphong & tuoitre: Đã bị dừng vĩnh viễn theo Ethical Crawling Policy.")
+    results["tienphong"] = 0
+    results["tuoitre"] = 0
 
     # 4. Ghi toàn bộ dữ liệu hợp lệ vào Database vesta_latest_backup.duckdb
     print("\n--- 4. GHI DỮ LIỆU VÀO DATABASE MỤC TIÊU ---")

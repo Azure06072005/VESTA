@@ -12,9 +12,15 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from crawlers.cafef_symbol_directory import (
     CENTER_ID_TO_EXCHANGE,
     UnknownCenterIdError,
+    build_dim_symbol_cafef,
+    build_dim_symbol_cafef_df,
     find_new_non_otc_symbols,
     find_otc_only_symbols,
+    get_otc_symbols,
+    get_tradeable_symbols,
     parse_directory,
+    run,
+    write_dim_symbol_cafef,
 )
 
 FIXTURE_PATH = Path(__file__).resolve().parents[1] / "cafef_company_list.json"
@@ -350,3 +356,124 @@ def test_find_new_non_otc_symbols_excludes_covered_warrants(real_directory):
     )
     gap = find_new_non_otc_symbols(df, equity_non_otc_symbols)
     assert len(gap) == 0
+
+
+# =============================================================================
+# F001b RECOMMENDATION TESTS: OTC-SUBUNIVERSE SEGREGATION & TRADEABLE FLAG
+# =============================================================================
+
+
+def test_parse_directory_assigns_tradeable_flag_and_subuniverse(real_directory):
+    """F001b: Ensure parse_directory flags OTC tickers with tradeable_flag=False
+    and tags subuniverse='OTC' to prevent execution noise in backtests.
+    """
+    df = parse_directory(real_directory)
+    assert "tradeable_flag" in df.columns
+    assert "subuniverse" in df.columns
+
+    otc_equities = df[(df["exchange"] == "OTC") & (df["instrument_type"] == "equity")]
+    assert len(otc_equities) > 0
+    assert (otc_equities["tradeable_flag"] == False).all()
+    assert (otc_equities["subuniverse"] == "OTC").all()
+
+
+def test_build_dim_symbol_cafef_segregates_exactly_750_otc_tickers(real_directory):
+    """F001b Recommendation Verification:
+    Segregate the 750 OTC tickers into a distinct OTC-Subuniverse,
+    tagging them with tradeable_flag = False during backtests.
+    """
+    df = build_dim_symbol_cafef_df(real_directory)
+    assert len(df) == 984  # 750 OTC equities + 234 unlisted historical equities
+
+    otc_df = df[df["subuniverse"] == "OTC"]
+    assert len(otc_df) == 750
+    assert (otc_df["tradeable_flag"] == False).all()
+    assert (otc_df["exchange"] == "OTC").all()
+    assert (otc_df["instrument_type"] == "equity").all()
+
+    unlisted_df = df[df["subuniverse"] == "UNLISTED"]
+    assert len(unlisted_df) == 234
+    assert (unlisted_df["tradeable_flag"] == False).all()
+    assert (unlisted_df["exchange"] != "OTC").all()
+
+
+def test_write_dim_symbol_cafef_and_view_isolation_in_memory():
+    """F001b Full-Pipeline In-Memory Verification:
+    Verify that write_dim_symbol_cafef populates core.dim_symbol_cafef and
+    creates the unified core.v_symbol_universe view, isolating 750 untradeable
+    OTC symbols from listed tradeable equities.
+    """
+    import duckdb
+
+    con = duckdb.connect(":memory:")
+
+    # 1. Setup mock schemas and listed equities in core.dim_symbol
+    con.execute("CREATE SCHEMA IF NOT EXISTS core;")
+    con.execute("CREATE SCHEMA IF NOT EXISTS staging;")
+    con.execute("""
+        CREATE TABLE core.dim_symbol (
+            symbol VARCHAR PRIMARY KEY,
+            exchange VARCHAR,
+            organ_name VARCHAR,
+            is_delisted BOOLEAN DEFAULT FALSE,
+            tradeable_flag BOOLEAN DEFAULT TRUE,
+            subuniverse VARCHAR DEFAULT 'LISTED',
+            fetched_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+        INSERT INTO core.dim_symbol (symbol, exchange, organ_name, is_delisted, tradeable_flag, subuniverse) VALUES
+            ('VCB', 'HOSE', 'Vietcombank', FALSE, TRUE, 'LISTED'),
+            ('FPT', 'HOSE', 'FPT Corp', FALSE, TRUE, 'LISTED'),
+            ('HPG', 'HOSE', 'Hoa Phat Group', FALSE, TRUE, 'LISTED');
+    """)
+
+    # 2. Write cafef supplementary directory with OTC segregation
+    real_raw = json.loads(FIXTURE_PATH.read_text(encoding="utf-8"))
+    cafef_df = parse_directory(real_raw)
+    supplement_df = build_dim_symbol_cafef(cafef_df)
+    cnt = write_dim_symbol_cafef(df=supplement_df, con=con)
+    assert cnt == 984
+
+    # 3. Assert counts and flags in core.dim_symbol_cafef
+    otc_cnt = con.execute(
+        "SELECT COUNT(*) FROM core.dim_symbol_cafef WHERE subuniverse = 'OTC' AND tradeable_flag = FALSE"
+    ).fetchone()[0]
+    assert otc_cnt == 750
+
+    unlisted_cnt = con.execute(
+        "SELECT COUNT(*) FROM core.dim_symbol_cafef WHERE subuniverse = 'UNLISTED' AND tradeable_flag = FALSE"
+    ).fetchone()[0]
+    assert unlisted_cnt == 234
+
+    tradeable_cafef_cnt = con.execute(
+        "SELECT COUNT(*) FROM core.dim_symbol_cafef WHERE tradeable_flag = TRUE"
+    ).fetchone()[0]
+    assert tradeable_cafef_cnt == 0
+
+    # 4. Assert unified view core.v_symbol_universe
+    view_total = con.execute("SELECT COUNT(*) FROM core.v_symbol_universe").fetchone()[0]
+    assert view_total == 3 + 984
+
+    view_tradeable = con.execute(
+        "SELECT COUNT(*) FROM core.v_symbol_universe WHERE tradeable_flag = TRUE"
+    ).fetchone()[0]
+    assert view_tradeable == 3
+
+    view_untradeable = con.execute(
+        "SELECT COUNT(*) FROM core.v_symbol_universe WHERE tradeable_flag = FALSE"
+    ).fetchone()[0]
+    assert view_untradeable == 984
+
+    view_otc = con.execute(
+        "SELECT COUNT(*) FROM core.v_symbol_universe WHERE subuniverse = 'OTC'"
+    ).fetchone()[0]
+    assert view_otc == 750
+
+    # 5. Helper queries: get_tradeable_symbols & get_otc_symbols
+    tradeables = get_tradeable_symbols(con=con)
+    assert set(tradeables) == {"VCB", "FPT", "HPG"}
+
+    otc_symbols = get_otc_symbols(con=con)
+    assert len(otc_symbols) == 750
+    assert "VCB" not in otc_symbols
+
+    con.close()

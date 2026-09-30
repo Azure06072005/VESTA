@@ -299,9 +299,10 @@ class SscCrawler:
         db_path: str = "d:/VESTA/db/vesta.duckdb",
         request_delay: float = DEFAULT_DELAY_SECONDS,
         session: requests.Session | None = None,
+        **kwargs: Any,
     ) -> None:
-        self.db_path = db_path
-        self.request_delay = request_delay
+        self.db_path = kwargs.get("duckdb_path", db_path)
+        self.request_delay = kwargs.get("delay", request_delay)
         self.session = session or requests.Session()
         self.session.headers.update(DEFAULT_HEADERS)
 

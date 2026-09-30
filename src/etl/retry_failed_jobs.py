@@ -40,6 +40,45 @@ class EmptyResultError(Exception):
     """
 
 
+class PermanentError(Exception):
+    """Raise this from a crawler call to signal an unrecoverable failure
+    (e.g. HTTP 404/410, permanently invalid ticker, delisted symbol) that
+    must NOT be retried and must be immediately routed to the Dead Letter Queue (DLQ).
+    """
+
+
+PERMANENT_HTTP_STATUSES = {400, 404, 410, 422}
+TRANSIENT_HTTP_STATUSES = {408, 429, 500, 502, 503, 504}
+
+
+def classify_error(exc: Exception) -> str:
+    """Classify an exception into 'PERMANENT' vs 'TRANSIENT'.
+    
+    - 'PERMANENT': Unrecoverable errors routed straight to DLQ (no retry).
+    - 'TRANSIENT': Temporary network/rate-limit/server errors eligible for retry.
+    """
+    if isinstance(exc, PermanentError):
+        return "PERMANENT"
+
+    status_code = getattr(exc, "status_code", None)
+    if status_code is None and hasattr(exc, "response") and exc.response is not None:
+        status_code = getattr(exc.response, "status_code", None)
+
+    if status_code in PERMANENT_HTTP_STATUSES:
+        return "PERMANENT"
+    if status_code in TRANSIENT_HTTP_STATUSES:
+        return "TRANSIENT"
+
+    exc_type_name = type(exc).__name__
+    if any(k in exc_type_name for k in ["Timeout", "Connection", "ConnectTimeout", "ReadTimeout"]):
+        return "TRANSIENT"
+    if any(k in exc_type_name for k in ["NotFoundError", "InvalidTicker", "DelistedError"]):
+        return "PERMANENT"
+
+    # Mặc định an toàn: Coi là TRANSIENT để retry có giới hạn (max_retry)
+    return "TRANSIENT"
+
+
 def _get_retry_count(con: duckdb.DuckDBPyConnection, dataset_name: str, symbol: str) -> int | None:
     row = con.execute(
         "SELECT retry_count FROM meta.crawl_progress WHERE dataset_name = ? AND symbol = ?",
@@ -92,9 +131,18 @@ def record_transient_failure(con: duckdb.DuckDBPyConnection, dataset_name: str, 
     return new_retry_count
 
 
+def record_permanent_failure(con: duckdb.DuckDBPyConnection, dataset_name: str, symbol: str) -> None:
+    """Immediately routes unrecoverable errors to the Dead Letter Queue (DLQ).
+    Marks status='dead_letter' so get_retryable_jobs() never retries it.
+    """
+    existing = _get_retry_count(con, dataset_name, symbol)
+    retry_count = (existing or 0) + 1
+    _upsert(con, dataset_name, symbol, status="dead_letter", retry_count=retry_count)
+
+
 def get_retryable_jobs(con: duckdb.DuckDBPyConnection, max_retry: int = 3) -> list[tuple[str, str, int]]:
     """(dataset_name, symbol, retry_count) tuples still under the retry
-    budget. 'empty' and 'success' rows are never retryable."""
+    budget. 'empty', 'success', and 'dead_letter' rows are never retryable."""
     rows = con.execute(
         "SELECT dataset_name, symbol, retry_count FROM meta.crawl_progress "
         "WHERE status = 'failed' AND retry_count < ? ORDER BY dataset_name, symbol",
@@ -115,6 +163,20 @@ def get_exhausted_jobs(con: duckdb.DuckDBPyConnection, max_retry: int = 3) -> li
     return [(r[0], r[1], r[2]) for r in rows]
 
 
+def get_dead_letter_jobs(con: duckdb.DuckDBPyConnection, max_retry: int = 3) -> list[tuple[str, str, int, str]]:
+    """Return all jobs in the Dead Letter Queue (DLQ):
+    1. Explicit permanent failures (status='dead_letter').
+    2. Retry-exhausted transient failures (status='failed' AND retry_count >= max_retry).
+    """
+    rows = con.execute(
+        "SELECT dataset_name, symbol, retry_count, status FROM meta.crawl_progress "
+        "WHERE status = 'dead_letter' OR (status = 'failed' AND retry_count >= ?) "
+        "ORDER BY dataset_name, symbol",
+        [max_retry],
+    ).fetchall()
+    return [(r[0], r[1], r[2], r[3]) for r in rows]
+
+
 def run_job(
     con: duckdb.DuckDBPyConnection,
     dataset_name: str,
@@ -124,20 +186,20 @@ def run_job(
     """Run fn() once, recording the outcome in meta.crawl_progress.
 
     - fn() succeeds -> record_success, returns fn()'s result.
-    - fn() raises EmptyResultError -> record_empty, returns None (this is
-      NOT a failure -- see module docstring).
-    - fn() raises anything else -> record_transient_failure, re-raises so
-      the caller's own error handling/logging still fires (this module
-      records state, it does not swallow errors -- conventions.md fail-
-      loudly pattern).
+    - fn() raises EmptyResultError -> record_empty, returns None.
+    - fn() raises PermanentError or permanent HTTP failure -> record_permanent_failure (DLQ), re-raises.
+    - fn() raises any other transient exception -> record_transient_failure, re-raises.
     """
     try:
         result = fn()
     except EmptyResultError:
         record_empty(con, dataset_name, symbol)
         return None
-    except Exception:
-        record_transient_failure(con, dataset_name, symbol)
+    except Exception as exc:
+        if classify_error(exc) == "PERMANENT":
+            record_permanent_failure(con, dataset_name, symbol)
+        else:
+            record_transient_failure(con, dataset_name, symbol)
         raise
     else:
         record_success(con, dataset_name, symbol)

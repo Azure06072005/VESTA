@@ -114,8 +114,8 @@ def test_build_events_joins_adjusted_price_not_raw_close(tmp_path):
     con = _setup_db(tmp_path)
     _seed_ohlcv(con, "FPT", ["2026-01-02", "2026-01-05"], [100.0, 100.0])
     con.execute(
-        "INSERT INTO core.price_adjustment_events VALUES "
-        "('FPT', '2026-01-05', 'share_issue', 0.5, 'EVT1', '2026-01-01 00:00:00')"
+        "INSERT INTO core.price_adjustment_events (symbol, ex_date, adjustment_type, multiplier, cumulative_adjustment_factor, source_event_ids, computed_at) VALUES "
+        "('FPT', '2026-01-05', 'share_issue', 0.5, 0.5, 'EVT1', '2026-01-01 00:00:00')"
     )
     _seed_news(con, "FPT", "u1", "2026-01-02 10:00:00")
 

@@ -22,10 +22,9 @@ import os
 import pathlib
 import sys
 import time
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional
 
 import duckdb
-import pandas as pd
 
 PROJECT_ROOT = pathlib.Path(__file__).resolve().parents[2]
 if str(PROJECT_ROOT) not in sys.path:
@@ -36,9 +35,9 @@ VENV_SITE = PROJECT_ROOT / ".venv" / "Lib" / "site-packages"
 if VENV_SITE.exists() and str(VENV_SITE) not in sys.path:
     sys.path.insert(1, str(VENV_SITE))
 
-from crawlers.db_writer import DEFAULT_TARGET_DB, ResilientDuckDBWriter
-from crawlers.track_crawling_progress import VN30_SYMBOLS
-from etl import db
+from crawlers.db_writer import DEFAULT_TARGET_DB, ResilientDuckDBWriter  # noqa: E402
+from crawlers.track_crawling_progress import VN30_SYMBOLS  # noqa: E402
+from etl import db  # noqa: E402
 
 sys.stdout.reconfigure(encoding="utf-8", line_buffering=True)
 logging.basicConfig(
@@ -55,9 +54,65 @@ logger = logging.getLogger("vesta_crawler_cli")
 
 TABLE_METADATA_SPECS = [
     {
+        "table": "core.dim_symbol",
+        "name": "Danh mục Toàn bộ Mã CK (F001)",
+        "date_col": "fetched_at",
+        "sym_col": "symbol",
+        "type": "reference",
+    },
+    {
+        "table": "core.dim_icb_hierarchy",
+        "name": "Phân ngành Chuẩn 4 Cấp ICB (F001)",
+        "date_col": "updated_at",
+        "sym_col": "icb_code",
+        "type": "reference",
+    },
+    {
+        "table": "core.symbol_exchange_history",
+        "name": "Lịch sử Chuyển Sàn Liên tục (F001)",
+        "date_col": "start_date",
+        "sym_col": "symbol",
+        "type": "reference",
+    },
+    {
+        "table": "core.dim_symbol_cafef",
+        "name": "Bổ sung Danh mục CafeF & OTC (F001b)",
+        "date_col": "fetched_at",
+        "sym_col": "symbol",
+        "type": "reference",
+    },
+    {
+        "table": "core.dim_index_metadata",
+        "name": "Danh mục 22 Rổ Chỉ số (F001c)",
+        "date_col": "created_at",
+        "sym_col": "index_code",
+        "type": "reference",
+    },
+    {
+        "table": "core.dim_index_constituents",
+        "name": "Thành phần Rổ Chỉ số & Room (F001c)",
+        "date_col": "effective_date",
+        "sym_col": "symbol",
+        "type": "reference",
+    },
+    {
         "table": "core.market_ohlcv_daily",
         "name": "Giá nến ngày (OHLCV 1D)",
         "date_col": "date",
+        "sym_col": "symbol",
+        "type": "market",
+    },
+    {
+        "table": "core.price_adjustment_events",
+        "name": "Sự kiện Điều chỉnh Giá & CAF (F002)",
+        "date_col": "ex_date",
+        "sym_col": "symbol",
+        "type": "market",
+    },
+    {
+        "table": "core.symbol_caf_timeline",
+        "name": "Dòng thời gian Hệ số CAF (F002)",
+        "date_col": "start_date",
         "sym_col": "symbol",
         "type": "market",
     },
@@ -88,6 +143,13 @@ TABLE_METADATA_SPECS = [
         "date_col": "event_date",
         "sym_col": "symbol",
         "type": "events",
+    },
+    {
+        "table": "core.cafef_disclosures",
+        "name": "Công bố thông tin CafeF (F003)",
+        "date_col": "published_at",
+        "sym_col": "symbol",
+        "type": "news",
     },
     {
         "table": "core.news",
@@ -145,6 +207,13 @@ TABLE_METADATA_SPECS = [
         "sym_col": "symbol",
         "type": "flow",
     },
+    {
+        "table": "core.realtime_quote_snapshot",
+        "name": "Bảng giá Snapshot & Định giá (F007)",
+        "date_col": "snapshot_at",
+        "sym_col": "symbol",
+        "type": "streaming",
+    },
 ]
 
 
@@ -158,6 +227,8 @@ def inspect_database_status(target_db: str) -> None:
 
     try:
         con = duckdb.connect(target_db, read_only=True)
+        db.attach_intraday(con, read_only=True)
+        db.attach_news(con, read_only=True)
     except Exception as e:
         print(f"[!] Không thể mở database {target_db} trực tiếp: {e}")
         buf_db = str(PROJECT_ROOT / "db" / "vesta_crawled_fresh.duckdb")
@@ -165,6 +236,8 @@ def inspect_database_status(target_db: str) -> None:
             print(f"[*] Thử đọc từ cơ sở dữ liệu đệm: {buf_db}")
             try:
                 con = duckdb.connect(buf_db, read_only=True)
+                db.attach_intraday(con, read_only=True)
+                db.attach_news(con, read_only=True)
             except Exception as e2:
                 print(f"[!] Thất bại kết nối đệm: {e2}")
                 return
@@ -188,59 +261,53 @@ def inspect_database_status(target_db: str) -> None:
         date_col = spec["date_col"]
         sym_col = spec["sym_col"]
 
-        # Kiểm tra bảng có tồn tại không
-        schema, table_name = tbl.split(".")
-        tbl_exists = con.execute(
-            """
-            SELECT COUNT(*) FROM information_schema.tables 
-            WHERE table_schema = ? AND table_name = ?
-            """,
-            [schema, table_name],
-        ).fetchone()[0]
-
-        if not tbl_exists:
-            print(f"{name:<32} | {'CHƯA TẠO':>12} | {'-':>8} | {'-':<11} | {'-':<11} | [!] Bảng chưa được khởi tạo")
-            continue
+        # Điều hướng bảng sang news_db hoặc intraday nếu cần
+        query_tbl = tbl
+        if spec.get("type") == "news":
+            query_tbl = f"news_db.{tbl}"
+        elif "1m" in tbl:
+            query_tbl = f"intraday.{tbl}"
 
         try:
             sym_expr = f"COUNT(DISTINCT {sym_col})" if sym_col else "'-'"
             date_expr = f"CAST(MIN({date_col}) AS VARCHAR), CAST(MAX({date_col}) AS VARCHAR)"
-            query = f"SELECT COUNT(*), {sym_expr}, {date_expr} FROM {tbl}"
+            query = f"SELECT COUNT(*), {sym_expr}, {date_expr} FROM {query_tbl}"
             row = con.execute(query).fetchone()
+        except Exception:
+            print(f"{name:<32} | {'CHƯA TẠO':>12} | {'-':>8} | {'-':<11} | {'-':<11} | [!] Bảng chưa được khởi tạo")
+            continue
 
-            total_rows = row[0]
-            total_syms = row[1] if row[1] != "-" else "-"
-            min_date = str(row[2])[:10] if row[2] else "-"
-            max_date = str(row[3])[:10] if row[3] else "-"
+        total_rows = row[0]
+        total_syms = row[1] if row[1] != "-" else "-"
+        min_date = str(row[2])[:10] if row[2] else "-"
+        max_date = str(row[3])[:10] if row[3] else "-"
 
-            # Đánh giá độ trễ
-            status_desc = "Trống"
-            if total_rows > 0 and max_date != "-":
-                try:
-                    max_d = dt.date.fromisoformat(max_date)
-                    gap_days = (today - max_d).days
-                    if gap_days <= 1:
-                        status_desc = "✅ Rất mới (T-0/T-1)"
-                    elif gap_days <= 7:
-                        status_desc = f"⚠️ Trễ {gap_days} ngày"
-                    elif gap_days <= 95:
-                        status_desc = f"⚠️ Trễ {gap_days // 30} tháng ({gap_days}d)"
-                    else:
-                        status_desc = f"❌ Cần cào bù ({gap_days}d)"
-                except Exception:
-                    status_desc = "Đã có dữ liệu"
+        # Đánh giá độ trễ
+        status_desc = "Trống"
+        if total_rows > 0 and max_date != "-":
+            try:
+                max_d = dt.date.fromisoformat(max_date)
+                gap_days = (today - max_d).days
+                if gap_days <= 1:
+                    status_desc = "✅ Rất mới (T-0/T-1)"
+                elif gap_days <= 7:
+                    status_desc = f"⚠️ Trễ {gap_days} ngày"
+                elif gap_days <= 95:
+                    status_desc = f"⚠️ Trễ {gap_days // 30} tháng ({gap_days}d)"
+                else:
+                    status_desc = f"❌ Cần cào bù ({gap_days}d)"
+            except Exception:
+                status_desc = "Đã có dữ liệu"
 
-            sym_str = f"{total_syms:,}" if isinstance(total_syms, int) else str(total_syms)
-            print(
-                f"{name:<32} | "
-                f"{total_rows:>12,} | "
-                f"{sym_str:>8} | "
-                f"{min_date:<11} | "
-                f"{max_date:<11} | "
-                f"{status_desc}"
-            )
-        except Exception as ex:
-            print(f"{name:<32} | {'LỖI ĐỌC':>12} | {'-':>8} | {'-':<11} | {'-':<11} | [!] {ex}")
+        sym_str = f"{total_syms:,}" if isinstance(total_syms, int) else str(total_syms)
+        print(
+            f"{name:<32} | "
+            f"{total_rows:>12,} | "
+            f"{sym_str:>8} | "
+            f"{min_date:<11} | "
+            f"{max_date:<11} | "
+            f"{status_desc}"
+        )
 
     con.close()
     print("═" * 115 + "\n")
@@ -251,7 +318,7 @@ def inspect_database_status(target_db: str) -> None:
 # =============================================================================
 
 def get_target_symbols(target_db: str, symbol_arg: str = "all") -> List[str]:
-    """Lấy danh sách mã chứng khoán theo lựa chọn."""
+    """Lấy danh sách mã chứng khoán theo lựa chọn (Đảm bảo cào toàn bộ danh mục mã khi chọn 'all')."""
     symbol_arg = symbol_arg.strip()
     if symbol_arg.lower() == "vn30":
         return VN30_SYMBOLS.copy()
@@ -259,7 +326,7 @@ def get_target_symbols(target_db: str, symbol_arg: str = "all") -> List[str]:
     if symbol_arg.lower() not in ("all", "all_equities"):
         return [s.strip().upper() for s in symbol_arg.split(",") if s.strip()]
 
-    # Lấy toàn bộ 1,522 mã niêm yết từ core.dim_symbol (bỏ trái phiếu)
+    # Lấy toàn bộ mã niêm yết từ core.dim_symbol (bỏ trái phiếu)
     query = """
         SELECT symbol 
         FROM core.dim_symbol 
@@ -267,27 +334,26 @@ def get_target_symbols(target_db: str, symbol_arg: str = "all") -> List[str]:
           AND length(symbol) = 3
         ORDER BY symbol
     """
+    for db_cand in [target_db, str(PROJECT_ROOT / "db" / "vesta_snapshot.duckdb"), str(PROJECT_ROOT / "db" / "vesta.duckdb")]:
+        if os.path.exists(db_cand):
+            try:
+                con = duckdb.connect(db_cand, read_only=True)
+                rows = con.execute(query).fetchall()
+                con.close()
+                symbols = [r[0] for r in rows]
+                if symbols and len(symbols) > 50:
+                    return symbols
+            except Exception:
+                pass
+
+    # Fallback tự động lấy 1,482+ mã từ hệ thống phân cấp ưu tiên
     try:
-        con = duckdb.connect(target_db, read_only=True)
-        rows = con.execute(query).fetchall()
-        con.close()
-        symbols = [r[0] for r in rows]
-        if symbols:
-            return symbols
+        from crawlers.intraday_ohlcv import get_prioritized_symbols
+        pri_syms = get_prioritized_symbols()
+        if pri_syms and len(pri_syms) > 50:
+            return pri_syms
     except Exception:
         pass
-
-    canonical = str(PROJECT_ROOT / "db" / "vesta.duckdb")
-    if os.path.exists(canonical) and canonical != target_db:
-        try:
-            con = duckdb.connect(canonical, read_only=True)
-            rows = con.execute(query).fetchall()
-            con.close()
-            symbols = [r[0] for r in rows]
-            if symbols:
-                return symbols
-        except Exception:
-            pass
 
     return VN30_SYMBOLS.copy()
 
@@ -312,6 +378,15 @@ def run_category_ohlcv(symbols: List[str], writer: ResilientDuckDBWriter, args: 
             total_bars += cnt
             logger.info("[%d/%d] %s: +%d nến %s.", idx, len(symbols), sym, cnt, interval)
         time.sleep(delay)
+
+    if interval == "1D" and total_bars > 0:
+        try:
+            from etl import adjustments
+            logger.info("  • Tự động đồng bộ hệ số điều chỉnh giá CAF & View Dual-Mode (F002 Recommendation)...")
+            adjustments.build_and_sync_all_adjustments(db_path=writer.target_db, symbols=symbols)
+        except Exception as e:
+            logger.warning("Không thể tự động đồng bộ CAF: %s", e)
+
     return total_bars
 
 
@@ -353,46 +428,48 @@ def run_category_news_stock(symbols: List[str], writer: ResilientDuckDBWriter, a
 
 
 def run_category_news_macro(symbols: List[str], writer: ResilientDuckDBWriter, args: argparse.Namespace) -> int:
-    """Chạy cào phân hệ Tin tức tài chính vĩ mô từ 4 nguồn báo chí hàng đầu."""
+    """Chạy cào phân hệ Tin tức tài chính vĩ mô từ 4 nguồn báo chí hàng đầu (Lưu vào vesta_news.duckdb)."""
     from crawlers import baochinhphu_crawler, nhandan_crawler, thoibaotaichinh_crawler, vietnamfinance_crawler
     max_pages = getattr(args, "pages", 10)
     source = getattr(args, "source", "all")
-    logger.info(">>> [CATEGORY: NEWS_MACRO] Khởi chạy kênh báo chí vĩ mô (nguồn=%s, tối đa %d trang/nguồn)...", source, max_pages)
+    news_db_path = str(db.NEWS_DB_PATH)
+    logger.info(">>> [CATEGORY: NEWS_MACRO] Khởi chạy kênh báo chí vĩ mô (nguồn=%s, tối đa %d trang/nguồn, DB=vesta_news.duckdb)...", source, max_pages)
 
     total = 0
+    current_year = dt.date.today().year
     # 1. Báo Nhân Dân
     if source in ("all", "nhandan"):
         try:
-            cnt1 = nhandan_crawler.crawl_nhandan(db_path=writer.target_db, start_year=2026, end_year=2025, max_articles=max_pages * 20)
+            cnt1 = nhandan_crawler.crawl_nhandan(db_path=news_db_path, start_year=current_year, end_year=current_year - 1, max_articles=max_pages * 20)
             total += cnt1
-            logger.info("  • Báo Nhân Dân: +%d tin bài.", cnt1)
+            logger.info("  • Báo Nhân Dân: +%d tin bài (vesta_news.duckdb).", cnt1)
         except Exception as e:
             logger.warning("  • Lỗi cào Báo Nhân Dân: %s", e)
 
     # 2. VietnamFinance
     if source in ("all", "vietnamfinance"):
         try:
-            cnt2 = vietnamfinance_crawler.crawl_vietnamfinance(db_path=writer.target_db, max_pages=max_pages)
+            cnt2 = vietnamfinance_crawler.crawl_vietnamfinance(db_path=news_db_path, max_pages=max_pages)
             total += cnt2
-            logger.info("  • VietnamFinance: +%d tin bài.", cnt2)
+            logger.info("  • VietnamFinance: +%d tin bài (vesta_news.duckdb).", cnt2)
         except Exception as e:
             logger.warning("  • Lỗi cào VietnamFinance: %s", e)
 
     # 3. Thời Báo Tài Chính Việt Nam
     if source in ("all", "thoibaotaichinh"):
         try:
-            cnt3 = thoibaotaichinh_crawler.crawl_tbtc(db_path=writer.target_db, max_pages=max_pages)
+            cnt3 = thoibaotaichinh_crawler.crawl_tbtc(db_path=news_db_path, max_pages=max_pages)
             total += cnt3
-            logger.info("  • Thời Báo Tài Chính: +%d tin bài.", cnt3)
+            logger.info("  • Thời Báo Tài Chính: +%d tin bài (vesta_news.duckdb).", cnt3)
         except Exception as e:
             logger.warning("  • Lỗi cào TBTC: %s", e)
 
     # 4. Báo Chính Phủ
     if source in ("all", "baochinhphu"):
         try:
-            cnt4 = baochinhphu_crawler.crawl_baochinhphu(db_path=writer.target_db, max_pages=max_pages)
+            cnt4 = baochinhphu_crawler.crawl_baochinhphu(db_path=news_db_path, max_pages=max_pages)
             total += cnt4
-            logger.info("  • Báo Chính Phủ: +%d tin bài.", cnt4)
+            logger.info("  • Báo Chính Phủ: +%d tin bài (vesta_news.duckdb).", cnt4)
         except Exception as e:
             logger.warning("  • Lỗi cào Báo Chính Phủ: %s", e)
 
@@ -425,6 +502,7 @@ def run_category_macro(symbols: List[str], writer: ResilientDuckDBWriter, args: 
     logger.info(">>> [CATEGORY: MACRO] Bắt đầu cào 9 chỉ số kinh tế vĩ mô & Lãi suất liên ngân hàng...")
     do_9ind = getattr(args, "macro_9ind", True)
     do_rates = getattr(args, "macro_rates", True)
+    total = 0
 
     # 1. 9 Chỉ số vĩ mô
     if do_9ind:
@@ -464,53 +542,345 @@ def run_category_governance(symbols: List[str], writer: ResilientDuckDBWriter, a
     return total
 
 
+def run_category_reference(symbols: List[str], writer: ResilientDuckDBWriter, args: argparse.Namespace) -> int:
+    """Chạy phân hệ Danh mục mã niêm yết, Phân cấp ngành ICB 4 tầng và Lịch sử chuyển sàn (F001)."""
+    from crawlers import dim_icb, dim_symbol, symbol_exchange_history
+
+    ref_mode = getattr(args, "ref_mode", "all")
+    logger.info(">>> [CATEGORY: REFERENCE] Khởi chạy cập nhật danh mục tham chiếu (chế độ=%s)...", ref_mode)
+    total = 0
+
+    con = writer.get_write_connection()
+    try:
+        # 1. Cập nhật Danh mục mã niêm yết dim_symbol
+        if ref_mode in ("all", "symbol"):
+            logger.info("  • [1/4] Cập nhật danh mục mã niêm yết core.dim_symbol...")
+            df_sym = dim_symbol.run(con=con)
+            cnt_sym = len(df_sym) if df_sym is not None else 0
+            total += cnt_sym
+            logger.info("    -> Đã cập nhật %d mã niêm yết vào core.dim_symbol.", cnt_sym)
+
+        # 2. Cập nhật Phân cấp ngành 4 tầng ICB
+        if ref_mode in ("all", "icb"):
+            logger.info("  • [2/4] Cập nhật từ điển phân ngành 4 cấp core.dim_icb_hierarchy...")
+            cnt_icb = dim_icb.crawl_and_load_icb(con=con)
+            total += cnt_icb
+            logger.info("    -> Đã nạp %d mã phân ngành chuẩn ICB vào core.dim_icb_hierarchy.", cnt_icb)
+
+        # 3. Dựng dòng thời gian chuyển sàn liên tục
+        if ref_mode in ("all", "history"):
+            logger.info("  • [3/4] Dựng dòng thời gian chuyển sàn liên tục core.symbol_exchange_history...")
+            cnt_hist = symbol_exchange_history.build_and_load_exchange_history(con=con)
+            total += cnt_hist
+            logger.info("    -> Đã sinh và nạp %d mốc chuyển sàn vào core.symbol_exchange_history.", cnt_hist)
+
+        # 4. Đồng bộ danh bạ CafeF & phân tách OTC-Subuniverse (F001b)
+        if ref_mode in ("all", "cafef", "otc"):
+            logger.info("  • [4/4] Đồng bộ danh bạ CafeF & phân tách OTC-Subuniverse core.dim_symbol_cafef...")
+            from crawlers import cafef_symbol_directory
+            cnt_cafef = cafef_symbol_directory.run(con=con)
+            total += cnt_cafef
+            logger.info("    -> Đã nạp %d mã (gồm 750 mã OTC cách ly) vào core.dim_symbol_cafef.", cnt_cafef)
+
+        # 5. Cào danh mục 22 rổ chỉ số & Room ngoại (F001c)
+        if ref_mode in ("all", "index", "group", "basket"):
+            logger.info("  • [5/5] Cào danh mục 22 rổ chỉ số & Room ngoại core.dim_index_constituents (F001c)...")
+            from crawlers import dim_index_constituents
+            summary_idx = dim_index_constituents.crawl_and_sync_constituents(con=con)
+            cnt_idx = sum(summary_idx.values())
+            total += cnt_idx
+            logger.info("    -> Đã nạp %d lượt phân bổ vào 22 rổ chỉ số.", cnt_idx)
+    finally:
+        writer.close_write_connection(con)
+
+    return total
+
+
+def run_category_intraday_1m(symbols: List[str], writer: Any, args: argparse.Namespace) -> int:
+    """Cào bù nến 1 phút 3 năm lưu vào vesta_intraday_1m.duckdb (F002b)."""
+    from crawlers import intraday_ohlcv
+    con_intra = db.connect_intraday()
+    total_new = 0
+    try:
+        for idx, sym in enumerate(symbols, 1):
+            logger.info("  • [%d/%d] Cào bù nến 1m cho mã %s...", idx, len(symbols), sym)
+            res = intraday_ohlcv.backfill_symbol_1m(sym, con=con_intra)
+            total_new += res.get("new_bars", 0)
+    finally:
+        con_intra.close()
+    return total_new
+
+
+def run_category_snapshots(symbols: List[str], writer: ResilientDuckDBWriter, args: argparse.Namespace) -> int:
+    """Cào bảng giá thời gian thực snapshot & chỉ số định giá P/E, P/B (F007 Vietcap/CafeF Direct REST API)."""
+    from crawlers import snapshots
+    logger.info(">>> [CATEGORY: SNAPSHOTS] Bắt đầu cào realtime quote snapshot cho %d mã...", len(symbols))
+    try:
+        raw = snapshots.fetch_raw(symbols)
+        if raw.empty:
+            logger.warning("  • Không lấy được dữ liệu snapshot từ Vietcap/CafeF fallback.")
+            return 0
+        normalized = snapshots.normalize_snapshot(raw)
+        total = writer.execute_with_retry(lambda con: snapshots.write_snapshot(normalized, con=con))
+        logger.info("  • Đã ghi thành công +%d bản ghi snapshot vào DuckDB.", total)
+        return total
+    except Exception as e:
+        logger.warning("  • Lỗi cào snapshot: %s", e)
+        return 0
+
+
+def run_category_news_comprehensive(
+    symbols: List[str],
+    writer: ResilientDuckDBWriter,
+    args: argparse.Namespace,
+    stop_check: Optional[Callable[[], bool]] = None,
+) -> int:
+    """Cào TOÀN BỘ dữ liệu tin tức không ngoại trừ mã nào hay chuyên mục nào, lưu vào vesta_news.duckdb (F003/F004).
+    
+    Bao gồm 4 phân hệ tin tức:
+    1. Tin tức CafeF theo toàn bộ danh mục mã (all symbols).
+    2. Tin tức chuyên mục biên tập CafeF (all category news: TT chứng khoán, Vĩ mô, Bất động sản, DN, v.v.).
+    3. Công bố thông tin doanh nghiệp CafeF Disclosures (core.cafef_disclosures).
+    4. Báo chí tài chính & chính sách vĩ mô (Báo Nhân Dân, TBTC, VietnamFinance, Báo Chính Phủ).
+    """
+    logger.info("=" * 80)
+    logger.info(">>> [KHỞI CHẠY PHÂN HỆ TIN TỨC TOÀN DIỆN (NEWS COMPREHENSIVE)]")
+    logger.info("    CSDL ĐÍCH CHUYÊN BIỆT: db/vesta_news.duckdb")
+    logger.info("    DANH MỤC: %d mã | TOÀN BỘ CHUYÊN MỤC BIÊN TẬP & CÔNG BỐ THÔNG TIN", len(symbols))
+    logger.info("=" * 80)
+
+    total_all_news = 0
+
+    # 1. Tin tức CafeF theo mã cổ phiếu (Tất cả các mã, không ngoại trừ mã nào)
+    logger.info("\n--- [1/4] CÀO TIN TỨC DOANH NGHIỆP CAFEF THEO MÃ (%d mã) ---", len(symbols))
+    from crawlers import cafef_news
+    delay = getattr(args, "delay", 0.4)
+    force = getattr(args, "force", False)
+    stock_news_written = 0
+
+    try:
+        con_news = db.connect_news()
+        try:
+            for idx, sym in enumerate(symbols, 1):
+                if stop_check and stop_check():
+                    logger.info("[!] Nhận tín hiệu dừng từ người dùng.")
+                    break
+                try:
+                    cnt = cafef_news.run(sym, incremental=not force, force=force, con=con_news)
+                    stock_news_written += cnt
+                    if cnt > 0 or idx % 50 == 0 or idx == len(symbols):
+                        logger.info("[%d/%d] %s: +%d tin bài CafeF mới (vesta_news.duckdb).", idx, len(symbols), sym, cnt)
+                except Exception as e:
+                    logger.debug("Bỏ qua tin bài %s: %s", sym, e)
+                time.sleep(delay)
+        finally:
+            con_news.close()
+    except Exception as ex_stock:
+        logger.warning("[!] Lỗi cào tin tức CafeF theo mã: %s", ex_stock)
+
+    total_all_news += stock_news_written
+    logger.info("-> [1/4 Hoàn tất]: +%d tin bài CafeF theo mã.", stock_news_written)
+
+    if stop_check and stop_check():
+        return total_all_news
+
+    # 2. Tin tức chuyên mục biên tập CafeF (Tất cả 9 chuyên mục, không ngoại trừ chuyên mục nào)
+    logger.info("\n--- [2/4] CÀO TIN TỨC CHUYÊN MỤC BIÊN TẬP CAFEF (TẤT CẢ CHUYÊN MỤC) ---")
+    cat_news_written = 0
+    try:
+        from crawlers.cafef_category_news import CATEGORY_IDS
+        from crawlers import cafef_category_orchestrator
+        max_p = getattr(args, "pages", 5)
+        con_news = db.connect_news()
+        try:
+            valid_symbols = cafef_category_orchestrator.load_valid_symbols(con_news)
+            existing_urls = cafef_category_orchestrator.load_existing_source_urls(con_news)
+            for c_slug in CATEGORY_IDS.keys():
+                if stop_check and stop_check():
+                    break
+                logger.info("  • Đang cào chuyên mục: [%s] (tối đa %d trang)...", c_slug, max_p)
+                try:
+                    res_cat = cafef_category_orchestrator.crawl_category_streaming(
+                        cat=c_slug,
+                        max_pages=max_p,
+                        con=con_news,
+                        valid_symbols=valid_symbols,
+                        existing_urls=existing_urls,
+                        max_concurrency=2,
+                    )
+                    w = res_cat.get("written", 0)
+                    cat_news_written += w
+                    logger.info("    -> [%s]: +%d tin bài mới đã ghi vào vesta_news.duckdb.", c_slug, w)
+                except Exception as ex_cat:
+                    logger.warning("    -> [!] Lỗi cào chuyên mục %s: %s", c_slug, ex_cat)
+        finally:
+            con_news.close()
+    except Exception as ex_catorch:
+        logger.warning("[!] Lỗi cào chuyên mục CafeF: %s", ex_catorch)
+
+    total_all_news += cat_news_written
+    logger.info("-> [2/4 Hoàn tất]: +%d tin bài chuyên mục CafeF.", cat_news_written)
+
+    if stop_check and stop_check():
+        return total_all_news
+
+    # 3. Công bố thông tin CafeF Disclosures (core.cafef_disclosures)
+    logger.info("\n--- [3/4] CÀO CÔNG BỐ THÔNG TIN CAFEF DISCLOSURES TOÀN THỊ TRƯỜNG ---")
+    disc_written = 0
+    try:
+        from crawlers import crawl_cafef_disclosures
+        disc_written = crawl_cafef_disclosures.crawl_live_disclosures(
+            max_pages=getattr(args, "pages", 5),
+            symbol="",
+            delay=0.5,
+            db_path=str(db.NEWS_DB_PATH),
+        )
+        logger.info("-> [3/4 Hoàn tất]: +%d bản ghi công bố thông tin (vesta_news.duckdb).", disc_written)
+    except Exception as ex_disc:
+        logger.warning("[!] Lỗi cào công bố thông tin: %s", ex_disc)
+
+    total_all_news += disc_written
+
+    if stop_check and stop_check():
+        return total_all_news
+
+    # 4. Báo chí tài chính & vĩ mô chính thống (Nhân Dân, TBTC, VietnamFinance, Chính Phủ)
+    logger.info("\n--- [4/4] CÀO BÁO CHÍ TÀI CHÍNH & VĨ MÔ CHÍNH THỐNG ---")
+    macro_press_written = run_category_news_macro(symbols, writer, args)
+    total_all_news += macro_press_written
+    logger.info("-> [4/4 Hoàn tất]: +%d tin bài báo chí vĩ mô (vesta_news.duckdb).", macro_press_written)
+
+    logger.info("\n>>> HOÀN TẤT PHÂN HỆ TIN TỨC: TỔNG CỘNG +%d BẢN GHI MỚI VÀO vesta_news.duckdb <<<", total_all_news)
+    return total_all_news
+
+
 CATEGORIES_REGISTRY = {
+    "reference": run_category_reference,
     "ohlcv": run_category_ohlcv,
+    "intraday_1m": run_category_intraday_1m,
     "fundamentals": run_category_fundamentals,
-    "news": run_category_news_stock,
+    "news": run_category_news_comprehensive,
+    "news_stock": run_category_news_stock,
     "news_macro": run_category_news_macro,
+    "news_all": run_category_news_comprehensive,
     "events": run_category_events,
     "macro": run_category_macro,
     "governance": run_category_governance,
+    "snapshots": run_category_snapshots,
 }
 
 
 # =============================================================================
-# 4. INCREMENTAL LATEST CRAWLER (TỰ ĐỘNG CÀO TIẾN ĐẾN HÔM NAY)
+# 4. INCREMENTAL LATEST CRAWLER (TỰ ĐỘNG CÀO TIẾN ĐẾN HÔM NAY - F001 -> F009)
 # =============================================================================
 
-def run_latest_all(symbols: List[str], writer: ResilientDuckDBWriter, args: argparse.Namespace) -> None:
-    """Tự động phát hiện khoảng trống thời gian và cào bù dữ liệu mới nhất toàn thị trường."""
+def run_latest_modular(
+    scope: str,
+    symbols: List[str],
+    writer: ResilientDuckDBWriter,
+    args: argparse.Namespace,
+    stop_check: Optional[Callable[[], bool]] = None,
+) -> Dict[str, int]:
+    """Tự động phát hiện khoảng trống thời gian và cào bù dữ liệu mới nhất theo từng tùy chọn mô-đun (F001 -> F009).
+    
+    4 Tùy chọn Scope:
+    1. ohlcv 1d/1m: Cập nhật nến 1D (vesta_snapshot.duckdb) & nến 1m (vesta_intraday_1m.duckdb) cho toàn bộ mã & mốc ngày.
+    2. fundamentals: Cập nhật BCTC quý mới nhất (vesta_snapshot.duckdb) cho toàn bộ mã.
+    3. news: Cập nhật toàn bộ tin tức không ngoại trừ mã nào hay chuyên mục nào (vesta_news.duckdb).
+    4. all: Cập nhật toàn diện tất cả các phân hệ trên theo đúng CSDL chuyên biệt của từng loại.
+    """
     today = dt.date.today().isoformat()
+    scope_str = str(scope).lower().strip()
     logger.info("=" * 80)
-    logger.info("BẮT ĐẦU CHẾ ĐỘ CẬP NHẬT MỚI NHẤT TOÀN THỊ TRƯỜNG (LATEST INCREMENTAL CATCH-UP)")
-    logger.info("Thời điểm thực thi: %s | Danh mục: %d mã", today, len(symbols))
+    logger.info("BẮT ĐẦU CHẾ ĐỘ CẬP NHẬT MỚI NHẤT (LATEST INCREMENTAL CATCH-UP)")
+    logger.info("TÙY CHỌN: [%s] | THỜI ĐIỂM: %s | TỔNG SỐ MÃ: %d", scope.upper(), today, len(symbols))
+    logger.info("CSDL ĐÍCH: 1D/BCTC -> vesta_snapshot.duckdb | 1m -> vesta_intraday_1m.duckdb | News -> vesta_news.duckdb")
     logger.info("=" * 80)
 
-    # 1. Cào giá nến ngày mới nhất
-    logger.info("\n--- [1/5] CẬP NHẬT GIÁ NẾN OHLCV MỚI NHẤT ---")
-    run_category_ohlcv(symbols, writer, args)
+    results: Dict[str, int] = {}
+    is_all = "4" in scope_str or "all" in scope_str
 
-    # 2. Cào BCTC quý mới nhất
-    logger.info("\n--- [2/5] CẬP NHẬT BÁO CÁO TÀI CHÍNH QUÝ MỚI NHẤT ---")
-    run_category_fundamentals(symbols, writer, args)
+    # --- 1. TÙY CHỌN: OHLCV 1D/1M ---
+    if is_all or "1" in scope_str or "ohlcv" in scope_str:
+        logger.info("\n" + "═" * 60)
+        logger.info("[PHÂN HỆ 1/4] CẬP NHẬT GIÁ NẾN 1D & 1M TOÀN THỊ TRƯỜNG")
+        logger.info("═" * 60)
 
-    # 3. Cào sự kiện & cổ tức mới nhất
-    logger.info("\n--- [3/5] CẬP NHẬT SỰ KIỆN DOANH NGHIỆP & CỔ TỨC ---")
-    run_category_events(symbols, writer, args)
+        # 1.1. Nến ngày 1D
+        logger.info("\n--- [1.1] Cập nhật nến ngày OHLCV 1D (Toàn bộ mã & ngày -> vesta_snapshot.duckdb) ---")
+        args_1d = argparse.Namespace(**vars(args))
+        args_1d.interval = "1D"
+        bars_1d = run_category_ohlcv(symbols, writer, args_1d)
+        results["ohlcv_1d"] = bars_1d
+        logger.info("[+] Đã cập nhật +%d nến ngày 1D.", bars_1d)
 
-    # 4. Cào lãi suất & vĩ mô mới nhất
-    logger.info("\n--- [4/5] CẬP NHẬT LÃI SUẤT LIÊN NGÂN HÀNG & CHỈ SỐ VĨ MÔ ---")
-    run_category_macro(symbols, writer, args)
+        # 1.2. Nến phút 1m Intraday
+        if not (stop_check and stop_check()):
+            logger.info("\n--- [1.2] Cập nhật nến phút Intraday 1m (Toàn bộ mã -> vesta_intraday_1m.duckdb) ---")
+            bars_1m = run_category_intraday_1m(symbols, writer, args)
+            results["ohlcv_1m"] = bars_1m
+            logger.info("[+] Đã cập nhật +%d nến phút 1m vào vesta_intraday_1m.duckdb.", bars_1m)
 
-    # 5. Cào tin tức báo chí mới nhất 7 ngày qua
-    logger.info("\n--- [5/5] CẬP NHẬT TIN TỨC BÁO CHÍ MỚI NHẤT ---")
-    args.pages = 3  # Lấy các trang đầu tiên chứa tin tức nóng nhất
-    run_category_news_macro(symbols, writer, args)
+    if stop_check and stop_check():
+        logger.info("[!] Nhận lệnh dừng từ người dùng. Kết thúc tiến trình.")
+        writer.sync_buffer_to_target()
+        return results
 
-    # Đồng bộ bộ đệm nếu có
+    # --- 2. TÙY CHỌN: FUNDAMENTALS ---
+    if is_all or "2" in scope_str or "fundamentals" in scope_str:
+        logger.info("\n" + "═" * 60)
+        logger.info("[PHÂN HỆ 2/4] CẬP NHẬT BÁO CÁO TÀI CHÍNH QUÝ MỚI NHẤT (FUNDAMENTALS)")
+        logger.info("═" * 60)
+        args_fund = argparse.Namespace(**vars(args))
+        args_fund.period = getattr(args, "period", "quarter")
+        args_fund.report_type = getattr(args, "report_type", "all")
+        stmts = run_category_fundamentals(symbols, writer, args_fund)
+        results["fundamentals"] = stmts
+        logger.info("[+] Đã cập nhật +%d BCTC quý vào vesta_snapshot.duckdb.", stmts)
+
+    if stop_check and stop_check():
+        logger.info("[!] Nhận lệnh dừng từ người dùng. Kết thúc tiến trình.")
+        writer.sync_buffer_to_target()
+        return results
+
+    # --- 3. TÙY CHỌN: NEWS (TOÀN BỘ TIN TỨC KHÔNG NGOẠI TRỪ MÃ HAY CHUYÊN MỤC) ---
+    if is_all or "3" in scope_str or "news" in scope_str:
+        logger.info("\n" + "═" * 60)
+        logger.info("[PHÂN HỆ 3/4] CẬP NHẬT TOÀN BỘ TIN TỨC & BÁO CHÍ (NEWS COMPREHENSIVE)")
+        logger.info("═" * 60)
+        news_cnt = run_category_news_comprehensive(symbols, writer, args, stop_check=stop_check)
+        results["news"] = news_cnt
+
+    if stop_check and stop_check():
+        logger.info("[!] Nhận lệnh dừng từ người dùng. Kết thúc tiến trình.")
+        writer.sync_buffer_to_target()
+        return results
+
+    # --- 4. BỔ SUNG KHI CHẠY ALL: SỰ KIỆN DOANH NGHIỆP & VĨ MÔ LÃI SUẤT ---
+    if is_all:
+        logger.info("\n" + "═" * 60)
+        logger.info("[PHÂN HỆ 4/4] CẬP NHẬT SỰ KIỆN QUYỀN, CỔ TỨC & CHỈ SỐ VĨ MÔ")
+        logger.info("═" * 60)
+        events_cnt = run_category_events(symbols, writer, args)
+        results["events"] = events_cnt
+
+        macro_cnt = run_category_macro(symbols, writer, args)
+        results["macro"] = macro_cnt
+
+    # Đồng bộ bộ đệm an toàn nếu có dữ liệu chờ nạp
     writer.sync_buffer_to_target()
-    logger.info("\n>>> HOÀN TẤT TOÀN BỘ TIẾN TRÌNH CẬP NHẬT DỮ LIỆU MỚI NHẤT <<<")
+    logger.info("\n" + "═" * 80)
+    logger.info(">>> HOÀN TẤT TOÀN BỘ TIẾN TRÌNH CẬP NHẬT MỚI NHẤT (SCOPE: %s) <<<", scope.upper())
+    for k, v in results.items():
+        logger.info("    • %s: +%d bản ghi", k, v)
+    logger.info("═" * 80)
+    return results
+
+
+def run_latest_all(symbols: List[str], writer: ResilientDuckDBWriter, args: argparse.Namespace) -> None:
+    """Tương thích ngược: Chạy toàn bộ hệ thống (all)."""
+    scope = getattr(args, "scope", "all")
+    run_latest_modular(scope, symbols, writer, args)
 
 
 # =============================================================================
@@ -540,10 +910,15 @@ def parse_args() -> argparse.Namespace:
         help="Chế độ cào: 'latest' (tự động cào bù tiến đến hôm nay), 'category' (chọn 1 danh mục), 'all' (cào toàn bộ)",
     )
     crawl_parser.add_argument(
+        "--scope",
+        default="all",
+        help="Tùy chọn cập nhật khi chạy mode 'latest': '1. ohlcv 1d/1m', '2. fundamentals', '3. news', '4. all'",
+    )
+    crawl_parser.add_argument(
         "--category",
         choices=list(CATEGORIES_REGISTRY.keys()),
         default="ohlcv",
-        help="Danh mục dữ liệu khi chạy mode 'category': ohlcv, fundamentals, news, news_macro, events, macro, governance",
+        help="Danh mục dữ liệu khi chạy mode 'category': reference, ohlcv, intraday_1m, fundamentals, news, news_macro, news_all, events, macro, governance, snapshots",
     )
     crawl_parser.add_argument(
         "--symbols",
@@ -556,7 +931,7 @@ def parse_args() -> argparse.Namespace:
     crawl_parser.add_argument("--period", choices=["quarter", "year"], default="quarter", help="Kỳ BCTC")
     crawl_parser.add_argument("--report-type", default="all", help="Loại BCTC")
     crawl_parser.add_argument("--delay", type=float, default=0.4, help="Thời gian nghỉ giữa các request (giây)")
-    crawl_parser.add_argument("--pages", type=int, default=5, help="Số trang tối đa cho crawler báo chí")
+    crawl_parser.add_argument("--pages", type=int, default=5, help="Số trang tối đa cho crawler báo chí / tin tức")
     crawl_parser.add_argument("--force", action="store_true", help="Bắt buộc cào đè, không dùng checkpoint bỏ qua")
     crawl_parser.add_argument("--limit", type=int, default=None, help="Giới hạn số lượng mã để test")
 
@@ -589,7 +964,8 @@ def main() -> int:
 
         # Mode: latest
         if args.mode == "latest":
-            run_latest_all(symbols, writer, args)
+            scope = getattr(args, "scope", "all")
+            run_latest_modular(scope, symbols, writer, args)
             return 0
 
         # Mode: category (chạy duy nhất 1 phân hệ chọn lọc)
