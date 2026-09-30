@@ -143,3 +143,45 @@ def test_retry_all_only_touches_jobs_still_under_retry_budget(tmp_path):
 
     rfj.retry_all(con, "F002", fn_factory, max_retry=3)
     assert calls == ["BBB"]  # AAA (exhausted) was skipped
+
+
+def test_permanent_error_immediately_routes_to_dead_letter(tmp_path):
+    db_path = tmp_path / "test_vesta.duckdb"
+    con = db.bootstrap_schema(db_path)
+
+    def unrecoverable() -> None:
+        raise rfj.PermanentError("HTTP 404: Ticker permanently delisted")
+
+    with pytest.raises(rfj.PermanentError):
+        rfj.run_job(con, "F001", "DELISTED_TICKER", unrecoverable)
+
+    row = con.execute(
+        "SELECT status, retry_count FROM meta.crawl_progress WHERE dataset_name = 'F001' AND symbol = 'DELISTED_TICKER'"
+    ).fetchone()
+    assert row[0] == "dead_letter"
+
+    # Must NOT be retryable
+    retryable = rfj.get_retryable_jobs(con, max_retry=3)
+    assert ("F001", "DELISTED_TICKER", row[1]) not in retryable
+
+    # Must appear in get_dead_letter_jobs()
+    dlq = rfj.get_dead_letter_jobs(con, max_retry=3)
+    assert any(j[0] == "F001" and j[1] == "DELISTED_TICKER" and j[3] == "dead_letter" for j in dlq)
+
+
+def test_classify_error_distinguishes_transient_vs_permanent():
+    class DummyHTTPResponse:
+        def __init__(self, code):
+            self.status_code = code
+
+    class DummyHTTPError(Exception):
+        def __init__(self, code):
+            self.response = DummyHTTPResponse(code)
+
+    assert rfj.classify_error(rfj.PermanentError("delisted")) == "PERMANENT"
+    assert rfj.classify_error(DummyHTTPError(404)) == "PERMANENT"
+    assert rfj.classify_error(DummyHTTPError(410)) == "PERMANENT"
+    assert rfj.classify_error(DummyHTTPError(429)) == "TRANSIENT"
+    assert rfj.classify_error(DummyHTTPError(503)) == "TRANSIENT"
+    assert rfj.classify_error(ConnectionError("network reset")) == "TRANSIENT"
+    assert rfj.classify_error(TimeoutError("socket timeout")) == "TRANSIENT"

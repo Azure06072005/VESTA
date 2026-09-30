@@ -9,9 +9,10 @@ event-type-specific columns preserved in detail_json.
 """
 from __future__ import annotations
 
+import datetime as dt
 import json
-import sys
 import pathlib
+import sys
 
 import pandas as pd
 import pytest
@@ -111,3 +112,58 @@ def test_write_events_rejects_schema_mismatch(tmp_path):
     bad_df = pd.DataFrame({"symbol": ["FPT"]})
     with pytest.raises(ValueError, match="missing columns"):
         corporate_events.write_events(bad_df, con)
+
+
+def test_vietstock_direct_schema_and_payout_delay_calculation(tmp_path):
+    """Verifies that Vietstock direct payload computes payout_delay_days accurately."""
+    raw_vietstock_df = pd.DataFrame([
+        {
+            "EventID": 226698,
+            "EventTypeID": 1,
+            "ChannelID": 13,
+            "Code": "FPT",
+            "Name": "Trả cổ tức bằng tiền mặt",
+            "Note": "Trả cổ tức năm 2025 bằng tiền, 1,000 đồng/CP",
+            "GDKHQDate": "/Date(1779901200000)/",   # 2026-05-28
+            "NDKCCDate": "/Date(1780074000000)/",   # 2026-05-29
+            "Time": "/Date(1781024400000)/",        # 2026-06-10
+            "Title": "FPT: Chi trả cổ tức năm 2025 bằng tiền",
+        },
+        {
+            "EventID": 226699,
+            "EventTypeID": 5,
+            "ChannelID": 0,
+            "Code": "FPT",
+            "Name": "Đại hội cổ đông",
+            "Note": "Tổ chức ĐHĐCĐ thường niên năm 2026",
+            "GDKHQDate": "/Date(1773075600000)/",   # 2026-03-09
+            "NDKCCDate": "/Date(1773162000000)/",   # 2026-03-10
+            "Time": None,
+            "Title": "FPT: Tổ chức ĐHĐCĐ thường niên năm 2026",
+        }
+    ])
+
+    norm = corporate_events.normalize_events(raw_vietstock_df, "FPT")
+    assert len(norm) == 2
+    assert "payout_delay_days" in norm.columns
+
+    # Check cash dividend item
+    div_item = norm[norm["event_id"] == "226698"].iloc[0]
+    assert div_item["event_type"] == "DIVIDEND"
+    assert div_item["event_date"] == dt.date(2026, 5, 28)
+    assert div_item["payout_delay_days"] == 13  # 2026-06-10 minus 2026-05-28
+
+    # Check AGM item (no payout date)
+    agm_item = norm[norm["event_id"] == "226699"].iloc[0]
+    assert agm_item["event_type"] == "SHAREHOLDER_MEETING"
+    assert pd.isna(agm_item["payout_delay_days"])
+
+    # Test database persistence with extended column
+    db_path = tmp_path / "test_extended.duckdb"
+    con = db.bootstrap_schema(db_path)
+    written = corporate_events.write_events(norm, con)
+    assert written == 2
+
+    # Verify DuckDB table has payout_delay_days column
+    row = con.execute("SELECT payout_delay_days FROM core.corporate_events WHERE event_id = '226698'").fetchone()
+    assert row[0] == 13

@@ -28,8 +28,7 @@ import pandas as pd
 import requests
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from etl import db
-from etl.retry_failed_jobs import EmptyResultError
+from etl.vas_dictionary import normalize_financial_dict
 
 logger = logging.getLogger(__name__)
 
@@ -193,6 +192,9 @@ class CafeFFinanceEnhancer:
             if not metrics:
                 continue
 
+            # Chuẩn hóa bổ sung key tiếng Anh tương ứng với chuẩn vnstock_data & downstream features
+            normalized_metrics = normalize_financial_dict(metrics, report_type)
+
             avail_at = dt.datetime.combine(
                 p_date + dt.timedelta(days=DISCLOSURE_LAG_DAYS),
                 dt.time(0, 0, 0),
@@ -203,7 +205,7 @@ class CafeFFinanceEnhancer:
                 "report_type": report_type,
                 "period_end": p_date,
                 "available_at": avail_at,
-                "data_json": json.dumps(metrics, ensure_ascii=False),
+                "data_json": json.dumps(normalized_metrics, ensure_ascii=False),
                 "fetched_at": now,
                 "source": "cafef",
             })

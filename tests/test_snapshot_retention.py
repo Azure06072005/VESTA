@@ -131,3 +131,95 @@ def test_run_accepts_a_single_string_symbol(tmp_path, monkeypatch):
     n = snapshots.run("FPT")
     assert captured["symbols"] == ["FPT"]
     assert n == 2
+
+
+def test_fetch_raw_vietcap_mock(monkeypatch):
+    sample_api_response = [
+        {
+            "listingInfo": {"code": "VN000000FPT1", "symbol": "FPT", "refPrice": 65300, "ceiling": 69800, "floor": 60800},
+            "matchPrice": {"matchPrice": 64700, "accumulatedVolume": 3543900, "foreignBuyVolume": 228305, "foreignSellVolume": 551080},
+            "bidAsk": {
+                "bidPrices": [{"price": 64700, "volume": 120700}],
+                "askPrices": [{"price": 64800, "volume": 27500}],
+            },
+        }
+    ]
+
+    class FakeResponse:
+        def read(self):
+            return json.dumps(sample_api_response).encode("utf-8")
+        def __enter__(self):
+            return self
+        def __exit__(self, *args):
+            pass
+
+    monkeypatch.setattr(snapshots.urllib.request, "urlopen", lambda *a, **kw: FakeResponse())
+
+    df = snapshots.fetch_raw_vietcap(["FPT"])
+    assert isinstance(df.columns, pd.MultiIndex)
+    assert ("listing", "symbol") in df.columns
+    assert df[("listing", "symbol")].iloc[0] == "FPT"
+    assert df[("match", "match_price")].iloc[0] == 64700
+    assert df[("bid_ask", "bid_1_price")].iloc[0] == 64700
+
+
+def test_fetch_raw_cafef_fallback_mock(monkeypatch):
+    sample_cafef = {
+        "FPT": {
+            "Symbol": "FPT",
+            "Price": 64.7,
+            "RefPrice": 65.3,
+            "CeilingPrice": 69.8,
+            "FloorPrice": 60.8,
+            "Volume": 3500000,
+            "BidPrice01": 64.5,
+            "BidVolume01": 300000,
+            "AskPrice01": 65.0,
+            "AskVolume01": 15000,
+            "ForeignBuyVolume": 200000,
+            "ForeignSellVolume": 500000,
+        }
+    }
+
+    class FakeResponse:
+        def read(self):
+            return json.dumps(sample_cafef).encode("utf-8")
+        def __enter__(self):
+            return self
+        def __exit__(self, *args):
+            pass
+
+    monkeypatch.setattr(snapshots.urllib.request, "urlopen", lambda *a, **kw: FakeResponse())
+
+    df = snapshots.fetch_raw_cafef(["FPT"])
+    assert isinstance(df.columns, pd.MultiIndex)
+    assert ("listing", "symbol") in df.columns
+    assert df[("listing", "symbol")].iloc[0] == "FPT"
+    assert df[("match", "match_price")].iloc[0] == 64700.0
+
+
+def test_fetch_valuation_snapshot_mock(monkeypatch):
+    sample_indicators = {
+        "Data": [
+            {"Code": "EPScoBan", "Value": "5.87"},
+            {"Code": "P/E", "Value": "11.03"},
+            {"Code": "Beta", "Value": "2.97"},
+            {"Code": "VonHoaThiTruong", "Value": "122,008.61"},
+        ]
+    }
+
+    class FakeResponse:
+        def read(self):
+            return json.dumps(sample_indicators).encode("utf-8")
+        def __enter__(self):
+            return self
+        def __exit__(self, *args):
+            pass
+
+    monkeypatch.setattr(snapshots.urllib.request, "urlopen", lambda *a, **kw: FakeResponse())
+
+    val = snapshots.fetch_valuation_snapshot("FPT")
+    assert val["symbol"] == "FPT"
+    assert val["EPScoBan"] == "5.87"
+    assert val["P/E"] == "11.03"
+    assert val["VonHoaThiTruong"] == "122,008.61"

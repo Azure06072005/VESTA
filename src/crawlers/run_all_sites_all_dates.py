@@ -37,15 +37,8 @@ def run_tinnhanhchungkhoan(start_year: int = 2000, end_year: int = 2026, max_art
 
 
 def run_tuoitre(start_page: int = 1881, max_pages: int = 1500, zones: list[int] = [11, 89]) -> int:
-    from crawlers.tuoitre_crawler import run_tuoitre_crawler
-    logger.info(f"=== [2/4] Khởi động Báo Tuổi Trẻ Deep Crawl (Trang {start_page}+, Zones {zones}) ===")
-    res = run_tuoitre_crawler(
-        mode="deep",
-        start_page=start_page,
-        max_pages=max_pages,
-        zones=zones,
-    )
-    return res.get("total_written", 0)
+    logger.warning("[POLICY] Bỏ qua Báo Tuổi Trẻ: Nguồn này đã bị DỪNG VĨNH VIỄN theo Ethical Crawling Policy (403 Forbidden / Anti-bot).")
+    return 0
 
 
 def run_thoibaonganhang(max_pages: int = 200) -> int:

@@ -163,3 +163,130 @@ def test_write_adjustment_events_is_idempotent(tmp_path):
         "SELECT COUNT(*) FROM core.price_adjustment_events WHERE symbol = 'FPT'"
     ).fetchone()[0]
     assert row_count == 1  # but the DB-level idempotency guard prevents a real duplicate row
+
+
+# =============================================================================
+# F002 RECOMMENDATION TESTS: SSC FORMULA, CAF TIMELINE, DUAL-MODE VIEW
+# =============================================================================
+
+def test_compute_ssc_ex_price_pure_cash():
+    """Kiểm tra công thức cổ tức tiền mặt: P_close=100, D=5 -> P_ex=95, f=0.95."""
+    p_ex, f = adjustments.compute_ssc_ex_price(p_close=100.0, cash_dividend=5.0)
+    assert p_ex == pytest.approx(95.0)
+    assert f == pytest.approx(0.95)
+
+
+def test_compute_ssc_ex_price_pure_stock():
+    """Kiểm tra công thức thưởng cổ phiếu: P_close=100, alpha=0.25 -> P_ex=80, f=0.80."""
+    p_ex, f = adjustments.compute_ssc_ex_price(p_close=100.0, stock_ratio=0.25)
+    assert p_ex == pytest.approx(80.0)
+    assert f == pytest.approx(0.80)
+
+
+def test_compute_ssc_ex_price_combined():
+    """Kiểm tra công thức gộp: P_close=100, D=2, alpha=0.20 -> P_ex=(100-2)/1.2=81.6667, f=0.816667."""
+    p_ex, f = adjustments.compute_ssc_ex_price(p_close=100.0, cash_dividend=2.0, stock_ratio=0.20)
+    assert p_ex == pytest.approx(98.0 / 1.2)
+    assert f == pytest.approx((98.0 / 1.2) / 100.0)
+
+
+def test_compute_ssc_ex_price_rights_issue():
+    """Kiểm tra quyền mua ưu đãi: P_close=40, beta=0.5, P_add=10 -> P_ex=(40+5)/1.5=30, f=0.75."""
+    p_ex, f = adjustments.compute_ssc_ex_price(
+        p_close=40.0,
+        rights_ratio=0.5,
+        rights_price=10.0,
+    )
+    assert p_ex == pytest.approx(30.0)
+    assert f == pytest.approx(0.75)
+
+
+def test_compute_symbol_adjustments_timeline_intervals():
+    """Kiểm tra sinh chuỗi CAF và khoảng timeline không chồng lấn [start_date, end_date)."""
+    ohlcv = pd.DataFrame({
+        "date": [dt.date(2025, 1, 1), dt.date(2025, 6, 1), dt.date(2025, 12, 1)],
+        "close": [100.0, 100.0, 100.0],
+    })
+    events = pd.DataFrame([
+        {
+            "event_id": "E1",
+            "event_type": "DIVIDEND",
+            "detail_json": json.dumps({"exright_date": "2025-06-02", "event_code": "DIV", "value_per_share": 10000.0}), # D=10.0 nghìn
+        },
+        {
+            "event_id": "E2",
+            "event_type": "DIVIDEND",
+            "detail_json": json.dumps({"exright_date": "2025-10-01", "event_code": "ISS", "exercise_ratio": 0.25}),      # alpha=0.25
+        },
+    ])
+
+    df_adj, df_time = adjustments.compute_symbol_adjustments("TEST", events, ohlcv)
+    assert len(df_adj) == 2
+    # f1 = (100 - 10)/100 = 0.90
+    # f2 = 1 / 1.25 = 0.80
+    assert df_adj.iloc[0]["multiplier"] == pytest.approx(0.90)
+    assert df_adj.iloc[1]["multiplier"] == pytest.approx(0.80)
+    # CAF dồn: sự kiện 1 (cũ hơn) có CAF = 0.90 * 0.80 = 0.72; sự kiện 2 có CAF = 0.80
+    assert df_adj.iloc[0]["cumulative_adjustment_factor"] == pytest.approx(0.72)
+    assert df_adj.iloc[1]["cumulative_adjustment_factor"] == pytest.approx(0.80)
+
+    # Timeline: 3 khoảng:
+    # 1: [1990-01-01, 2025-06-02) -> caf = 0.72
+    # 2: [2025-06-02, 2025-10-01) -> caf = 0.80
+    # 3: [2025-10-01, 2099-12-31) -> caf = 1.00
+    assert len(df_time) == 3
+    assert df_time.iloc[0]["caf"] == pytest.approx(0.72)
+    assert df_time.iloc[1]["caf"] == pytest.approx(0.80)
+    assert df_time.iloc[2]["caf"] == pytest.approx(1.00)
+
+
+def test_v_market_ohlcv_dual_query(tmp_path):
+    """Kiểm tra view core.v_market_ohlcv_dual tính đúng giá thô và giá điều chỉnh song song."""
+    db_path = tmp_path / "test_dual.duckdb"
+    con = db.bootstrap_schema(db_path)
+
+    # Nạp nến mẫu vào core.market_ohlcv_daily
+    con.execute("""
+        INSERT INTO core.market_ohlcv_daily (symbol, date, open, high, low, close, volume, fetched_at)
+        VALUES 
+            ('TEST', DATE '2025-01-02', 72.0, 75.0, 70.0, 72.0, 1000000, CURRENT_TIMESTAMP),
+            ('TEST', DATE '2025-07-01', 80.0, 82.0, 78.0, 80.0, 1000000, CURRENT_TIMESTAMP),
+            ('TEST', DATE '2025-11-01', 100.0, 102.0, 99.0, 100.0, 1000000, CURRENT_TIMESTAMP);
+    """)
+
+    # Nạp timeline vào core.symbol_caf_timeline
+    con.execute("""
+        INSERT INTO core.symbol_caf_timeline (symbol, start_date, end_date, caf)
+        VALUES 
+            ('TEST', DATE '1990-01-01', DATE '2025-06-02', 0.72),
+            ('TEST', DATE '2025-06-02', DATE '2025-10-01', 0.80),
+            ('TEST', DATE '2025-10-01', DATE '2099-12-31', 1.00);
+    """)
+
+    res = con.execute("""
+        SELECT date, adj_close, caf, raw_close, adj_volume, raw_volume
+        FROM core.v_market_ohlcv_dual
+        WHERE symbol = 'TEST'
+        ORDER BY date
+    """).fetchall()
+
+    assert len(res) == 3
+    # Row 1 (2025-01-02): caf=0.72 -> raw_close = 72.0 / 0.72 = 100.0, raw_volume = 1,000,000 * 0.72 = 720,000
+    assert res[0][1] == pytest.approx(72.0)
+    assert res[0][2] == pytest.approx(0.72)
+    assert res[0][3] == pytest.approx(100.0)
+    assert res[0][5] == pytest.approx(720000)
+
+    # Row 2 (2025-07-01): caf=0.80 -> raw_close = 80.0 / 0.80 = 100.0, raw_volume = 800,000
+    assert res[1][1] == pytest.approx(80.0)
+    assert res[1][2] == pytest.approx(0.80)
+    assert res[1][3] == pytest.approx(100.0)
+    assert res[1][5] == pytest.approx(800000)
+
+    # Row 3 (2025-11-01): caf=1.00 -> raw_close = 100.0, raw_volume = 1,000,000
+    assert res[2][1] == pytest.approx(100.0)
+    assert res[2][2] == pytest.approx(1.00)
+    assert res[2][3] == pytest.approx(100.0)
+    assert res[2][5] == pytest.approx(1000000)
+
+    con.close()

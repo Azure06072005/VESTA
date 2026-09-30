@@ -1,0 +1,159 @@
+{
+  "core.market_ohlcv_daily": {
+    "keys": [
+      "symbol",
+      "date"
+    ],
+    "rows_vesta": 5178766,
+    "rows_snapshot": 2983100,
+    "duplicates_in_vesta": 0,
+    "duplicates_in_snapshot": 0,
+    "missing_in_snapshot_from_vesta": 2202889
+  },
+  "staging.market_ohlcv_daily": {
+    "keys": [
+      "symbol",
+      "date"
+    ],
+    "rows_vesta": 4831222,
+    "rows_snapshot": 2696177,
+    "duplicates_in_vesta": 0,
+    "duplicates_in_snapshot": 0,
+    "missing_in_snapshot_from_vesta": 2151431
+  },
+  "core.market_ohlcv_1m": {
+    "keys": [
+      "symbol",
+      "time"
+    ],
+    "rows_vesta": 248191,
+    "rows_snapshot": 6807406,
+    "duplicates_in_vesta": 0,
+    "duplicates_in_snapshot": 0,
+    "missing_in_snapshot_from_vesta": 1008
+  },
+  "core.market_foreign_flow_daily": {
+    "keys": [
+      "symbol",
+      "date"
+    ],
+    "rows_vesta": 4839720,
+    "rows_snapshot": 4839720,
+    "duplicates_in_vesta": 0,
+    "duplicates_in_snapshot": 0,
+    "missing_in_snapshot_from_vesta": 0
+  },
+  "core.market_index_daily": {
+    "keys": [
+      "index_code",
+      "date"
+    ],
+    "rows_vesta": 206313,
+    "rows_snapshot": 206313,
+    "duplicates_in_vesta": 0,
+    "duplicates_in_snapshot": 0,
+    "missing_in_snapshot_from_vesta": 0
+  },
+  "core.corporate_events": {
+    "keys": [
+      "symbol",
+      "event_date",
+      "event_type"
+    ],
+    "rows_vesta": 40277,
+    "rows_snapshot": 40277,
+    "duplicates_in_vesta": 3488,
+    "duplicates_in_snapshot": 3488,
+    "missing_in_snapshot_from_vesta": 0
+  },
+  "core.fundamentals": {
+    "keys": [
+      "symbol",
+      "report_type",
+      "period_end"
+    ],
+    "rows_vesta": 179159,
+    "rows_snapshot": 189653,
+    "duplicates_in_vesta": 21202,
+    "duplicates_in_snapshot": 21882,
+    "missing_in_snapshot_from_vesta": 0
+  },
+  "staging.fundamentals": {
+    "keys": [
+      "symbol",
+      "report_type",
+      "period_end"
+    ],
+    "rows_vesta": 179599,
+    "rows_snapshot": 190093,
+    "duplicates_in_vesta": 21268,
+    "duplicates_in_snapshot": 21944,
+    "missing_in_snapshot_from_vesta": 0
+  },
+  "core.news": {
+    "keys": [
+      "source_url"
+    ],
+    "rows_vesta": 669564,
+    "rows_snapshot": 661627,
+    "duplicates_in_vesta": 0,
+    "duplicates_in_snapshot": 0,
+    "missing_in_snapshot_from_vesta": 7937
+  },
+  "staging.news": {
+    "keys": [
+      "source_url"
+    ],
+    "rows_vesta": 669457,
+    "rows_snapshot": 661520,
+    "duplicates_in_vesta": 0,
+    "duplicates_in_snapshot": 0,
+    "missing_in_snapshot_from_vesta": 7937
+  },
+  "core.cafef_disclosures": {
+    "keys": [
+      "symbol",
+      "published_at",
+      "title"
+    ],
+    "rows_vesta": 60,
+    "rows_snapshot": 24600,
+    "duplicates_in_vesta": "Err: Binder Error: Referenced column \"title\" not found in FROM clause!\nCandidate bindings: \"file_url\", \"file_name\", \"content\", \"quarter\", \"trade_center_id\"\n\nLINE 5:                 GROUP BY symbol, published_at, title \n                                                       ^",
+    "duplicates_in_snapshot": "Err: Binder Error: Referenced column \"title\" not found in FROM clause!\nCandidate bindings: \"file_url\", \"file_name\", \"content\", \"quarter\", \"trade_center_id\"\n\nLINE 5:                 GROUP BY symbol, published_at, title \n                                                       ^",
+    "missing_in_snapshot_from_vesta": "Err: Binder Error: Table \"v\" does not have a column named \"title\"\n\nCandidate bindings: : \"file_name\", \"file_url\"\n\nLINE 4: ... v.symbol = s.symbol AND v.published_at = s.published_at AND v.title = s.title\n                                                                        ^"
+  },
+  "core.stock_research_reports": {
+    "keys": [
+      "report_id"
+    ],
+    "rows_vesta": 688,
+    "rows_snapshot": 777,
+    "duplicates_in_vesta": 0,
+    "duplicates_in_snapshot": 0,
+    "missing_in_snapshot_from_vesta": 0
+  },
+  "meta.crawl_progress": {
+    "keys": [
+      "dataset_name",
+      "symbol"
+    ],
+    "rows_vesta": 20031,
+    "rows_snapshot": 26592,
+    "duplicates_in_vesta": 0,
+    "duplicates_in_snapshot": 0,
+    "missing_in_snapshot_from_vesta": 536
+  },
+  "core.pit_events": {
+    "keys": [
+      "symbol",
+      "available_at",
+      "event_type",
+      "event_id"
+    ],
+    "rows_vesta": 658182,
+    "rows_snapshot": 658182,
+    "duplicates_in_vesta": "Err: Binder Error: Referenced column \"available_at\" not found in FROM clause!\nCandidate bindings: \"published_at\", \"price_t1\", \"price_t5\", \"price_t30\", \"fundamentals_as_of\"\n\nLINE 5:                 GROUP BY symbol, available_at, event_type, event_id \n                                         ^",
+    "duplicates_in_snapshot": "Err: Binder Error: Referenced column \"available_at\" not found in FROM clause!\nCandidate bindings: \"published_at\", \"price_t1\", \"price_t5\", \"price_t30\", \"fundamentals_as_of\"\n\nLINE 5:                 GROUP BY symbol, available_at, event_type, event_id \n                                         ^",
+    "missing_in_snapshot_from_vesta": "Err: Binder Error: Table \"v\" does not have a column named \"available_at\"\n\nCandidate bindings: : \"built_at\"\n\nLINE 4: ...        LEFT JOIN core.pit_events s ON v.symbol = s.symbol AND v.available_at = s.available_at AND v.event_type = s.event_...\n                                                                          ^"
+  }
+}

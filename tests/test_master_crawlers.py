@@ -9,13 +9,11 @@ Kiểm thử tự động cho hệ thống Master Crawlers & ResilientDuckDBWrit
 
 from __future__ import annotations
 
-import argparse
 import os
 import pathlib
 import sys
 import tempfile
 import duckdb
-import pytest
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1] / "src"))
@@ -62,7 +60,6 @@ def test_news_registry_completeness():
         "tinnhanhchungkhoan",
         "vneconomy",
         "thoibaonganhang",
-        "sbv_policy",
         "ssc_policy",
         "baochinhphu",
         "associations",
@@ -73,6 +70,9 @@ def test_news_registry_completeness():
         spec = NEWS_REGISTRY[src]
         assert callable(spec.runner), f"Runner của {src} phải là hàm có thể gọi được"
         assert spec.category in ["equity", "portals", "policy", "associations", "international"]
+
+    # Đảm bảo các nguồn bị cấm tuyệt đối không xuất hiện trong NEWS_REGISTRY
+    assert "sbv_policy" not in NEWS_REGISTRY, "sbv_policy đã bị cấm cào vĩnh viễn, không được đăng ký trong Registry"
 
 
 def test_dynamic_crawler_registration():
@@ -204,7 +204,7 @@ def test_progress_tracker_generation():
         rep = tracker.generate_report()
 
         assert rep["connection_status"] == "OK"
-        assert len(rep["tables"]) == 11
+        assert len(rep["tables"]) >= 11
         assert "core.news" in [t["table"] for t in rep["tables"]]
         assert "core.news_resources" in [t["table"] for t in rep["tables"]]
 

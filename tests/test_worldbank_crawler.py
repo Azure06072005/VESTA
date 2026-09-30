@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import duckdb
-import pytest
 
 from src.crawlers.worldbank_crawler import (
     transform_wb_record,

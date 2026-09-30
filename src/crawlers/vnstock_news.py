@@ -193,7 +193,7 @@ def write_news(df: pd.DataFrame, con: "duckdb.DuckDBPyConnection | None" = None)
     if missing:
         raise ValueError(f"News DataFrame missing columns: {missing}")
 
-    con = con or db.bootstrap_schema()
+    con = con or (db.connect_news() if hasattr(db, "connect_news") else db.bootstrap_schema())
     urls = df["source_url"].unique().tolist()
 
     cols_sql = ", ".join(NEWS_COLUMNS)

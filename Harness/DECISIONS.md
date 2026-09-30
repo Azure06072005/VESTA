@@ -2,6 +2,99 @@
 
 Newest at the top. Don't reverse any of these without a new, stated reason.
 
+## 2026-09-29: Unified News Lakehouse Schema (Merged core.news, core.news_resources, and core.macro_policy)
+- Context & Motivation: The news database (`db/vesta_news.duckdb`) historically contained 3 separate tables: `core.news` (670,409 rows with mandatory `symbol`), `core.news_resources` (478,599 rows of macro/industry media), and `core.macro_policy` (847 policy circulars, with 64.6% URL overlap with `news_resources`). This tri-table schema introduced fragmentation, redundant union queries for NLP models, and maintenance overhead across crawlers.
+- Architectural Resolution & Implementation in `src/etl/unify_news_schema.py`:
+  1. **Unified Schema on `core.news`**:
+     - Standardized on 14 canonical columns: `source_url` (VARCHAR PRIMARY KEY), `news_type` (VARCHAR NOT NULL: 'EQUITY_STOCK', 'MACRO_POLICY', 'FINANCIAL_MEDIA', 'INDUSTRY_ASSOCIATION', 'GENERAL_NEWS'), `symbol` (VARCHAR NULLABLE; populated for stock news, NULL for macro), `source`, `issuing_body`, `doc_type`, `doc_number`, `published_at`, `available_at`, `headline`, `summary`, `body`, `duplicate_of`, `fetched_at`.
+     - Full deduplication on `source_url` consolidated all 3 tables into **1,149,304 unique articles** with 0 data loss.
+  2. **Zero Breaking Changes via Backward-Compatible SQL Views**:
+     - `core.news_resources`: View trỏ vào `core.news WHERE symbol IS NULL` (478,895 bài viết).
+     - `core.macro_policy`: View trỏ vào `core.news WHERE news_type = 'MACRO_POLICY' OR (symbol IS NULL AND source IN ('baochinhphu', 'ssc', 'mof', 'sbv', 'gdt', 'moit', 'thoibaonganhang'))` (56,970 bài viết).
+     - `core.v_stock_news`: View trỏ vào `core.news WHERE symbol IS NOT NULL` (670,409 bài viết).
+     - `core.v_macro_news`: View trỏ vào `core.news WHERE symbol IS NULL` (478,895 bài viết).
+  3. **Verification & Regression Testing**:
+     - Migrated successfully in 44.23s.
+     - Confirmed 41/41 unit tests pass (`test_vnstock_news_crawler.py`, `test_cafef_crawler.py`, `test_sector_news_matcher.py`).
+     - Confirmed 13/13 unit tests pass (`test_pit_join.py`).
+     - Schema synchronized in `src/crawlers/db_writer.py`.
+
+## 2026-09-28: F007b Restructured to Direct REST API Architecture (Zero vnstock / Zero API Key)
+- Context & Motivation: F007b originally tracked capabilities of `vnstock_data` (Sponsor package: `Insights`, `Analytics.valuation`, `Macro`). Reverse engineering of `vnstock_data` confirmed that it merely wraps public endpoints from securities broker research gateways. Relying on `vnstock_data` introduced licensing fragility, token checks, and unneeded external package lock-in.
+- Architectural Resolution & Implementation in `src/crawlers/market_insights.py`:
+  1. **Vietcap IQ Direct Screener & Criteria (`iq.vietcap.com.vn`)**:
+     - Direct `POST https://iq.vietcap.com.vn/api/iq-insight-service/v1/screening/paging` with `pageSize=1600`. Scans all 1,522 equities on HSX, HNX, UPCOM in 0.90s with 24-51 quantitative factors (P/E, P/B, ROE, RS_3M, MACD, RSI, ADX, Trend).
+     - Direct `GET https://iq.vietcap.com.vn/api/iq-insight-service/v1/screening/criteria` for standardized factor taxonomy.
+  2. **VNDIRECT FINFO Direct Rankings & Historical Valuation (`api-finfo.vndirect.com.vn/v4`)**:
+     - Direct `GET https://api-finfo.vndirect.com.vn/v4/top_stocks` for Gainers, Losers, Value, Volume Spikes, and Block Deal Spikes.
+     - Direct `GET https://api-finfo.vndirect.com.vn/v4/foreigns` for Daily Foreign Net Buy/Sell Top lists.
+     - Direct `GET https://api-finfo.vndirect.com.vn/v4/ratios` for historical index valuation series (P/E, P/B) for VN-Index, VN30, HNX.
+  3. **ASEAN Securities Research Gateway (`asean-apigw.aseansc.com.vn/pbapi/api`)**:
+     - Direct `GET .../mktBreadth?indexCode=HOSE` for 740+ days of market breadth (% stocks above MA20, MA50, MA200, valuation bands).
+     - Direct `GET .../aseanfeargreed?indexCode=HOSE` for real-time Fear & Greed index score, advances/declines, MFI, RSI.
+     - Direct `GET .../macro/{indicator}` for 12 macroeconomic series (GDP, CPI, Import/Export XM, Interbank Rate, USD/VND Exchange Rate, FDI, Budget, Debt, OMO, Credit, Liquidity).
+- Verification & State:
+  - 11/11 tests pass in `tests/test_market_insights.py` in 0.56s.
+  - Live execution verified in `scratch/verify_market_insights_live.py`: Screener scanned 1,522 stocks in 0.906s, VNDIRECT gainers in 0.345s, historical P/E (latest 2026-09-25: 12.32) in 0.447s, ASEAN breadth in 0.281s, fear/greed in 0.121s, and GDP in 0.127s.
+  - Zero vnstock dependency, zero API key requirement. State: `passing`.
+
+## 2026-09-27: F007 Restructured to Direct Vietcap REST API & CafeF Fallback (Zero vnstock / Zero API Key)
+- Context & Motivation: F007 (Realtime Quote Snapshot & Valuation / Analytics) previously relied on `vnstock` / `vnstock_data` and required a `VNSTOCK_API_KEY`. Reverse engineering of the vnstock codebase proved that `vnstock` is merely a client wrapper around open securities broker endpoints. Furthermore, `vnstock_data` introduced unnecessary licensing overhead and token refresh risks.
+- Architectural Resolution & Upgrades in `src/crawlers/snapshots.py`:
+  1. **Primary Gold Standard: Direct Vietcap REST API**:
+     - Direct `POST https://trading.vietcap.com.vn/api/price/symbols/getList` with payload `{"symbols": [...]}`.
+     - Preserves the entire 82+ field MultiIndex schema across 3 hierarchy tiers (`listing`, `bid_ask`, `match`).
+     - Level 2 Depth: Full Top 3 Bid/Ask price and volume (`bid_price_1..3`, `bid_vol_1..3`, `ask_price_1..3`, `ask_vol_1..3`).
+     - 24/7 Availability: Unlike KBS or VNDIRECT which clear quotes outside trading hours, Vietcap permanently retains the latest closing snapshot with full depth over weekends and nights.
+  2. **Secondary Fallback: Direct CafeF Realtime Prices**:
+     - Direct `GET https://cafef.vn/RealtimePricesHeader.ashx?symbols=...` as an automatic fallback if Vietcap is unreachable.
+  3. **Direct Valuation Multiples: CafeF ChiSoTaiChinh**:
+     - Direct `GET https://cafef.vn/ChiSoTaiChinh.ashx?symbol=...` for instant, latency-free extraction of `P/E`, `P/B`, `EPS`, and `Market Cap`.
+  4. **Strict Schema Preservation & DuckDB Retention**:
+     - Maintains 100% backward-compatible storage in `staging.realtime_quote_snapshot` and `core.realtime_quote_snapshot`.
+     - Preserves immutable append-only snapshot audit trail with ISO UTC `snapshot_at` timestamps.
+- Testing & Verification:
+  - 11/11 tests pass in `tests/test_snapshot_retention.py` in 1.32s (including mock tests for Vietcap Direct, CafeF Fallback, and CafeF Valuation).
+  - Live execution verified on `['FPT', 'VNM', 'HPG', 'TCB', 'SSI']`: Successfully captured 5 snapshot rows with 106 JSON fields into DuckDB without errors.
+  - Zero vnstock and zero API Key dependencies remaining.
+
+## 2026-09-27: F007 / F007b Tiered Retention Recommendations Formally Routed to ETL Maintenance
+- Context & Motivation: Recommendations for F007 (realtime quote snapshots) and F007b (intraday order book depth) proposed implementing a tiered retention policy: retaining full granular tick/1m snapshots for 90 days, then downsampling older history to daily closing summaries for long-term historical storage.
+- Architectural Resolution & Decision:
+  1. **Formal Separation of Concerns**: Realtime quote and order book depth retention is classified as an **ETL Pipeline Maintenance & Database Optimization** task rather than a crawler feature concern.
+  2. **Storage Tiering Architecture**:
+     - **Hot Tier (0 – 90 days)**: Full raw tick and 1-minute order book depth snapshots are retained uncompressed in `vesta_intraday_1m.duckdb` to support microstructure feature extraction, institutional flow detection, and execution slippage modeling.
+     - **Cold Tier (> 90 days)**: Scheduled maintenance downsamples granular records into compact daily summaries (OHLCV, VWAP, average bid/ask order book imbalance, and total traded depth), preventing uncontrolled multi-gigabyte DuckDB growth.
+  3. **Documentation Alignment**: Formally updated in `Harness/feature_list.json` under F007 and F007b.
+
+## 2026-09-27: F006 Upgraded to Direct Vietstock Events REST API & Quantitative Payout Delay Metric
+- Context & Reason: User identified critical analytical limitations in CafeF corporate events (reliance on un-OCRed scanned PDF attachments). In accordance with user guidance, evaluated network traffic in `scratch/har/vietstock/lich_su_kien.har` and transitioned corporate event ingestion to Vietstock's direct API.
+- Resolution & Upgrades in `src/crawlers/corporate_events.py`:
+  1. **Direct Public REST API (Zero vnstock / Zero API Key)**: Direct POST calls to `https://finance.vietstock.vn/data/eventstypedata` with dynamic session cookie & `__RequestVerificationToken`. Completely removes all dependency on `vnstock`/`vnstock_data` and proprietary API keys.
+  2. **100% Clean Structured JSON Schema**: Extracts event types (`EventTypeID`), clear title (`Name`), terms (`Note`), ex-rights date (`GDKHQDate`), record date (`NDKCCDate`), actual payment date (`Time`), and full un-OCRed announcement text (`Content`).
+  3. **Timezone Accuracy (UTC+7)**: Properly parses Vietstock timestamps (`/Date(...)`) using Vietnam local time (`dt.timezone(dt.timedelta(hours=7))`), preventing 1-day backward shift bugs caused by UTC parsing.
+  4. **Quantitative Payout Delay Metric (`payout_delay_days`)**: Added column to quantify corporate liquidity squeeze risk: `payout_delay_days = (payment_date - anchor_date).days` (measuring elapsed days between ex-date/record-date and actual cash disbursement).
+  5. **Backward-Compatible Schema Migration**: `write_events()` automatically checks and runs `ALTER TABLE core.corporate_events ADD COLUMN payout_delay_days INTEGER` if missing.
+- Testing & Verification:
+  - 11/11 tests passed in `tests/test_corporate_events.py` in 0.74s.
+  - Full VN30 backfill completed: +1,088 corporate events across all 30 tickers in 79.2s.
+  - Empirical Findings on VN30: Average cash payout delay ranges from 21.6 days (VPB) to 41.7 days (STB).
+  - Production Crawler: Completed 100% full-market crawl across all 1,519 active symbols on all 3 exchanges: VN30 (+1,088 events, 30 tickers), HOSE (+12,032 events, 375 tickers, 0 errors), HNX (+9,268 events, 296 tickers, 0 errors), and UPCOM (+16,173 events, 818 tickers, 0 errors). Grand total: +38,561 structured corporate events written to core.corporate_events with payout_delay_days calculated. Zero API failures recorded.
+
+## 2026-09-27: F005 Refactored to Direct CafeF BCTC REST API & Quantitative Financial Health
+- Context & Reason: User instructed to remove all `vnstock` dependencies across the fundamental crawling pipeline (F005). The legacy `vnstock_data` implementation had two severe historical flaws: (1) `balance_sheet()` returned an empty DataFrame live, previously accepted as a permanent API gap in DECISIONS.md (2026-08-12); (2) `financial_health` (5th sub-dataset) was completely missing and unverified.
+- Resolution & Upgrades in `src/crawlers/fundamentals.py`:
+  1. **Direct Public REST API (Zero vnstock / Zero API Key)**: Direct calls to CafeF BCTC endpoints (`GetReportCDKT`, `GetReportDetail`, `GetReportLCTT`, `FinancialIndicators`). Eliminates external licensing checks, timeout failures, and vendor lock-in.
+  2. **Balance Sheet Gap Permanently Eradicated**: `GetReportCDKT` exposes up to 81 quarters (from 2006 to 2026) of full Balance Sheet data per symbol with 79 granular line items (Total Assets, Receivables, Inventories, Short/Long-term Liabilities, Equity).
+  3. **5th Dimension Activated (`financial_health`)**: Computes authentic institutional quantitative health metrics:
+     - **Piotroski F-Score (0-9 points)**: 9 fundamental criteria across Profitability, Leverage/Liquidity, and Operating Efficiency.
+     - **Altman Z-Score**: $Z = 1.2 X_1 + 1.4 X_2 + 3.3 X_3 + 0.6 X_4 + 0.999 X_5$, classified into Safe ($Z > 2.99$), Grey ($1.81 \le Z \le 2.99$), or Distress ($Z < 1.81$).
+  4. **Strict Point-In-Time (PIT) & Zero Look-Ahead Bias**: Maintains `available_at = period_end + 30 days` (Circular 96/2020/TT-BTC) and append-only revision logging for audited restatements.
+- Testing & Verification:
+  - 21/21 tests passed in `tests/test_fundamental_crawler.py` and `tests/test_fundamentals_source_fix.py`.
+  - Full crawler suite regression: 106/106 tests passed in 5.23s.
+  - Live execution verified: Successfully fetched and wrote 81 quarters of `balance_sheet` and 81 quarters of `financial_health` for FPT to DuckDB in under 2 seconds.
+
 ## 2026-09-17: Master Unified Pipeline Upgrade: Universe Mode & 6 Quantitative Modules Ingestion
 - Context & Motivation: User requested extending the data collection pipeline from hardcoded symbol subsets to supporting the entire market universe (`--all-symbols`), and formally integrating 6 advanced quantitative microstructure categories into the master crawler framework:
   1. **Level 2 Order Book Depth & OFI (`src/crawlers/order_book_depth.py`)**: Captures 3-10 bid/ask levels (`bid_price_1..3, bid_vol_1..3, ask_price_1..3, ask_vol_1..3`), tick-by-tick trades from `Market.equity(s).intraday()`, and calculates instantaneous Order Flow Imbalance (OFI) and flags Shark Market Sweeps vs passive price walls.

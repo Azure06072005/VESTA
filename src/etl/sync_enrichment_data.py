@@ -82,6 +82,24 @@ def sync_data(src_path: str = "db/test_db/vesta_test.duckdb", dst_path: str = "d
         c_rates = con_dst.execute("SELECT count(*) FROM core.macro_rates").fetchone()[0]
         logger.info(f" -> core.macro_rates sync complete: {c_rates} rows total.")
 
+        # 4. Sync price_adjustment_events
+        con_dst.execute("""
+            CREATE TABLE IF NOT EXISTS core.price_adjustment_events (
+                symbol VARCHAR NOT NULL,
+                ex_date DATE NOT NULL,
+                adjustment_type VARCHAR NOT NULL,
+                multiplier DOUBLE NOT NULL,
+                source_event_id VARCHAR NOT NULL,
+                computed_at TIMESTAMP NOT NULL,
+                PRIMARY KEY (symbol, ex_date, source_event_id)
+            );
+            INSERT INTO core.price_adjustment_events
+            SELECT * FROM src_db.core.price_adjustment_events
+            ON CONFLICT (symbol, ex_date, source_event_id) DO NOTHING;
+        """)
+        c_adj = con_dst.execute("SELECT count(*) FROM core.price_adjustment_events").fetchone()[0]
+        logger.info(f" -> core.price_adjustment_events sync complete: {c_adj} rows total.")
+
         return True
     finally:
         con_dst.close()

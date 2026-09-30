@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import datetime as dt
 import io
-import logging
 import os
 import pathlib
 import sys
@@ -20,10 +19,9 @@ import threading
 import time
 import tkinter as tk
 from tkinter import messagebox, ttk
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Optional
 
 import duckdb
-import pandas as pd
 
 # Định vị thư mục gốc dự án an toàn trong mọi trường hợp (gốc hoặc src/crawlers)
 def find_project_root() -> pathlib.Path:
@@ -43,25 +41,27 @@ if VENV_SITE.exists() and str(VENV_SITE) not in sys.path:
     sys.path.insert(1, str(VENV_SITE))
 
 try:
-    from crawlers.db_writer import DEFAULT_TARGET_DB, ResilientDuckDBWriter
-    from crawlers.track_crawling_progress import VN30_SYMBOLS
-    from crawlers.vesta_crawler_cli import (
-        CATEGORIES_REGISTRY,
-        TABLE_METADATA_SPECS,
-        get_target_symbols,
-        run_latest_all,
-    )
-    from etl import db
-except ImportError:
     from src.crawlers.db_writer import DEFAULT_TARGET_DB, ResilientDuckDBWriter
-    from src.crawlers.track_crawling_progress import VN30_SYMBOLS
     from src.crawlers.vesta_crawler_cli import (
         CATEGORIES_REGISTRY,
         TABLE_METADATA_SPECS,
         get_target_symbols,
+        run_category_news_comprehensive,
         run_latest_all,
+        run_latest_modular,
     )
     from src.etl import db
+except ImportError:
+    from crawlers.db_writer import DEFAULT_TARGET_DB, ResilientDuckDBWriter
+    from crawlers.vesta_crawler_cli import (
+        CATEGORIES_REGISTRY,
+        TABLE_METADATA_SPECS,
+        get_target_symbols,
+        run_category_news_comprehensive,
+        run_latest_all,
+        run_latest_modular,
+    )
+    from etl import db
 
 
 # =============================================================================
@@ -182,14 +182,17 @@ class VestaCrawlerApp(tk.Tk):
         title_box.pack(side="left", fill="y")
         ttk.Label(title_box, text="VESTA QUANT LAKEHOUSE — CRAWLER CONTROLLER", style="Header.TLabel").pack(anchor="w")
         db_name = os.path.basename(self.target_db)
-        self.lbl_subtitle = ttk.Label(title_box, text=f"CSDL: {db_name} | Bộ đệm: Sạch | Vnstock Sponsor Unified API | T-0: {dt.date.today()}", style="SubHeader.TLabel")
+        self.lbl_subtitle = ttk.Label(title_box, text=f"CSDL Chính: {db_name} | Bộ đệm: Khởi tạo | Vnstock Sponsor Unified API | T-0: {dt.date.today()}", style="SubHeader.TLabel")
         self.lbl_subtitle.pack(anchor="w")
 
-        self.btn_refresh = ttk.Button(header_frame, text="🔄 Làm Mới Trạng Thái", command=self.refresh_status_async, style="Primary.TButton")
+        self.btn_refresh = ttk.Button(header_frame, text="🔄 Làm Mới", command=self.refresh_status_async, style="Primary.TButton")
         self.btn_refresh.pack(side="right", pady=4)
 
-        self.btn_sync = ttk.Button(header_frame, text="⚡ Đồng Bộ Bộ Đệm", command=self.sync_buffer_async, style="Primary.TButton")
+        self.btn_sync = ttk.Button(header_frame, text="⚡ Nạp Nguyên Tử", command=self.sync_buffer_async, style="Primary.TButton")
         self.btn_sync.pack(side="right", padx=(0, 6), pady=4)
+
+        self.btn_sync_all = ttk.Button(header_frame, text="📦 Nạp Toàn Bộ Staging", command=self.sync_all_async, style="Primary.TButton")
+        self.btn_sync_all.pack(side="right", padx=(0, 6), pady=4)
 
         # 2. KHUNG CHÍNH (PanedWindow chia trên - dưới)
         main_paned = ttk.PanedWindow(self, orient="vertical")
@@ -203,7 +206,7 @@ class VestaCrawlerApp(tk.Tk):
         status_card = ttk.Frame(top_container, style="Card.TFrame", padding=10)
         status_card.pack(side="left", fill="both", expand=True, padx=(0, 8))
 
-        ttk.Label(status_card, text="📊 TÌNH TRẠNG DỮ LIỆU LAKEHOUSE (LỌC BỎ OUTLIER > HÔM NAY)", style="Section.TLabel").pack(anchor="w", pady=(0, 6))
+        ttk.Label(status_card, text="TÌNH TRẠNG DỮ LIỆU LAKEHOUSE (LỌC BỎ OUTLIER > HÔM NAY)", style="Section.TLabel").pack(anchor="w", pady=(0, 6))
 
         tree_cols = ("table", "records", "symbols", "min_date", "max_date", "status")
         self.tree_status = ttk.Treeview(status_card, columns=tree_cols, show="headings", height=11)
@@ -230,7 +233,7 @@ class VestaCrawlerApp(tk.Tk):
         self.ctrl_card = ttk.Frame(top_container, style="Card.TFrame", padding=12)
         self.ctrl_card.pack(side="right", fill="both", expand=False, ipadx=4)
 
-        ttk.Label(self.ctrl_card, text="⚙️ CẤU HÌNH & ĐIỀU PHỐI CÀO CHI TIẾT", style="Section.TLabel").pack(anchor="w", pady=(0, 6))
+        ttk.Label(self.ctrl_card, text="CẤU HÌNH & ĐIỀU PHỐI CÀO CHI TIẾT", style="Section.TLabel").pack(anchor="w", pady=(0, 6))
 
         # Chọn chế độ
         mode_box = ttk.Frame(self.ctrl_card, style="Card.TFrame")
@@ -245,6 +248,7 @@ class VestaCrawlerApp(tk.Tk):
         self.lbl_cat.pack(anchor="w", pady=(6, 2))
 
         self.cat_map = {
+            "reference": "0. Danh mục mã, Phân ngành ICB, Sàn & OTC (F001/F001b)",
             "ohlcv": "1. Giá nến ngày / phút (OHLCV)",
             "fundamentals": "2. Báo cáo tài chính (BCTC)",
             "news_macro": "3. Báo chí Vĩ mô (Nhân Dân, TBTC, VNF, Chính Phủ)",
@@ -252,6 +256,7 @@ class VestaCrawlerApp(tk.Tk):
             "events": "5. Lịch sự kiện doanh nghiệp & Cổ tức",
             "macro": "6. 9 Chỉ số vĩ mô & Lãi suất LH",
             "governance": "7. Hồ sơ doanh nghiệp & Cổ đông lớn",
+            "snapshots": "8. Bảng giá Snapshot & Định giá (F007 Vietcap/CafeF)",
         }
         self.combo_cat = ttk.Combobox(self.ctrl_card, values=list(self.cat_map.values()), state="readonly")
         self.combo_cat.current(0)
@@ -267,14 +272,23 @@ class VestaCrawlerApp(tk.Tk):
         self._init_category_frames()
         self._show_active_config_frame()
 
+        # Tùy chọn nạp đệm Zero-Lock & Nạp nguyên tử (Khuyến nghị F000)
+        self.var_buffer_first = tk.BooleanVar(value=True)
+        self.chk_buffer = ttk.Checkbutton(
+            self.ctrl_card,
+            text="⚡ Ghi đệm trước (Zero-Lock) & Tự nạp nguyên tử",
+            variable=self.var_buffer_first,
+        )
+        self.chk_buffer.pack(anchor="w", pady=(6, 2))
+
         # Nút thực thi chính
         btn_box = ttk.Frame(self.ctrl_card, style="Card.TFrame")
-        btn_box.pack(fill="x", pady=(8, 0))
+        btn_box.pack(fill="x", pady=(4, 0))
 
-        self.btn_start = ttk.Button(btn_box, text="▶ BẮT ĐẦU CÀO DỮ LIỆU", style="Success.TButton", command=self.start_crawl_thread)
+        self.btn_start = ttk.Button(btn_box, text="BẮT ĐẦU CÀO DỮ LIỆU", style="Success.TButton", command=self.start_crawl_thread)
         self.btn_start.pack(fill="x", pady=2)
 
-        self.btn_stop = ttk.Button(btn_box, text="⏹ DỪNG TIẾN TRÌNH", style="Danger.TButton", command=self.stop_crawl, state="disabled")
+        self.btn_stop = ttk.Button(btn_box, text="DỪNG TIẾN TRÌNH", style="Danger.TButton", command=self.stop_crawl, state="disabled")
         self.btn_stop.pack(fill="x", pady=2)
 
         # --- NỬA DƯỚI: REALTIME LOG VIEWER ---
@@ -283,8 +297,8 @@ class VestaCrawlerApp(tk.Tk):
 
         log_header = ttk.Frame(log_card, style="Card.TFrame")
         log_header.pack(fill="x", pady=(0, 4))
-        ttk.Label(log_header, text="📜 MÀN HÌNH THEO DÕI TIẾN TRÌNH THỜI GIAN THỰC (CONSOLE OUTPUT)", style="Section.TLabel").pack(side="left")
-        ttk.Button(log_header, text="🧹 Xóa Log", command=self.clear_logs).pack(side="right")
+        ttk.Label(log_header, text="MÀN HÌNH THEO DÕI TIẾN TRÌNH THỜI GIAN THỰC (CONSOLE OUTPUT)", style="Section.TLabel").pack(side="left")
+        ttk.Button(log_header, text="Xóa Log", command=self.clear_logs).pack(side="right")
 
         self.txt_log = tk.Text(
             log_card,
@@ -308,6 +322,21 @@ class VestaCrawlerApp(tk.Tk):
     def _init_category_frames(self):
         """Khởi tạo các khung cấu hình chuyên biệt cho từng loại dữ liệu."""
         self.frames = {}
+
+        # 0. Khung cấu hình REFERENCE (F001/F001b)
+        f_ref = ttk.Frame(self.dynamic_config_container, style="Card.TFrame")
+        self.frames["reference"] = f_ref
+        ttk.Label(f_ref, text="Cấu hình Danh Mục Tham Chiếu, Phân Ngành ICB & OTC (F001/F001b):", font=("Segoe UI", 9, "bold")).pack(anchor="w", pady=(0, 4))
+
+        self.var_ref_mode = tk.StringVar(value="all")
+        f_rmode = ttk.Frame(f_ref, style="Card.TFrame")
+        f_rmode.pack(fill="x", pady=2)
+        ttk.Radiobutton(f_rmode, text="Đồng bộ toàn diện (Mã niêm yết + ICB + Lịch sử sàn + OTC + 22 Rổ chỉ số)", variable=self.var_ref_mode, value="all").pack(anchor="w", pady=2)
+        ttk.Radiobutton(f_rmode, text="Chỉ nạp 22 Rổ chỉ số & Room ngoại (VN30, VNDIAMOND, Ngành ICB...) - F001c", variable=self.var_ref_mode, value="index").pack(anchor="w", pady=2)
+        ttk.Radiobutton(f_rmode, text="Chỉ tải Từ điển Phân ngành ICB 4 cấp (177 mã)", variable=self.var_ref_mode, value="icb").pack(anchor="w", pady=2)
+        ttk.Radiobutton(f_rmode, text="Chỉ dựng Dòng thời gian chuyển sàn liên tục (2,063 mốc)", variable=self.var_ref_mode, value="history").pack(anchor="w", pady=2)
+        ttk.Radiobutton(f_rmode, text="Chỉ nạp & Phân lập Danh mục OTC CafeF (750 mã tradeable=False)", variable=self.var_ref_mode, value="otc").pack(anchor="w", pady=2)
+        ttk.Label(f_ref, text="* Triệt tiêu Survivorship Bias, Phân lập OTC subuniverse & Quản lý 22 Rổ chỉ số / Room ngoại.", font=("Segoe UI", 8), foreground=self.color_text_muted).pack(anchor="w", pady=(4, 0))
 
         # 1. Khung cấu hình OHLCV
         f_ohlcv = ttk.Frame(self.dynamic_config_container, style="Card.TFrame")
@@ -431,20 +460,54 @@ class VestaCrawlerApp(tk.Tk):
         ttk.Label(f_gov, text="Mã cổ phiếu:").pack(anchor="w")
         ttk.Entry(f_gov, textvariable=self.var_gov_symbols).pack(fill="x", pady=2)
 
-        # 8. Khung LATEST (Cào bù toàn bộ đến hôm nay)
+        # 8. Khung cấu hình SNAPSHOTS (F007 Vietcap/CafeF Direct REST API)
+        f_snap = ttk.Frame(self.dynamic_config_container, style="Card.TFrame")
+        self.frames["snapshots"] = f_snap
+        ttk.Label(f_snap, text="Cấu hình Bảng Giá Snapshot & Định Giá (F007):", font=("Segoe UI", 9, "bold")).pack(anchor="w", pady=(0, 4))
+        self.var_snap_symbols = tk.StringVar(value="vn30")
+        ttk.Label(f_snap, text="Mã cổ phiếu:").pack(anchor="w")
+        ttk.Entry(f_snap, textvariable=self.var_snap_symbols).pack(fill="x", pady=2)
+        q_snap = ttk.Frame(f_snap, style="Card.TFrame")
+        q_snap.pack(fill="x", pady=2)
+        ttk.Button(q_snap, text="VN30", command=lambda: self.var_snap_symbols.set("vn30")).pack(side="left", padx=(0, 2))
+        ttk.Button(q_snap, text="Toàn bộ (all)", command=lambda: self.var_snap_symbols.set("all")).pack(side="left", padx=2)
+        ttk.Label(f_snap, text="* Nguồn: Vietcap Direct REST API (82 cột Level 2 Depth) + CafeF Fallback.", font=("Segoe UI", 8), foreground=self.color_text_muted).pack(anchor="w", pady=(4, 0))
+
+        # 9. Khung LATEST (Cập nhật dữ liệu mới nhất - F001 -> F009)
         f_latest = ttk.Frame(self.dynamic_config_container, style="Card.TFrame")
         self.frames["latest"] = f_latest
-        ttk.Label(f_latest, text="Cập Nhật Mới Nhất Toàn Bộ Thị Trường:", font=("Segoe UI", 9, "bold")).pack(anchor="w", pady=(0, 4))
-        ttk.Label(f_latest, text="Tự động phát hiện ngày cào cuối (max_date) và cào bù\ntiến đến hôm nay cho tất cả phân hệ.", font=("Segoe UI", 8), foreground=self.color_text_muted).pack(anchor="w")
+        ttk.Label(f_latest, text="Cập Nhật Dữ Liệu Mới Nhất (Incremental Latest Catch-Up):", font=("Segoe UI", 9, "bold")).pack(anchor="w", pady=(0, 2))
+        ttk.Label(f_latest, text="Tự động phát hiện khoảng trống ngày và cào bù tiến tới hôm nay.", font=("Segoe UI", 8), foreground=self.color_text_muted).pack(anchor="w", pady=(0, 4))
 
+        # 4 Tùy chọn cốt lõi theo cấu hình cập nhật mới nhất
+        ttk.Label(f_latest, text="Chọn phân hệ cập nhật mới nhất (Scope):", font=("Segoe UI", 8, "bold")).pack(anchor="w", pady=(2, 1))
+        self.var_latest_scope = tk.StringVar(value="4. all")
+
+        scope_box = ttk.Frame(f_latest, style="Card.TFrame")
+        scope_box.pack(fill="x", pady=2)
+
+        ttk.Radiobutton(scope_box, text="1. ohlcv 1d/1m (Nến 1D -> Snapshot DB | 1m -> Intraday DB)", value="1. ohlcv 1d/1m", variable=self.var_latest_scope).pack(anchor="w", pady=1)
+        ttk.Radiobutton(scope_box, text="2. fundamentals (BCTC toàn bộ mã -> Snapshot DB)", value="2. fundamentals", variable=self.var_latest_scope).pack(anchor="w", pady=1)
+        ttk.Radiobutton(scope_box, text="3. news (Toàn bộ tin tức mã, chuyên mục, CBTT -> News DB)", value="3. news", variable=self.var_latest_scope).pack(anchor="w", pady=1)
+        ttk.Radiobutton(scope_box, text="4. all (Đồng bộ liên hoàn tất cả các phân hệ trên)", value="4. all", variable=self.var_latest_scope).pack(anchor="w", pady=1)
+
+        # Danh mục mã (Mặc định: 'all' = 1,482+ mã toàn thị trường)
         self.var_latest_symbols = tk.StringVar(value="all")
-        ttk.Label(f_latest, text="Danh mục mã:").pack(anchor="w", pady=(4, 1))
+        ttk.Label(f_latest, text="Danh mục mã (Mặc định 'all' = Toàn bộ thị trường):", font=("Segoe UI", 8, "bold")).pack(anchor="w", pady=(4, 1))
         ttk.Entry(f_latest, textvariable=self.var_latest_symbols).pack(fill="x", pady=2)
-        
+
         q_lsym = ttk.Frame(f_latest, style="Card.TFrame")
         q_lsym.pack(fill="x", pady=2)
-        ttk.Button(q_lsym, text="Toàn bộ", command=lambda: self.var_latest_symbols.set("all")).pack(side="left", padx=(0, 2))
+        ttk.Button(q_lsym, text="Toàn bộ thị trường (all)", command=lambda: self.var_latest_symbols.set("all")).pack(side="left", padx=(0, 2))
         ttk.Button(q_lsym, text="VN30", command=lambda: self.var_latest_symbols.set("vn30")).pack(side="left", padx=2)
+
+        # Hộp thông tin CSDL cách ly chuyên biệt (Dedicated Database Isolation)
+        f_db_info = ttk.Frame(f_latest, style="Card.TFrame")
+        f_db_info.pack(fill="x", pady=(6, 2))
+        ttk.Label(f_db_info, text="📌 Phân lập CSDL chuyên biệt (Dedicated Database Isolation):", font=("Segoe UI", 8, "bold")).pack(anchor="w")
+        ttk.Label(f_db_info, text="• Nến ngày 1D & BCTC & Sự kiện: vesta_snapshot.duckdb", font=("Segoe UI", 8), foreground=self.color_text_muted).pack(anchor="w")
+        ttk.Label(f_db_info, text="• Nến phút 1m Intraday: vesta_intraday_1m.duckdb", font=("Segoe UI", 8), foreground=self.color_text_muted).pack(anchor="w")
+        ttk.Label(f_db_info, text="• Toàn bộ Tin tức mã, chuyên mục, CBTT: vesta_news.duckdb", font=("Segoe UI", 8), foreground=self.color_text_muted).pack(anchor="w")
 
     def _get_active_cat_key(self) -> str:
         selected_display = self.combo_cat.get()
@@ -501,11 +564,15 @@ class VestaCrawlerApp(tk.Tk):
 
         try:
             con = duckdb.connect(self.target_db, read_only=True)
+            db.attach_intraday(con, read_only=True)
+            db.attach_news(con, read_only=True)
         except Exception:
             buf_db = str(PROJECT_ROOT / "db" / "vesta_crawled_fresh.duckdb")
             if os.path.exists(buf_db):
                 try:
                     con = duckdb.connect(buf_db, read_only=True)
+                    db.attach_intraday(con, read_only=True)
+                    db.attach_news(con, read_only=True)
                 except Exception:
                     con = None
             else:
@@ -522,15 +589,11 @@ class VestaCrawlerApp(tk.Tk):
                 date_col = spec["date_col"]
                 sym_col = spec["sym_col"]
 
-                schema, table_name = tbl.split(".")
-                tbl_exists = con.execute(
-                    "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = ? AND table_name = ?",
-                    [schema, table_name],
-                ).fetchone()[0]
-
-                if not tbl_exists:
-                    rows_data.append((name, "-", "-", "-", "-", "Chưa khởi tạo"))
-                    continue
+                query_tbl = tbl
+                if spec.get("type") == "news":
+                    query_tbl = f"news_db.{tbl}"
+                elif "1m" in tbl:
+                    query_tbl = f"intraday.{tbl}"
 
                 sym_expr = f"COUNT(DISTINCT {sym_col})" if sym_col else "'-'"
                 
@@ -543,7 +606,11 @@ class VestaCrawlerApp(tk.Tk):
                         CAST(MAX(CASE WHEN {date_col} <= CURRENT_DATE THEN {date_col} ELSE NULL END) AS VARCHAR)
                     """
 
-                row = con.execute(f"SELECT COUNT(*), {sym_expr}, {date_expr} FROM {tbl}").fetchone()
+                try:
+                    row = con.execute(f"SELECT COUNT(*), {sym_expr}, {date_expr} FROM {query_tbl}").fetchone()
+                except Exception:
+                    rows_data.append((name, "-", "-", "-", "-", "Chưa khởi tạo"))
+                    continue
 
                 total_rows = row[0]
                 total_syms = row[1] if row[1] != "-" else "-"
@@ -567,35 +634,47 @@ class VestaCrawlerApp(tk.Tk):
                         status_desc = "Đã có dữ liệu"
 
                 rows_data.append((name, f"{total_rows:,}", str(total_syms), min_date, max_date, status_desc))
-            con.close()
 
             # Kiểm tra dữ liệu trong buffer_db (nếu có)
             buf_db = str(PROJECT_ROOT / "db" / "vesta_crawled_fresh.duckdb")
-            buf_info = "Bộ đệm: Sạch"
+            buf_info = "Bộ đệm: Trống (0 bản ghi)"
             if os.path.exists(buf_db):
+                con_b = None
                 try:
                     con_b = duckdb.connect(buf_db, read_only=True)
-                    b_rows = con_b.execute("SELECT schema_name, table_name FROM duckdb_tables() WHERE database_name = 'vesta_crawled_fresh' AND schema_name IN ('core', 'main')").fetchall()
+                    b_rows = con_b.execute("SELECT schema_name, table_name FROM duckdb_tables() WHERE schema_name IN ('core', 'main', 'staging')").fetchall()
                     b_cnt = 0
                     for s, t in b_rows:
-                        b_cnt += con_b.execute(f"SELECT COUNT(1) FROM {s}.{t}").fetchone()[0]
-                    con_b.close()
+                        try:
+                            b_cnt += con_b.execute(f"SELECT COUNT(1) FROM {s}.{t}").fetchone()[0]
+                        except Exception:
+                            pass
                     if b_cnt > 0:
-                        buf_info = f"⚡ Bộ đệm: Có {b_cnt:,} bản ghi"
+                        buf_info = f"⚡ Bộ đệm: {b_cnt:,} bản ghi chờ nạp"
                 except Exception:
                     pass
+                finally:
+                    if con_b is not None:
+                        try:
+                            con_b.close()
+                        except Exception:
+                            pass
 
             self.after(0, self._finish_refresh_status, rows_data, None, buf_info)
         except Exception as ex:
-            if con:
-                con.close()
             self.after(0, self._finish_refresh_status, [], str(ex), "Bộ đệm: Chưa xác định")
+        finally:
+            if con is not None:
+                try:
+                    con.close()
+                except Exception:
+                    pass
 
-    def _finish_refresh_status(self, rows: List[tuple], error: Optional[str], buf_info: str = "Bộ đệm: Sạch"):
-        self.btn_refresh.configure(state="normal", text="🔄 Làm Mới Trạng Thái")
+    def _finish_refresh_status(self, rows: List[tuple], error: Optional[str], buf_info: str = "Bộ đệm: Trống"):
+        self.btn_refresh.configure(state="normal", text="🔄 Làm Mới")
         if hasattr(self, "lbl_subtitle"):
             db_name = os.path.basename(self.target_db)
-            self.lbl_subtitle.configure(text=f"CSDL: {db_name} | {buf_info} | Vnstock Sponsor Unified API | T-0: {dt.date.today()}")
+            self.lbl_subtitle.configure(text=f"CSDL Chính: {db_name} | {buf_info} | Vnstock Sponsor Unified API | T-0: {dt.date.today()}")
 
         if error:
             messagebox.showwarning("Cảnh báo Database", f"Lỗi quét trạng thái: {error}")
@@ -608,20 +687,55 @@ class VestaCrawlerApp(tk.Tk):
             self.tree_status.insert("", "end", values=r)
 
     def sync_buffer_async(self):
-        self.btn_sync.configure(state="disabled", text="⏳ Đang đồng bộ...")
+        self.btn_sync.configure(state="disabled", text="⏳ Đang nạp...")
         threading.Thread(target=self._worker_sync_buffer, daemon=True).start()
 
     def _worker_sync_buffer(self):
         writer = ResilientDuckDBWriter(target_db=self.target_db)
         try:
-            total = writer.sync_buffer_to_target()
-            print(f"\n[⚡ ĐỒNG BỘ BỘ ĐỆM] Đã đồng bộ thành công +{total} bảng từ bộ đệm vào {os.path.basename(self.target_db)}.")
+            res = writer.atomic_ingest_buffer()
+            if res.get("status") == "SUCCESS":
+                total_rows = res.get("total_rows", 0)
+                total_tbls = res.get("tables_synced", 0)
+                ms = res.get("elapsed_ms", 0.0)
+                if total_rows > 0:
+                    print(f"\n[⚡ NẠP NGUYÊN TỬ THÀNH CÔNG] Đã nạp +{total_rows:,} bản ghi ({total_tbls} bảng) vào {os.path.basename(self.target_db)} trong {ms:.2f} ms.")
+                else:
+                    print(f"\n[⚡ BỘ ĐỆM ĐÃ SẠCH] Không có bản ghi mới cần nạp vào {os.path.basename(self.target_db)}.")
+            else:
+                print(f"\n[!] Kết quả nạp nguyên tử: {res.get('status')} - {res.get('reason', res.get('error', ''))}")
         except Exception as e:
-            print(f"\n[!] Lỗi khi đồng bộ bộ đệm: {e}")
+            print(f"\n[!] Lỗi khi nạp nguyên tử từ bộ đệm: {e}")
         self.after(0, self._finish_sync_buffer)
 
     def _finish_sync_buffer(self):
-        self.btn_sync.configure(state="normal", text="⚡ Đồng Bộ Bộ Đệm")
+        self.btn_sync.configure(state="normal", text="⚡ Nạp Nguyên Tử")
+        self.refresh_status_async()
+
+    def sync_all_async(self):
+        if hasattr(self, "btn_sync_all"):
+            self.btn_sync_all.configure(state="disabled", text="⏳ Đang nạp...")
+        threading.Thread(target=self._worker_sync_all, daemon=True).start()
+
+    def _worker_sync_all(self):
+        writer = ResilientDuckDBWriter(target_db=self.target_db)
+        try:
+            print("\n" + "═" * 80)
+            print(f"[*] QUÉT VÀ NẠP NGUYÊN TỬ TẤT CẢ CÁC CSDL STAGING VÀO {os.path.basename(self.target_db)}...")
+            res = writer.sync_all_staging_databases()
+            total_rows = res.get("total_rows", 0)
+            total_tbls = res.get("total_tables", 0)
+            print(f"[+] Hoàn tất: Nạp tổng cộng +{total_rows:,} dòng từ {total_tbls} bảng.")
+            for db_f, d in res.get("synced_databases", {}).items():
+                print(f"    • {os.path.basename(db_f)}: +{d.get('total_rows', 0):,} dòng trong {d.get('elapsed_ms', 0.0):.2f} ms")
+            print("═" * 80 + "\n")
+        except Exception as e:
+            print(f"\n[!] Lỗi khi nạp toàn bộ staging: {e}")
+        self.after(0, self._finish_sync_all)
+
+    def _finish_sync_all(self):
+        if hasattr(self, "btn_sync_all"):
+            self.btn_sync_all.configure(state="normal", text="📦 Nạp Toàn Bộ Staging")
         self.refresh_status_async()
 
     # =========================================================================
@@ -649,12 +763,18 @@ class VestaCrawlerApp(tk.Tk):
             # 1. Kiểm tra trùng lặp tin tức (News & News Macro)
             if cat_key in ("news_macro", "news"):
                 tbl = "core.news_resources" if cat_key == "news_macro" else "core.news"
-                existing_cnt = con.execute(f"SELECT COUNT(*) FROM {tbl}").fetchone()[0]
-                rows = con.execute(f"SELECT source_url FROM {tbl} WHERE source_url IS NOT NULL").fetchall()
+                try:
+                    con_news = db.connect_news(read_only=True)
+                    existing_cnt = con_news.execute(f"SELECT COUNT(*) FROM {tbl}").fetchone()[0]
+                    rows = con_news.execute(f"SELECT source_url FROM {tbl} WHERE source_url IS NOT NULL").fetchall()
+                    con_news.close()
+                except Exception:
+                    existing_cnt = 0
+                    rows = []
                 precheck_res["existing_urls"] = {r[0] for r in rows}
-                print(f"  -> Đã tìm thấy {existing_cnt:,} tin bài hiện có trong {tbl}.")
+                print(f"  -> Đã tìm thấy {existing_cnt:,} tin bài hiện có trong vesta_news.duckdb ({tbl}).")
                 print(f"  -> CƠ CHẾ: Đã nạp {len(precheck_res['existing_urls']):,} URLs vào bộ nhớ đệm.")
-                print(f"  -> Toàn bộ tin bài đã có sẽ được BỎ QUA NGAY LẬP TỨC. Chỉ cào và lưu các tin bài mới!")
+                print("  -> Toàn bộ tin bài đã có sẽ được BỎ QUA NGAY LẬP TỨC. Chỉ cào và lưu các tin bài mới!")
 
             # 2. Kiểm tra ngày nến OHLCV (Bỏ qua mã đã có đủ nến đến hôm nay)
             elif cat_key == "ohlcv":
@@ -689,12 +809,14 @@ class VestaCrawlerApp(tk.Tk):
                     print(f"  -> Đã kiểm tra {len(symbols)} mã trong core.market_ohlcv_daily:")
                     print(f"     • {len(skipped)} mã đã có đủ nến đến hôm nay ({today_str}) -> TỰ ĐỘNG BỎ QUA.")
                     print(f"     • {len(to_crawl)} mã còn thiếu dữ liệu -> SẼ ĐƯỢC CÀO BÙ TIẾN.")
-
-            con.close()
         except Exception as e:
-            if con:
-                con.close()
             print(f"  -> [Cảnh báo] Lỗi trong lúc pre-check: {e}")
+        finally:
+            if con is not None:
+                try:
+                    con.close()
+                except Exception:
+                    pass
 
         print("─" * 80 + "\n")
         return precheck_res
@@ -726,7 +848,8 @@ class VestaCrawlerApp(tk.Tk):
         target_db = os.path.abspath(self.target_db)
         os.environ["VESTA_DB_PATH"] = target_db
         db.DB_PATH = pathlib.Path(target_db)
-        writer = ResilientDuckDBWriter(target_db=target_db)
+        buffer_first = self.var_buffer_first.get() if hasattr(self, "var_buffer_first") else True
+        writer = ResilientDuckDBWriter(target_db=target_db, buffer_first=buffer_first)
 
         # Dummy Args
         class CrawlArgs:
@@ -737,24 +860,27 @@ class VestaCrawlerApp(tk.Tk):
 
         print("\n" + "═" * 80)
         print(f"KHỞI CHẠY TIẾN TRÌNH CÀO DỮ LIỆU — VESTA QUANT DESKTOP ({dt.datetime.now().strftime('%H:%M:%S')})")
-        print(f"Chế độ: {mode.upper()} | Database đích: {os.path.basename(target_db)}")
+        print(f"Chế độ: {mode.upper()} | CSDL đích: {os.path.basename(target_db)} | Bộ đệm Zero-Lock: {'BẬT' if buffer_first else 'TẮT'}")
         print("═" * 80)
 
         try:
             if mode == "latest":
                 symbols_str = self.var_latest_symbols.get().strip()
                 symbols = get_target_symbols(target_db, symbol_arg=symbols_str)
+                scope = self.var_latest_scope.get().strip() if hasattr(self, "var_latest_scope") else "4. all"
                 args.symbols = symbols_str
                 args.delay = 0.4
                 args.interval = "1D"
                 args.force = False
                 args.period = "quarter"
                 args.report_type = "all"
-                args.pages = 3
+                args.pages = 5
+                args.scope = scope
                 
-                # Pre-check cho latest
-                self._precheck_and_log("ohlcv", symbols, target_db, force=False)
-                run_latest_all(symbols, writer, args)
+                print(f"[*] CHẾ ĐỘ CẬP NHẬT MỚI NHẤT (LATEST): Tùy chọn [{scope.upper()}] | {len(symbols)} mã")
+                if "1" in scope or "ohlcv" in scope or "all" in scope:
+                    self._precheck_and_log("ohlcv", symbols, target_db, force=False)
+                run_latest_modular(scope, symbols, writer, args, stop_check=lambda: not self.is_running)
 
             elif mode == "category":
                 cat_key = self._get_active_cat_key()
@@ -787,9 +913,18 @@ class VestaCrawlerApp(tk.Tk):
                     symbols_str = self.var_events_symbols.get().strip()
                     args.delay = 0.4
                     args.force = False
+                elif cat_key == "reference":
+                    symbols_str = "all"
+                    args.ref_mode = self.var_ref_mode.get() if hasattr(self, "var_ref_mode") else "all"
+                    args.delay = 0.2
+                    args.force = False
                 elif cat_key == "governance":
                     symbols_str = self.var_gov_symbols.get().strip()
                     args.delay = 0.3
+                    args.force = False
+                elif cat_key == "snapshots":
+                    symbols_str = self.var_snap_symbols.get().strip()
+                    args.delay = 0.2
                     args.force = False
                 else: # macro
                     symbols_str = "all"
@@ -805,13 +940,17 @@ class VestaCrawlerApp(tk.Tk):
                 if cat_key == "ohlcv" and not getattr(args, "force", False):
                     symbols = precheck["symbols_to_crawl"]
 
-                if not symbols and cat_key == "ohlcv":
+                if not symbols and cat_key == "ohlcv" and getattr(args, "interval", "1D") != "1m":
                     print("[OK] Toàn bộ các mã đã có đầy đủ dữ liệu mới nhất. Không cần cào thêm!")
                 else:
-                    runner = CATEGORIES_REGISTRY[cat_key]
+                    if cat_key == "ohlcv" and getattr(args, "interval", "1D") == "1m":
+                        runner = CATEGORIES_REGISTRY["intraday_1m"]
+                    elif cat_key == "news":
+                        runner = lambda syms, w, a: run_category_news_comprehensive(syms, w, a, stop_check=lambda: not self.is_running)
+                    else:
+                        runner = CATEGORIES_REGISTRY[cat_key]
                     cnt = runner(symbols, writer, args)
-                    writer.sync_buffer_to_target()
-                    print(f"\n[OK] Hoàn tất phân hệ [{cat_key.upper()}]. Đã lưu thành công +{cnt:,} bản ghi.")
+                    print(f"\n[OK] Hoàn tất phân hệ [{cat_key.upper()}]. Đã thu thập +{cnt:,} bản ghi.")
 
             elif mode == "all":
                 symbols = get_target_symbols(target_db, symbol_arg="all")
@@ -821,21 +960,29 @@ class VestaCrawlerApp(tk.Tk):
                 args.report_type = "all"
                 args.pages = 5
                 args.force = False
-
-                for cat_k, runner in CATEGORIES_REGISTRY.items():
-                    if not self.is_running:
-                        break
-                    print(f"\n--- BẮT ĐẦU PHÂN HỆ: {cat_k.upper()} ---")
-                    try:
-                        self._precheck_and_log(cat_k, symbols, target_db, force=False)
-                        c = runner(symbols, writer, args)
-                        print(f"  -> Hoàn tất {cat_k}: +{c:,} bản ghi.")
-                    except Exception as ex_cat:
-                        print(f"  -> [Lỗi] {cat_k}: {ex_cat}")
-                writer.sync_buffer_to_target()
+                print("\n[*] KHỞI CHẠY CHẾ ĐỘ CÀO TOÀN BỘ (ALL) THEO CƠ CHẾ PHÂN LẬP CSDL CHUYÊN BIỆT...")
+                run_latest_modular("all", symbols, writer, args, stop_check=lambda: not self.is_running)
 
         except Exception as e:
             print(f"\n[!] LỖI TRONG TIẾN TRÌNH: {e}")
+
+        # TỰ ĐỘNG THỰC HIỆN GIAO DỊCH NẠP NGUYÊN TỬ (ATOMIC INGESTION) SAU KHI CÀO
+        try:
+            print("\n" + "─" * 80)
+            print(f"[*] THỰC HIỆN GIAO DỊCH NẠP NGUYÊN TỬ (ATOMIC INGESTION) VÀO {os.path.basename(target_db)}...")
+            res_ingest = writer.atomic_ingest_buffer()
+            if res_ingest.get("status") == "SUCCESS":
+                s_rows = res_ingest.get("total_rows", 0)
+                s_tbls = res_ingest.get("tables_synced", 0)
+                ms = res_ingest.get("elapsed_ms", 0.0)
+                if s_rows > 0:
+                    print(f"⚡ [NẠP NGUYÊN TỬ THÀNH CÔNG] Đã nạp an toàn +{s_rows:,} bản ghi ({s_tbls} bảng) trong {ms:.2f} ms!")
+                else:
+                    print("⚡ [BỘ ĐỆM SẠCH] Toàn bộ dữ liệu mới đã được nạp an toàn vào CSDL chính.")
+            else:
+                print(f"[!] Kết quả nạp nguyên tử: {res_ingest.get('status')} - {res_ingest.get('reason', res_ingest.get('error', ''))}")
+        except Exception as ex_sync:
+            print(f"[!] Lỗi khi nạp nguyên tử sau cào: {ex_sync}")
 
         duration = time.time() - start_time
         print("\n" + "═" * 80)

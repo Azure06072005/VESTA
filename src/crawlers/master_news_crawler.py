@@ -33,14 +33,12 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import logging
-import os
 import pathlib
 import sys
 import time
-from typing import Any, Callable, Dict, List, Optional
+from typing import Callable, Dict, List
 
 import duckdb
-import pandas as pd
 
 PROJECT_ROOT = pathlib.Path(__file__).resolve().parents[2]
 if str(PROJECT_ROOT) not in sys.path:
@@ -51,9 +49,9 @@ VENV_SITE = PROJECT_ROOT / ".venv" / "Lib" / "site-packages"
 if VENV_SITE.exists() and str(VENV_SITE) not in sys.path:
     sys.path.insert(1, str(VENV_SITE))
 
-from crawlers.db_writer import ResilientDuckDBWriter, DEFAULT_TARGET_DB
+from crawlers.db_writer import ResilientDuckDBWriter
 from crawlers.boundary_manager import BoundaryManager
-from etl import db
+from crawlers.crawl_policy import is_source_allowed
 
 sys.stdout.reconfigure(encoding="utf-8")
 logging.basicConfig(
@@ -110,6 +108,7 @@ def register_news(name: str, category: str, description: str, default_enabled: b
 @register_news("vnstock_news", "equity", "vnstock: Tin tức & thông báo doanh nghiệp niêm yết (core.news)")
 def run_vnstock_news(symbols: List[str], writer: ResilientDuckDBWriter, args: argparse.Namespace) -> int:
     from crawlers import vnstock_news
+    from etl import db
     boundary_mgr = BoundaryManager(db_path=writer.target_db)
     active_symbols, _ = boundary_mgr.filter_symbols_to_crawl(
         "news", symbols, force=getattr(args, "force", False), date_column="published_at"
@@ -119,22 +118,27 @@ def run_vnstock_news(symbols: List[str], writer: ResilientDuckDBWriter, args: ar
         return 0
 
     total = 0
-    for sym in active_symbols:
-        sym = sym.upper().strip()
-        logger.info("[vnstock_news] Đang lấy tin tức vnstock cho %s...", sym)
-        try:
-            n = vnstock_news.run(sym)
-            total += n
-            logger.info("  -> [OK] %s: +%d tin vnstock.", sym, n)
-        except Exception as e:
-            logger.warning("  -> [Skip] Lỗi cào tin vnstock cho %s: %s", sym, e)
-        time.sleep(getattr(args, "delay", 0.5))
+    con = db.connect(writer.target_db)
+    try:
+        for sym in active_symbols:
+            sym = sym.upper().strip()
+            logger.info("[vnstock_news] Đang lấy tin tức vnstock cho %s...", sym)
+            try:
+                n = vnstock_news.run(sym, con=con)
+                total += n
+                logger.info("  -> [OK] %s: +%d tin vnstock.", sym, n)
+            except Exception as e:
+                logger.warning("  -> [Skip] Lỗi cào tin vnstock cho %s: %s", sym, e)
+            time.sleep(getattr(args, "delay", 0.5))
+    finally:
+        con.close()
     return total
 
 
 @register_news("cafef_news", "equity", "CafeF: Tin tức chi tiết theo từng mã chứng khoán (core.news)")
 def run_cafef_news(symbols: List[str], writer: ResilientDuckDBWriter, args: argparse.Namespace) -> int:
     from crawlers import cafef_news
+    from etl import db
     boundary_mgr = BoundaryManager(db_path=writer.target_db)
     active_symbols, _ = boundary_mgr.filter_symbols_to_crawl(
         "news", symbols, force=getattr(args, "force", False), date_column="published_at"
@@ -145,16 +149,20 @@ def run_cafef_news(symbols: List[str], writer: ResilientDuckDBWriter, args: argp
 
     total = 0
     pages = 2 if getattr(args, "smoke_test", False) else getattr(args, "cafef_pages", 5)
-    for sym in active_symbols:
-        sym = sym.upper().strip()
-        logger.info("[cafef_news] Đang lấy tin tức CafeF cho %s (%d trang)...", sym, pages)
-        try:
-            n = cafef_news.run(sym, max_pages=pages)
-            total += n
-            logger.info("  -> [OK] %s: +%d tin tức CafeF.", sym, n)
-        except Exception as e:
-            logger.warning("  -> [Skip] Lỗi cào tin CafeF cho %s: %s", sym, e)
-        time.sleep(getattr(args, "delay", 0.5))
+    con = db.connect(writer.target_db)
+    try:
+        for sym in active_symbols:
+            sym = sym.upper().strip()
+            logger.info("[cafef_news] Đang lấy tin tức CafeF cho %s (%d trang)...", sym, pages)
+            try:
+                n = cafef_news.run(sym, max_pages=pages, con=con)
+                total += n
+                logger.info("  -> [OK] %s: +%d tin tức CafeF.", sym, n)
+            except Exception as e:
+                logger.warning("  -> [Skip] Lỗi cào tin CafeF cho %s: %s", sym, e)
+            time.sleep(getattr(args, "delay", 0.5))
+    finally:
+        con.close()
     return total
 
 
@@ -323,24 +331,8 @@ def run_thoibaotaichinh(symbols: List[str], writer: ResilientDuckDBWriter, args:
 # 3. GOVERNMENT POLICY & REGULATORY AUTHORITIES
 # =============================================================================
 
-@register_news("sbv_policy", "policy", "Ngân hàng Nhà nước VN: Thông tư, quyết định lãi suất & tỷ giá (core.news_resources)")
-def run_sbv_policy(symbols: List[str], writer: ResilientDuckDBWriter, args: argparse.Namespace) -> int:
-    from crawlers.sbv_crawler import crawl_sbv_policy
-    boundary_mgr = BoundaryManager(db_path=writer.target_db)
-    b_info = boundary_mgr.audit_source_date_boundary(
-        "news_resources", "sbv", target_earliest_year=getattr(args, "target_earliest_year", 2000)
-    )
-    boundary_mgr.print_crawling_strategy(b_info)
-
-    max_items = 20 if getattr(args, "smoke_test", False) else getattr(args, "limit", 100)
-    logger.info("[sbv_policy] Đang trích xuất văn bản pháp quy từ Ngân hàng Nhà nước...")
-    try:
-        cnt = crawl_sbv_policy(max_articles=max_items, duckdb_path=writer.target_db)
-        logger.info("  -> [OK] SBV: Đã nạp +%d văn bản chỉ đạo.", cnt)
-        return cnt
-    except Exception as e:
-        logger.warning("  -> [Skip] Lỗi cào SBV: %s", e)
-        return 0
+# LƯU Ý: Nguồn Ngân hàng Nhà nước (sbv.gov.vn) đã được DỪNG VĨNH VIỄN do chính sách WAF/Anti-bot.
+# Nguồn thay thế hợp lệ: thoibaonganhang (Thời báo Ngân hàng - cơ quan ngôn luận SBV) và baochinhphu.
 
 
 @register_news("ssc_policy", "policy", "Ủy ban Chứng khoán Nhà nước: Quyết định xử phạt, cấp phép & văn bản điều hành (core.news_resources)")
@@ -350,7 +342,19 @@ def run_ssc_policy(symbols: List[str], writer: ResilientDuckDBWriter, args: argp
     pages = 2 if getattr(args, "smoke_test", False) else 5
     logger.info("[ssc_policy] Đang cào văn bản UBCKNN...")
     try:
-        cnt = crawler.crawl(max_pages=pages)
+        res = crawler.crawl(max_pages=pages)
+        cnt = len(res) if isinstance(res, list) else int(res)
+        try:
+            con = duckdb.connect(writer.target_db)
+            con.execute("""
+                INSERT OR IGNORE INTO core.news_resources
+                SELECT source, issuing_body, doc_type, doc_number, published_at, available_at, headline, summary, body, source_url, fetched_at
+                FROM core.macro_policy
+                WHERE source = 'ssc'
+            """)
+            con.close()
+        except Exception:
+            pass
         logger.info("  -> [OK] SSC: Đã nạp +%d văn bản pháp quy.", cnt)
         return cnt
     except Exception as e:
@@ -436,15 +440,7 @@ def run_associations(symbols: List[str], writer: ResilientDuckDBWriter, args: ar
     except Exception as e:
         logger.warning("  -> [Skip] Lỗi cào HoREA: %s", e)
 
-    # 3. VNBA (Hiệp hội Ngân hàng)
-    try:
-        from crawlers.vnba_crawler import run_vnba_crawler
-        res = run_vnba_crawler(max_articles_per_cat=15, db_path=writer.target_db)
-        cnt = res.get("total_written", 0)
-        total += cnt
-        logger.info("  -> [OK] VNBA: +%d bài viết ngành ngân hàng.", cnt)
-    except Exception as e:
-        logger.warning("  -> [Skip] Lỗi cào VNBA: %s", e)
+    # (VNBA vnba.org.vn đã bị gỡ bỏ vĩnh viễn theo Ethical Crawling Policy do rate limit 429)
 
     # 4. VSA (Thép Việt Nam)
     try:
@@ -528,6 +524,10 @@ def run_international(symbols: List[str], writer: ResilientDuckDBWriter, args: a
 # ORCHESTRATION ENGINE & CLI
 # =============================================================================
 
+DEFAULT_NEWS_DB = str(PROJECT_ROOT / "db" / "vesta_news.duckdb")
+DEFAULT_SNAPSHOT_DB = str(PROJECT_ROOT / "db" / "vesta_snapshot.duckdb")
+
+
 def sanitize_argv() -> None:
     """Xử lý phòng thủ các trường hợp người dùng gõ '--symbols -all' hoặc '-symbols'."""
     for i in range(1, len(sys.argv)):
@@ -544,7 +544,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="VESTA Master Financial, Macro & Policy News Crawler Orchestrator"
     )
-    parser.add_argument("--db", default=DEFAULT_TARGET_DB, help="Đường dẫn file DuckDB chính")
+    parser.add_argument("--db", default=DEFAULT_NEWS_DB, help="Đường dẫn file DuckDB tin tức")
     parser.add_argument("--symbols", default="VCB,FPT,SSI", help="Danh sách mã cổ phiếu cho tin doanh nghiệp ('vn30', 'all', hoặc mã cụ thể)")
     parser.add_argument("--all", action="store_true", help="Cào toàn bộ mã cổ phiếu trên thị trường (tương đương --symbols all)")
     parser.add_argument("--sources", default="all", help="Danh sách nguồn cào (all hoặc phân tách bởi dấu phẩy)")
@@ -557,6 +557,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--priority", default="forward", choices=["forward", "backward", "both"], 
                         help="Thứ tự ưu tiên cào: forward (ưu tiên đến hôm nay trước), backward (vét cạn 2000), both (cả hai)")
     parser.add_argument("--target-earliest-year", type=int, default=2000, help="Mốc năm sớm nhất cần cào lùi về (mặc định: 2000)")
+    parser.add_argument("--cafef-pages", type=int, default=5, help="Số trang tin tức CafeF mỗi mã")
+    parser.add_argument("--disclosure-pages", type=int, default=10, help="Số trang văn bản công bố thông tin")
+    parser.add_argument("--category-pages", type=int, default=3, help="Số trang mỗi phân vùng chuyên đề CafeF")
+    parser.add_argument("--vietstock-pages", type=int, default=5, help="Số trang tin tức Vietstock")
+    parser.add_argument("--vneconomy-pages", type=int, default=5, help="Số trang tin tức VnEconomy")
     parser.add_argument("--sync", action="store_true", help="Kích hoạt đồng bộ dữ liệu đệm vào database đích")
     parser.add_argument("--list", action="store_true", help="Liệt kê toàn bộ nguồn tin tức đã đăng ký")
     return parser.parse_args()
@@ -592,7 +597,7 @@ def main() -> int:
         logger.info(">>> Đã tự động nạp rổ chỉ số VN30 (%d mã) cho tin doanh nghiệp <<<", len(symbols))
     elif raw_symbols.lower() == "all":
         try:
-            con = duckdb.connect(writer.target_db, read_only=True)
+            con = duckdb.connect(DEFAULT_SNAPSHOT_DB, read_only=True)
             df_sym = con.execute("SELECT symbol FROM core.dim_symbol WHERE is_delisted IS NOT TRUE ORDER BY symbol").fetchdf()
             symbols = df_sym["symbol"].tolist()
             con.close()
@@ -617,7 +622,16 @@ def main() -> int:
 
     if args.sources.lower() != "all":
         req_sources = [s.strip().lower() for s in args.sources.split(",") if s.strip()]
-        selected_specs = [s for s in selected_specs if s.name in req_sources]
+        valid_sources = []
+        for s in req_sources:
+            if not is_source_allowed(s):
+                logger.warning(
+                    "[ETHICAL CRAWL POLICY] Bỏ qua '%s': Nguồn này đã bị CẤM VĨNH VIỄN do chính sách WAF/Paywall/Anti-bot.",
+                    s,
+                )
+            else:
+                valid_sources.append(s)
+        selected_specs = [s for s in selected_specs if s.name in valid_sources]
 
     if not selected_specs:
         logger.error("Không có nguồn tin tức nào thỏa mãn tiêu chí lọc: sources=%s, categories=%s", args.sources, args.categories)

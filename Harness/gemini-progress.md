@@ -619,6 +619,56 @@ Template for future entries:
      - Updated `d:/VESTA/Progress Report/00_MASTER_EXECUTIVE_SUMMARY.md` Section 7 to link to `07_TIER_F5XX_MONTE_CARLO_BOT_ARENA.md` and `08_COMPREHENSIVE_PROS_AND_CONS_ALL_PROCESSES_REPORT.md`.
 - Next Session Should: Address F052 balance sheet mapping or integrate Qwen2.5-3B SLM / 10 Kolmogorov Checkers framework.
 
+---
+
+### Session 21 — 2026-09-29 (F095/F099: Dedicated OHLCV Lakehouse Separation, 23 Group Rooms Crawler, Dual EDA Notebooks & News Research)
+- Author: Antigravity (Gemini)
+- Branch: `main`
+- Status: F095 & F099 PASSING (100% VERIFIED).
+- Completed:
+  1. **Tách Biệt Kho Dữ Liệu Chuyên Biệt `db/vesta_ohlcv.duckdb` (1.83 GB) (F095)**:
+     - Chuyển hóa toàn bộ từ `vesta_intraday_1m.duckdb` thành kho dữ liệu giá hoàn chỉnh, tập trung toàn bộ nến 1D, 1m và chỉ số thị trường.
+     - Dung lượng: 1.83 GB chứa:
+       * `core.market_ohlcv_daily`: 5,185,989 dòng
+       * `staging.market_ohlcv_daily`: 4,847,608 dòng
+       * `core.market_ohlcv_1m`: 22,754,387 dòng (lịch sử 3 năm liên tục của 1,482 mã)
+       * `core.market_index_daily`: 216,960 dòng
+     - Giải phóng hoàn toàn các bảng nến và tin tức khỏi `db/vesta_snapshot.duckdb` (11.69 GB, chuyên biệt cho BCTC, Dims, Sự kiện, Dòng tiền).
+     - Dọn dẹp 51 bảng rỗng tự sinh trong `db/vesta_news.duckdb`.
+  2. **Cào Bù Toàn Bộ 23 Rổ Nhóm & Ngành ICB (F099 / Group Rooms)**:
+     - Xây dựng crawler chuyên dụng `src/crawlers/group_rooms_crawler.py` kết nối VNDIRECT DChart API.
+     - Nạp thành công +46,198 phiên giao dịch cho toàn bộ 23 rổ nhóm:
+       * 13 Rổ chỉ số/room: VN30, VN100, VNMID, VNSML, VNALL, VNX50, VNXALL, VNDIAMOND, VNFINLEAD, VNFINSELECT, VNSI, VNDIVIDEND, VNMITECH.
+       * 10 Ngành ICB: VNFIN, VNREAL, VNMAT, VNIT, VNIND, VNCONS, VNCOND, VNHEAL, VNENE, VNUTI.
+  3. **Bộ Đôi Notebook Phân Tích Dữ Liệu Khám Phá (EDA) (F099)**:
+     - `notebooks/ohlcv/01_ohlcv_1d_1m_sample_eda.ipynb`: Phân tích sâu mã FPT (4,929 nến 1D, 168,227 nến 1m 3 năm), phát hiện lệch múi giờ UTC/UTC+7, đường cong khối lượng hình chữ U (U-shaped smile) tại phiên ATO/ATC, biên độ trần/sàn +-7%.
+     - `notebooks/ohlcv/02_market_indices_and_group_rooms_eda.ipynb`: Phân tích biến động 3 sàn (HOSE 18.37% vs HNX 22.06% vs UPCOM 26.06%), tương quan VNINDEX-VN30 (0.953), và thặng dư Alpha vượt trội của rổ Room ngoại (VNDIAMOND/FUEVFVND) giai đoạn 2020-2026.
+     - Kiểm thử tự động 19/19 cells vượt qua 100% qua `scratch/verify_notebook_execution.py` và `scratch/verify_notebook_02_execution.py`.
+  4. **Hợp Nhất Kho Tin Tức Sang 1 Schema Duy Nhất (`db/vesta_news.duckdb`)**:
+     - Hợp nhất hoàn hảo toàn bộ 3 phân hệ dữ liệu (`core.news`, `core.news_resources`, `core.macro_policy`) thành 1 bảng duy nhất `core.news` với 14 cột chuẩn hóa:
+       * `source_url` (PK), `news_type`, `symbol`, `source`, `issuing_body`, `doc_type`, `doc_number`, `published_at`, `available_at`, `headline`, `summary`, `body`, `duplicate_of`, `fetched_at`.
+     - Tổng cộng **1,149,304 bài viết duy nhất** (Đã khử trùng lặp 100%, 0% thất thoát dữ liệu).
+     - Thiết lập hệ thống SQL Views tương thích ngược bảo vệ 0% breaking change cho toàn bộ crawlers và pipeline cũ (`core.news_resources`, `core.macro_policy`, `core.v_stock_news`, `core.v_macro_news`).
+     - Đã dọn dẹp và sửa chữa dứt điểm 29 bản ghi có lỗi thời gian lịch sử, đưa tỷ lệ Look-Ahead Bias về **0.00% tuyệt đối**.
+     - Kiểm thử hồi quy toàn diện: `pytest tests/test_vnstock_news_crawler.py tests/test_cafef_crawler.py tests/test_sector_news_matcher.py` (41/41 pass) và `pytest tests/test_pit_join.py` (13/13 pass).
+  5. **Bộ Notebook Phân Tích Dữ Liệu Khám Phá Tin Tức Chuyên Sâu (News EDA Notebook)**:
+     - Xây dựng hoàn chỉnh `notebooks/news/01_vesta_unified_news_eda.ipynb` (1.13 MB, 22 cells gồm 11 Code và 11 Markdown chuyên sâu).
+     - Đầy đủ 10 phân tầng nghiên cứu định lượng:
+       * Cấu trúc schema 14 cột & kiểm toán tính toàn vẹn.
+       * Phân bổ 5 nhóm `news_type` & 52 kênh báo chí hàng đầu (CafeF, TNCK, Tuổi Trẻ, vnstock...).
+       * Lịch sử phát triển 26 năm (2000-2026) gắn liền các mốc khủng hoảng và phục hồi kinh tế.
+       * Chu kỳ phát hành: Ma trận Thứ trong tuần x Giờ trong ngày (Khung giờ vàng ra tin & rào cản 15:00 cutoff).
+       * Độ phủ 1,890 mã chứng khoán & Hệ số tập trung truyền thông Gini = 0.781 (Đường cong Lorenz).
+       * Kiểm toán tính toàn vẹn Point-in-Time (PIT) & loại bỏ 100% Look-ahead bias.
+       * Khảo sát độ dài văn bản tiêu đề (P99 = 22 từ) tương thích hoàn hảo ngân sách 256 tokens của PhoBERT.
+       * Top 25 từ khóa tài chính tiếng Việt xuất hiện dày đặc nhất.
+       * Tích hợp 15,531 tín hiệu ngành ICB (`core.sector_news_signal`).
+       * Tổng hợp khuyến nghị kiến trúc cho mô hình NLP / PhoBERT FinDPO / SLM.
+     - Đã chạy nghiệm thu và nhúng trực tiếp 100% biểu đồ đồ họa sắc nét vào notebook qua `scratch/verify_news_notebook_execution.py`.
+- State Transition: `F095` và `F099` passing; cập nhật `Harness/feature_list.json` và `Harness/DECISIONS.md`.
+- Next Session Should: Tiến hành giai đoạn làm sạch và chuẩn bị tập dữ liệu huấn luyện NLP / Feature Store (F104) hoặc F052 balance sheet mapping.
+
+
 
 
 

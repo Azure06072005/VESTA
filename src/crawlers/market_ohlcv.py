@@ -38,37 +38,110 @@ RAW_COLUMN_ALIASES: dict[str, list[str]] = {
     "volume": ["volume", "volume_match", "matched_volume"],
 }
 
+import requests
+
 OHLCV_COLUMNS = ["symbol", "date", "open", "high", "low", "close", "volume", "fetched_at"]
 
 
+def _fetch_dnse_daily(symbol: str, start: str, end: str, timeout: int = 8) -> pd.DataFrame:
+    """Tải trực tiếp nến ngày từ DNSE Entrade X API."""
+    try:
+        from_ts = int(pd.to_datetime(start).timestamp())
+        to_ts = int(pd.to_datetime(end).timestamp()) + 86400
+        url = f"https://services.entrade.com.vn/chart-api/v2/ohlcs/stock?from={from_ts}&to={to_ts}&symbol={symbol.upper()}&resolution=1D"
+        r = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=timeout)
+        if r.status_code == 200:
+            d = r.json()
+            if d.get("t") and len(d["t"]) > 0:
+                df = pd.DataFrame({
+                    "time": pd.to_datetime(d["t"], unit="s").strftime("%Y-%m-%d"),
+                    "open": [float(x) for x in d["o"]],
+                    "high": [float(x) for x in d["h"]],
+                    "low": [float(x) for x in d["l"]],
+                    "close": [float(x) for x in d["c"]],
+                    "volume": [int(x) for x in d["v"]],
+                })
+                if df["open"].max() > 1000:
+                    for c in ["open", "high", "low", "close"]:
+                        df[c] = df[c] / 1000.0
+                return df
+    except Exception:
+        pass
+    return pd.DataFrame()
+
+
+def _fetch_vietcap_daily(symbol: str, start: str, end: str, timeout: int = 12) -> pd.DataFrame:
+    """Tải trực tiếp nến ngày từ Vietcap Trading gap-chart API."""
+    try:
+        to_ts = int(pd.to_datetime(end).timestamp()) + 86400
+        start_dt = pd.to_datetime(start)
+        end_dt = pd.to_datetime(end)
+        days = max(10, (end_dt - start_dt).days + 1)
+        url = "https://trading.vietcap.com.vn/api/chart/OHLCChart/gap-chart"
+        payload = {
+            "timeFrame": "ONE_DAY",
+            "symbols": [symbol.upper()],
+            "to": to_ts,
+            "countBack": min(days + 20, 5000),
+        }
+        headers = {
+            "Content-Type": "application/json",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+            "Origin": "https://trading.vietcap.com.vn",
+            "Referer": "https://trading.vietcap.com.vn/",
+        }
+        r = requests.post(url, json=payload, headers=headers, timeout=timeout)
+        if r.status_code == 200:
+            data = r.json()
+            if data and isinstance(data, list) and len(data) > 0 and data[0].get("t"):
+                item = data[0]
+                df = pd.DataFrame({
+                    "time": pd.to_datetime([int(x) for x in item["t"]], unit="s").strftime("%Y-%m-%d"),
+                    "open": [float(x) for x in item["o"]],
+                    "high": [float(x) for x in item["h"]],
+                    "low": [float(x) for x in item["l"]],
+                    "close": [float(x) for x in item["c"]],
+                    "volume": [int(x) for x in item["v"]],
+                })
+                # Lọc đúng phạm vi start - end
+                df = df[(df["time"] >= str(start)[:10]) & (df["time"] <= str(end)[:10])].copy()
+                if not df.empty and df["open"].max() > 1000:
+                    for c in ["open", "high", "low", "close"]:
+                        df[c] = df[c] / 1000.0
+                return df
+    except Exception:
+        pass
+    return pd.DataFrame()
+
+
 def _authenticate() -> None:
+    """Tải biến môi trường và thiết lập key nếu có (không bắt buộc nếu dùng Direct API)."""
     db.load_env()
     api_key = os.environ.get(REQUIRED_ENV_VAR)
-    if not api_key:
-        raise RuntimeError(
-            f"{REQUIRED_ENV_VAR} is not set. Export it before running this "
-            f"crawler -- credentials never go in code or configs/."
-        )
-    try:
-        import vnstock_data as vs  # prefer Sponsor package if available
-    except ImportError:
-        import vnstock as vs  # type: ignore[no-redef]
-
-    if hasattr(vs, "change_api_key"):
-        vs.change_api_key(api_key)
+    if api_key:
+        try:
+            import vnstock_data as vs
+            if hasattr(vs, "change_api_key"):
+                vs.change_api_key(api_key)
+        except Exception:
+            pass
 
 
 def fetch_raw(symbol: str, start: str, end: str) -> pd.DataFrame:
-    """Live network call. Requires VNSTOCK_API_KEY to be set.
-
-    Fetches OHLCV using modern vnstock_data Unified API (Sponsor Tier),
-    falling back to modern vnstock.api.quote.Quote without deprecated methods.
-    Normalization happens in normalize_ohlcv() so that logic stays
-    testable without network access.
-    """
+    """Thu thập nến ngày OHLCV từ nguồn Direct (DNSE, Vietcap) và fallback vnstock nếu có."""
     _authenticate()
 
-    # 1. Ưu tiên hàng đầu: vnstock_data Sponsor Tier (Unified API)
+    # 1. Ưu tiên hàng đầu: DNSE Direct API (Cực nhanh và ổn định cao)
+    df_dnse = _fetch_dnse_daily(symbol, start, end)
+    if df_dnse is not None and not df_dnse.empty:
+        return df_dnse
+
+    # 2. Ưu tiên 2: Vietcap Direct API (gap-chart ONE_DAY)
+    df_vci = _fetch_vietcap_daily(symbol, start, end)
+    if df_vci is not None and not df_vci.empty:
+        return df_vci
+
+    # 3. Fallback: vnstock_data / vnstock (nếu môi trường có cấu hình)
     try:
         from vnstock_data import Market
         eq = Market().equity(symbol)
@@ -78,7 +151,6 @@ def fetch_raw(symbol: str, start: str, end: str) -> pd.DataFrame:
     except Exception:
         pass
 
-    # 2. Fallback: vnstock.api.quote.Quote (chuẩn API mới thay thế cho Vnstock().stock())
     try:
         from vnstock.api.quote import Quote
         q = Quote(symbol=symbol, source="VCI")
@@ -155,6 +227,23 @@ def write_ohlcv(df: pd.DataFrame, con: "duckdb.DuckDBPyConnection | None" = None
 
     con = con or db.bootstrap_schema()
     symbols = df["symbol"].unique().tolist()
+
+    # Đảm bảo staging và core schema/tables luôn sẵn sàng trên mọi kết nối
+    con.execute("""
+        CREATE SCHEMA IF NOT EXISTS staging;
+        CREATE SCHEMA IF NOT EXISTS core;
+        CREATE TABLE IF NOT EXISTS staging.market_ohlcv_daily (
+            symbol VARCHAR NOT NULL, date DATE NOT NULL,
+            open DOUBLE, high DOUBLE, low DOUBLE, close DOUBLE, volume BIGINT,
+            fetched_at TIMESTAMP NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS core.market_ohlcv_daily (
+            symbol VARCHAR NOT NULL, date DATE NOT NULL,
+            open DOUBLE, high DOUBLE, low DOUBLE, close DOUBLE, volume BIGINT,
+            fetched_at TIMESTAMP NOT NULL,
+            PRIMARY KEY (symbol, date)
+        );
+    """)
 
     con.execute("DELETE FROM staging.market_ohlcv_daily WHERE symbol IN ?", [symbols])
     con.register("ohlcv_df", df[OHLCV_COLUMNS])

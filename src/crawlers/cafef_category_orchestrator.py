@@ -25,9 +25,17 @@ from crawlers.cafef_category_news import (
     fetch_timeline_page,
     parse_article_links,
 )
+from crawlers.cafef_news import VN30_SYMBOLS
 from etl import db
 
 logger = logging.getLogger(__name__)
+
+# Nhóm các chuyên mục Vĩ mô & Toàn cầu: Bắt buộc cào toàn bộ bao gồm cả thân bài (body content)
+GLOBAL_ECONOMY_CATEGORIES = {
+    "tai-chinh-quoc-te",
+    "vi-mo-dau-tu",
+    "kinh-te-so",
+}
 
 # Scoped (?i:...) applies case-insensitivity ONLY to the Vietnamese keywords.
 # ([A-Z0-9]{3,4}) is strictly uppercase ASCII.
@@ -92,12 +100,20 @@ def extract_symbol(
     return candidate
 
 
-def load_valid_symbols(con: duckdb.DuckDBPyConnection) -> set[str]:
+def load_valid_symbols(con: duckdb.DuckDBPyConnection | None = None) -> set[str]:
     """Loads listed stock symbols exclusively from core.dim_symbol (HOSE, HNX, UPCOM).
     Excludes OTC/fund/unclassified entities from dim_symbol_cafef.
     """
     try:
-        rows = con.execute("SELECT DISTINCT symbol FROM core.dim_symbol").fetchall()
+        if con is not None:
+            rows = con.execute("SELECT DISTINCT symbol FROM core.dim_symbol").fetchall()
+            return {r[0] for r in rows if r[0]}
+    except Exception:
+        pass
+    try:
+        con_snap = db.connect(read_only=True)
+        rows = con_snap.execute("SELECT DISTINCT symbol FROM core.dim_symbol").fetchall()
+        con_snap.close()
         return {r[0] for r in rows if r[0]}
     except Exception as e:
         logger.warning(f"Could not read core.dim_symbol: {e}")
@@ -105,12 +121,19 @@ def load_valid_symbols(con: duckdb.DuckDBPyConnection) -> set[str]:
 
 
 def load_existing_source_urls(con: duckdb.DuckDBPyConnection) -> set[str]:
-    """Reads all existing source_urls from core.news for zero-waste deduplication."""
+    """Reads all existing source_urls from core.news and core.news_resources for zero-waste deduplication."""
+    existing = set()
     try:
         rows = con.execute("SELECT DISTINCT source_url FROM core.news WHERE source_url IS NOT NULL").fetchall()
-        return {r[0] for r in rows if r[0]}
+        existing.update(r[0] for r in rows if r[0])
     except Exception:
-        return set()
+        pass
+    try:
+        rows = con.execute("SELECT DISTINCT source_url FROM core.news_resources WHERE source_url IS NOT NULL").fetchall()
+        existing.update(r[0] for r in rows if r[0])
+    except Exception:
+        pass
+    return existing
 
 
 def enrich_article_record(
@@ -118,85 +141,156 @@ def enrich_article_record(
     valid_symbols: set[str],
     category_slug: str | None = None,
 ) -> dict[str, Any] | None:
-    """Fetches HTML and parses article body & timestamp for a single article link.
-    Returns None if fetch fails or if no confident equity symbol is matched.
+    """Xử lý bài viết chuyên mục theo chính sách phân cấp:
+    1. Chuyên mục Global & Economy (tai-chinh-quoc-te, vi-mo-dau-tu, kinh-te-so):
+       -> Bắt buộc cào toàn bộ nội dung bao gồm cả thân bài (body content).
+       -> Nếu bài viết có mã CK: ghi vào core.news.
+       -> Nếu là vĩ mô chung: ghi vào core.news_resources.
+    2. Các chuyên mục khác (thi-truong-chung-khoan, bat-dong-san, doanh-nghiep...):
+       -> Nếu là mã thuộc rổ VN30 (2023 - 2026): cào thân bài (body content).
+       -> Các mã khác ngoài VN30: chỉ lưu headline (body = None, headline only).
     """
     url = article_link["url"]
-
     headline = (article_link.get("title") or "").strip()
+    is_global_or_economy = category_slug in GLOBAL_ECONOMY_CATEGORIES
 
-    # Pre-check symbol extraction before expensive network HTML fetch.
-    # If headline already exists and does not match any valid equity syntax,
-    # skip the network request entirely (saves >90% of requests and avoids rate limits).
     symbol = extract_symbol(headline, url, valid_symbols, category_slug=category_slug)
-    if headline and not symbol:
+    
+    # Đối với các category thông thường: Bỏ qua nếu không có mã cổ phiếu
+    if not is_global_or_economy and not symbol:
         return None
 
-    try:
-        html = fetch_article_html(url)
-        parsed = parse_article_body(html, url)
-    except Exception as e:
-        logger.warning(f"Failed to fetch/parse body for {url}: {e}")
-        return None
+    # Xác định có cần cào body hay không
+    need_body = False
+    if is_global_or_economy:
+        need_body = True
+    elif symbol and (symbol in VN30_SYMBOLS):
+        need_body = True
+
+    parsed = {}
+    body_text = None
+    pub_dt = dt.datetime.now(dt.timezone.utc)
+
+    if need_body:
+        try:
+            html = fetch_article_html(url)
+            parsed = parse_article_body(html, url)
+            body_text = parsed.get("body")
+            
+            published_at_str = parsed.get("published_at")
+            if published_at_str:
+                try:
+                    pub_dt = dt.datetime.fromisoformat(published_at_str)
+                    if pub_dt.tzinfo is None:
+                        pub_dt = pub_dt.replace(tzinfo=dt.timezone.utc)
+                except Exception:
+                    pub_dt = dt.datetime.now(dt.timezone.utc)
+            
+            # Đối với VN30 ngoài dải 2023 - 2026: không lưu body
+            if not is_global_or_economy and symbol and (pub_dt.year < 2023 or pub_dt.year > 2026):
+                body_text = None
+        except Exception as e:
+            logger.debug(f"Không thể cào body cho {url}: {e}")
+            body_text = None
+    else:
+        # Headline only: không tải mạng chi tiết
+        body_text = None
 
     if not headline and parsed.get("title"):
         headline = str(parsed["title"]).strip()
-        symbol = extract_symbol(headline, url, valid_symbols, category_slug=category_slug)
+        if not symbol:
+            symbol = extract_symbol(headline, url, valid_symbols, category_slug=category_slug)
 
-    # Fail closed: never write a row without confident equity symbol match
-    if not symbol:
-        return None
-
-    published_at_str = parsed.get("published_at")
-    if published_at_str:
-        try:
-            pub_dt = dt.datetime.fromisoformat(published_at_str)
-            if pub_dt.tzinfo is None:
-                pub_dt = pub_dt.replace(tzinfo=dt.timezone.utc)
-        except Exception:
-            pub_dt = dt.datetime.now(dt.timezone.utc)
-    else:
-        pub_dt = dt.datetime.now(dt.timezone.utc)
-
-    body_text = parsed.get("body")
     fetched_at = dt.datetime.now(dt.timezone.utc)
 
-    return {
-        "symbol": symbol,
-        "source": "cafef",
-        "published_at": pub_dt,
-        "available_at": pub_dt,
-        "headline": headline,
-        "body": body_text,
-        "source_url": url,
-        "fetched_at": fetched_at,
-    }
+    # Phân loại đích lưu trữ: core.news vs core.news_resources
+    if symbol:
+        return {
+            "target_table": "core.news",
+            "symbol": symbol,
+            "source": "cafef",
+            "published_at": pub_dt,
+            "available_at": pub_dt,
+            "headline": headline,
+            "body": body_text,
+            "source_url": url,
+            "fetched_at": fetched_at,
+        }
+    elif is_global_or_economy:
+        issuing = "CafeF Quốc tế" if category_slug == "tai-chinh-quoc-te" else "CafeF Vĩ mô"
+        return {
+            "target_table": "core.news_resources",
+            "source": "cafef",
+            "issuing_body": issuing,
+            "doc_type": "Chuyên đề",
+            "doc_number": None,
+            "published_at": pub_dt,
+            "available_at": pub_dt,
+            "headline": headline,
+            "summary": headline,
+            "body": body_text,
+            "source_url": url,
+            "fetched_at": fetched_at,
+        }
+    return None
 
 
 def write_category_news(con: duckdb.DuckDBPyConnection, df: pd.DataFrame) -> int:
-    """Inserts enriched category articles into core.news with source_url deduplication."""
+    """Inserts enriched category articles into core.news and core.news_resources."""
     if df.empty:
         return 0
 
     df_clean = df.drop_duplicates(subset=["source_url"]).copy()
-    con.register("df_incoming", df_clean)
-    row = con.execute("""
-        SELECT COUNT(*) FROM df_incoming 
-        WHERE source_url NOT IN (SELECT source_url FROM core.news)
-    """).fetchone()
-    to_insert_count = int(row[0]) if row else 0
+    if "target_table" not in df_clean.columns:
+        df_clean["target_table"] = "core.news"
 
-    if to_insert_count == 0:
-        return 0
+    total_inserted = 0
 
-    insert_sql = """
-    INSERT OR IGNORE INTO core.news (symbol, source, published_at, available_at, headline, body, source_url, fetched_at)
-    SELECT symbol, source, published_at, available_at, headline, body, source_url, fetched_at
-    FROM df_incoming
-    WHERE source_url NOT IN (SELECT source_url FROM core.news)
-    """
-    con.execute(insert_sql)
-    return to_insert_count
+    # 1. Ghi bài viết theo mã vào core.news
+    df_news = df_clean[df_clean["target_table"] == "core.news"].copy()
+    if not df_news.empty:
+        news_cols = ["symbol", "source", "published_at", "available_at", "headline", "body", "source_url", "fetched_at"]
+        df_news_data = df_news[news_cols]
+        con.register("df_news_incoming", df_news_data)
+        row = con.execute("""
+            SELECT COUNT(*) FROM df_news_incoming 
+            WHERE source_url NOT IN (SELECT source_url FROM core.news)
+        """).fetchone()
+        to_insert_news = int(row[0]) if row else 0
+
+        if to_insert_news > 0:
+            con.execute("""
+                INSERT OR IGNORE INTO core.news (symbol, source, published_at, available_at, headline, body, source_url, fetched_at)
+                SELECT symbol, source, published_at, available_at, headline, body, source_url, fetched_at
+                FROM df_news_incoming
+                WHERE source_url NOT IN (SELECT source_url FROM core.news)
+            """)
+            total_inserted += to_insert_news
+        con.unregister("df_news_incoming")
+
+    # 2. Ghi bài viết vĩ mô toàn cầu vào core.news_resources
+    df_res = df_clean[df_clean["target_table"] == "core.news_resources"].copy()
+    if not df_res.empty:
+        res_cols = ["source", "issuing_body", "doc_type", "doc_number", "published_at", "available_at", "headline", "summary", "body", "source_url", "fetched_at"]
+        df_res_data = df_res[res_cols]
+        con.register("df_res_incoming", df_res_data)
+        row = con.execute("""
+            SELECT COUNT(*) FROM df_res_incoming 
+            WHERE source_url NOT IN (SELECT source_url FROM core.news_resources)
+        """).fetchone()
+        to_insert_res = int(row[0]) if row else 0
+
+        if to_insert_res > 0:
+            con.execute("""
+                INSERT OR IGNORE INTO core.news_resources (source, issuing_body, doc_type, doc_number, published_at, available_at, headline, summary, body, source_url, fetched_at)
+                SELECT source, issuing_body, doc_type, doc_number, published_at, available_at, headline, summary, body, source_url, fetched_at
+                FROM df_res_incoming
+                WHERE source_url NOT IN (SELECT source_url FROM core.news_resources)
+            """)
+            total_inserted += to_insert_res
+        con.unregister("df_res_incoming")
+
+    return total_inserted
 
 
 def crawl_category_streaming(
@@ -274,14 +368,18 @@ def crawl_category_streaming(
 def run_category_orchestrator(
     categories: list[str] | None = None,
     max_pages: int = 50,
-    db_path: str = "db/vesta.duckdb",
+    db_path: str = "db/vesta_news.duckdb",
     max_concurrency: int = 1,
 ) -> dict[str, Any]:
     """Runs the streaming crawl & enrichment loop across requested categories."""
     if categories is None:
         categories = list(CATEGORY_IDS.keys())
 
-    con = db.connect(db_path, read_only=False)
+    if "vesta_news" in db_path:
+        con = db.connect_news(read_only=False)
+    else:
+        con = db.connect(db_path, read_only=False)
+
     valid_symbols = load_valid_symbols(con)
     existing_urls = load_existing_source_urls(con)
 
@@ -319,7 +417,7 @@ def main() -> None:
     parser.add_argument("--categories", nargs="+", default=list(CATEGORY_IDS.keys()), help="Categories to crawl")
     parser.add_argument("--max-pages", type=int, default=50, help="Max pages per category")
     parser.add_argument("--concurrency", type=int, default=1, help="Concurrent workers for body parsing")
-    parser.add_argument("--db", default="db/vesta.duckdb", help="DuckDB path")
+    parser.add_argument("--db", default="db/vesta_news.duckdb", help="DuckDB path")
     args = parser.parse_args()
 
     summary = run_category_orchestrator(
