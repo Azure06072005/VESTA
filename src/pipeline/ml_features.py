@@ -96,6 +96,17 @@ def extract_text_features(headline: str) -> dict[str, Any]:
     }
 
 
+def _resolve_ohlcv_table(con: duckdb.DuckDBPyConnection) -> str:
+    """Tự động phát hiện bảng OHLCV: ưu tiên ohlcv_db nếu đã được caller ATTACH."""
+    try:
+        attached = [r[0] for r in con.execute("PRAGMA database_list").fetchall()]
+        if "ohlcv_db" in attached:
+            return "ohlcv_db.core.market_ohlcv_daily"
+    except Exception:
+        pass
+    return "core.market_ohlcv_daily"
+
+
 def extract_price_momentum_features(
     con: duckdb.DuckDBPyConnection, symbol: str, as_of_date: dt.date
 ) -> dict[str, float | None]:
@@ -105,10 +116,11 @@ def extract_price_momentum_features(
     - Only queries rows where date <= as_of_date (zero forward leakage).
     - Requires at least 21 historical bars for full 20-day momentum and volatility.
     """
+    ohlcv_tbl = _resolve_ohlcv_table(con)
     rows = con.execute(
-        """
+        f"""
         SELECT date, close
-        FROM core.market_ohlcv_daily
+        FROM {ohlcv_tbl}
         WHERE symbol = ? AND date <= ? AND close IS NOT NULL
         ORDER BY date DESC
         LIMIT 25
@@ -162,23 +174,27 @@ def extract_fundamental_features(fundamentals_json: str | None) -> dict[str, flo
         if not isinstance(data, dict):
             return {"pe_ratio": None, "pb_ratio": None, "roe": None}
 
-        # Normalize keys to lowercase for flexible schema matching
+        # Normalize keys to lowercase for flexible schema matching (root and sub-dict ratio)
         norm = {str(k).lower(): v for k, v in data.items()}
+        if "ratio" in norm and isinstance(norm["ratio"], dict):
+            for rk, rv in norm["ratio"].items():
+                norm[str(rk).lower()] = rv
 
         def _get_float(*keys: str) -> float | None:
             for k in keys:
-                if k in norm and norm[k] is not None:
+                kl = k.lower()
+                if kl in norm and norm[kl] is not None:
                     try:
-                        val = float(norm[k])
+                        val = float(norm[kl])
                         if not math.isnan(val) and not math.isinf(val):
                             return val
                     except (ValueError, TypeError):
                         pass
             return None
 
-        pe = _get_float("pe", "price_to_earnings", "rt_pe", "p/e")
-        pb = _get_float("pb", "price_to_book", "rt_pb", "p/b")
-        roe = _get_float("roe", "return_on_equity", "rt_roe")
+        pe = _get_float("rt_value_pe", "pe", "price_to_earnings", "rt_pe", "p/e")
+        pb = _get_float("rt_value_pb", "pb", "price_to_book", "rt_pb", "p/b")
+        roe = _get_float("rt_prt_roe", "roe", "return_on_equity", "rt_roe")
         return {"pe_ratio": pe, "pb_ratio": pb, "roe": roe}
     except Exception:
         return {"pe_ratio": None, "pb_ratio": None, "roe": None}
@@ -244,6 +260,7 @@ def build_feature_dataframe(
             where_sql = ("WHERE " + " AND ".join(where_clauses)) if where_clauses else ""
             limit_sql = f"LIMIT {int(limit)}" if limit is not None else ""
 
+            ohlcv_tbl = _resolve_ohlcv_table(con)
             vectorized_sql = f"""
                 WITH daily_returns AS (
                     SELECT 
@@ -253,7 +270,7 @@ def build_feature_dataframe(
                         CASE WHEN LAG(close, 1) OVER w > 0 THEN (close - LAG(close, 1) OVER w) / LAG(close, 1) OVER w ELSE NULL END AS ret_1d,
                         CASE WHEN LAG(close, 5) OVER w > 0 THEN (close - LAG(close, 5) OVER w) / LAG(close, 5) OVER w ELSE NULL END AS mom_5d,
                         CASE WHEN LAG(close, 20) OVER w > 0 THEN (close - LAG(close, 20) OVER w) / LAG(close, 20) OVER w ELSE NULL END AS mom_20d
-                    FROM core.market_ohlcv_daily
+                    FROM {ohlcv_tbl}
                     WHERE close > 0
                     WINDOW w AS (PARTITION BY symbol ORDER BY date)
                 ),

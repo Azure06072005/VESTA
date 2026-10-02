@@ -42,7 +42,8 @@ def _seed_ohlcv(con, symbol: str, dates: list[str], closes: list[float]) -> None
 
 def _seed_news(con, symbol: str, source_url: str, published_at: str, headline: str = "H") -> None:
     con.execute(
-        "INSERT INTO core.news VALUES (?, 'vnstock', ?, ?, ?, NULL, ?, ?, NULL)",
+        "INSERT INTO core.news (symbol, source, published_at, available_at, headline, body, source_url, fetched_at, duplicate_of, news_type) "
+        "VALUES (?, 'vnstock', ?, ?, ?, NULL, ?, ?, NULL, 'STOCK_NEWS')",
         [symbol, published_at, published_at, headline, source_url, dt.datetime(2026, 1, 1)],
     )
 

@@ -5,17 +5,24 @@ Unit tests for F202b DSR & PBO implementation:
 - Mathematical accuracy of Bailey & Lopez de Prado expected max SR formula
 - DSR formula correctness against known hand-calculated benchmark
 - Outlier sensitivity & kurtosis deflation behavior
-- PBO calculation consistency
+- PBO calculation consistency (CSCV)
+- Immutable Strategy Trial Ledger (meta.strategy_trial_log) logging
+- VN30 basket definition integrity
 """
 
 import math
+import duckdb
 import numpy as np
+import pandas as pd
 import pytest
 
 from src.pipeline.f202b_dsr_pbo import (
     expected_max_sr,
     compute_dsr,
-    evaluate_treatment_dsr
+    evaluate_treatment_dsr,
+    compute_pbo_cscv,
+    log_strategy_trial,
+    VN30_BASKET,
 )
 
 
@@ -81,3 +88,69 @@ def test_outlier_kurtosis_impact():
     
     # Cohen's d of clean sample should be higher due to uninflated variance
     assert clean_eval["cohens_d"] > raw_eval["cohens_d"]
+
+
+def test_vn30_basket_integrity():
+    """Ensure VN30_BASKET contains strictly 30 unique symbols."""
+    assert len(VN30_BASKET) == 30
+    assert len(set(VN30_BASKET)) == 30
+    assert "VCB" in VN30_BASKET
+    assert "FPT" in VN30_BASKET
+
+
+def test_pbo_cscv_synthetic():
+    """Test Combinatorial Symmetric Cross-Validation on synthetic multi-horizon dataframe."""
+    rng = np.random.default_rng(123)
+    n_samples = 500
+    dates = pd.date_range("2020-01-01", periods=n_samples, freq="D")
+    
+    # Create 3 candidate strategies
+    strat1 = rng.normal(0.01, 0.05, n_samples)
+    strat2 = rng.normal(0.005, 0.05, n_samples)
+    strat3 = rng.normal(-0.002, 0.05, n_samples)
+    
+    df = pd.DataFrame({
+        "published_at": dates,
+        "diff_t30_t5": strat1,
+        "diff_t5_t1": strat2,
+        "diff_t30_t1": strat3
+    })
+    
+    res = compute_pbo_cscv(df, n_blocks=8, sample_combinations=50, seed=42)
+    assert res["n_strategies"] == 3
+    assert 0.0 <= res["pbo"] <= 1.0
+    assert "mean_logit" in res
+
+
+def test_log_strategy_trial_mock(tmp_path):
+    """Verify log_strategy_trial writes immutable audit record to DuckDB."""
+    db_file = str(tmp_path / "test_ledger.duckdb")
+    
+    success = log_strategy_trial(
+        db_path=db_file,
+        strategy_name="test_mean_reversion",
+        horizon_days=30,
+        sentiment_source="mock_lexicon",
+        threshold_param=0.0,
+        universe="test_vn30",
+        sample_size_n=500,
+        observed_sr=0.15,
+        skewness=0.5,
+        kurtosis=3.2,
+        p_value_naive=0.001,
+        dsr_score=0.985,
+        config_json={"test_param": 1},
+        git_commit_hash="abc1234"
+    )
+    assert success is True
+    
+    # Read back and verify schema & contents
+    con = duckdb.connect(db_file, read_only=True)
+    rows = con.execute("SELECT strategy_name, universe, dsr_score, sample_size_n FROM meta.strategy_trial_log").fetchall()
+    con.close()
+    
+    assert len(rows) == 1
+    assert rows[0][0] == "test_mean_reversion"
+    assert rows[0][1] == "test_vn30"
+    assert math.isclose(rows[0][2], 0.985)
+    assert rows[0][3] == 500

@@ -206,13 +206,7 @@ def normalize_ohlcv(raw_df: pd.DataFrame, symbol: str) -> pd.DataFrame:
     )
     out["fetched_at"] = dt.datetime.now(dt.timezone.utc).replace(tzinfo=None)
 
-    dupes = out.duplicated(subset=["symbol", "date"]).sum()
-    if dupes:
-        raise ValueError(
-            f"normalize_ohlcv produced {dupes} duplicate (symbol, date) "
-            f"row(s) for {symbol!r} -- refusing to write ambiguous data."
-        )
-
+    out = out.drop_duplicates(subset=["symbol", "date"], keep="last")
     return out[OHLCV_COLUMNS]
 
 

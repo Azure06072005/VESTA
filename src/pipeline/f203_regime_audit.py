@@ -6,6 +6,7 @@ from pipeline.f2xx_validation.f203_regime_audit import (
     RegimeStats,
     get_db_connection,
     load_sanitized_pit_events,
+    evaluate_dynamic_market_health_gating,
     main,
     run_regime_audit,
 )
@@ -15,6 +16,7 @@ __all__ = [
     "RegimeStats",
     "get_db_connection",
     "load_sanitized_pit_events",
+    "evaluate_dynamic_market_health_gating",
     "main",
     "run_regime_audit",
 ]

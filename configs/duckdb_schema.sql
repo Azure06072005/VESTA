@@ -19,6 +19,27 @@ CREATE TABLE IF NOT EXISTS meta.crawl_progress (
     PRIMARY KEY (dataset_name, symbol)
 );
 
+-- meta.strategy_trial_log (F202/F202b): Immutable ledger of all backtested strategy
+-- trial configurations, required for Deflated Sharpe Ratio (DSR) and PBO calculation.
+CREATE TABLE IF NOT EXISTS meta.strategy_trial_log (
+    trial_id           VARCHAR PRIMARY KEY,
+    strategy_name      VARCHAR NOT NULL,
+    trial_timestamp    TIMESTAMP NOT NULL,
+    horizon_days       INTEGER NOT NULL,
+    sentiment_source   VARCHAR NOT NULL,
+    threshold_param    DOUBLE,
+    universe           VARCHAR NOT NULL,
+    sample_size_n      INTEGER NOT NULL,
+    observed_sr        DOUBLE NOT NULL,
+    annualized_sr      DOUBLE,
+    skewness           DOUBLE,
+    kurtosis           DOUBLE,
+    p_value_naive      DOUBLE,
+    dsr_score          DOUBLE,
+    config_json        VARCHAR,
+    git_commit_hash    VARCHAR
+);
+
 -- core.dim_symbol (F001): symbol master data. delisted_date is nullable
 -- and, as of 2026-08-11, will be NULL for every row -- vnstock's unified
 -- API does not expose delisted symbols (confirmed via live discovery call,
@@ -412,30 +433,40 @@ CREATE TABLE IF NOT EXISTS core.corporate_events (
 -- cafef.vn (F004) can be unioned without source-specific branching (see
 -- DECISIONS.md "Dual news source" entry). available_at = published_at for
 -- news (no separate disclosure-lag concept, unlike F005's fundamentals).
--- Column names for the F003 vnstock source are UNCONFIRMED as of this
--- schema -- see src/crawlers/vnstock_news.py module docstring.
+-- staging/core.news (F003/F004/F106): Hợp nhất toàn diện tin tức doanh nghiệp,
+-- tin vĩ mô, báo chí tài chính và công bố thông tin theo chuẩn 14 cột
 CREATE TABLE IF NOT EXISTS staging.news (
-    symbol       VARCHAR NOT NULL,
-    source       VARCHAR NOT NULL,  -- 'vnstock' (F003) or 'cafef' (F004)
-    published_at TIMESTAMP NOT NULL,
-    available_at TIMESTAMP NOT NULL,
-    headline     VARCHAR NOT NULL,
+    source_url   VARCHAR,
+    news_type    VARCHAR DEFAULT 'STOCK_NEWS',
+    symbol       VARCHAR,
+    source       VARCHAR,
+    issuing_body VARCHAR,
+    doc_type     VARCHAR,
+    doc_number   VARCHAR,
+    published_at TIMESTAMP,
+    available_at TIMESTAMP,
+    headline     VARCHAR,
+    summary      VARCHAR,
     body         VARCHAR,
-    source_url   VARCHAR NOT NULL,
-    fetched_at   TIMESTAMP NOT NULL,
-    duplicate_of VARCHAR            -- nullable; set by etl.news_dedup, added in F009
+    duplicate_of VARCHAR,
+    fetched_at   TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS core.news (
-    symbol       VARCHAR NOT NULL,
+    source_url   VARCHAR NOT NULL,
+    news_type    VARCHAR NOT NULL DEFAULT 'STOCK_NEWS',
+    symbol       VARCHAR,
     source       VARCHAR NOT NULL,
+    issuing_body VARCHAR,
+    doc_type     VARCHAR,
+    doc_number   VARCHAR,
     published_at TIMESTAMP NOT NULL,
     available_at TIMESTAMP NOT NULL,
     headline     VARCHAR NOT NULL,
+    summary      VARCHAR,
     body         VARCHAR,
-    source_url   VARCHAR NOT NULL,
+    duplicate_of VARCHAR,
     fetched_at   TIMESTAMP NOT NULL,
-    duplicate_of VARCHAR,           -- nullable; set by etl.news_dedup, added in F009
     PRIMARY KEY (source_url)
 );
 
@@ -537,65 +568,26 @@ CREATE TABLE IF NOT EXISTS core.pit_events (
 
 -- staging/core.news_resources: Dành cho toàn bộ tin tức vĩ mô, báo chí tài chính,
 -- chỉ đạo điều hành chính phủ, thông tư bộ ngành và hiệp hội ngành nghề
--- (phân biệt với core.news chuyên về tin tức gắn với từng mã cổ phiếu cụ thể).
-CREATE TABLE IF NOT EXISTS staging.news_resources (
-    source        VARCHAR NOT NULL,
-    issuing_body  VARCHAR NOT NULL,
-    doc_type      VARCHAR,
-    doc_number    VARCHAR,
-    published_at  TIMESTAMP NOT NULL,
-    available_at  TIMESTAMP NOT NULL,
-    headline      VARCHAR NOT NULL,
-    summary       VARCHAR,
-    body          VARCHAR,
-    source_url    VARCHAR NOT NULL,
-    fetched_at    TIMESTAMP NOT NULL
-);
+CREATE OR REPLACE VIEW staging.news_resources AS
+SELECT source, issuing_body, doc_type, doc_number, published_at, available_at, headline, summary, body, source_url, fetched_at
+FROM staging.news
+WHERE symbol IS NULL;
 
-CREATE TABLE IF NOT EXISTS core.news_resources (
-    source        VARCHAR NOT NULL,
-    issuing_body  VARCHAR NOT NULL,
-    doc_type      VARCHAR,
-    doc_number    VARCHAR,
-    published_at  TIMESTAMP NOT NULL,
-    available_at  TIMESTAMP NOT NULL,
-    headline      VARCHAR NOT NULL,
-    summary       VARCHAR,
-    body          VARCHAR,
-    source_url    VARCHAR NOT NULL,
-    fetched_at    TIMESTAMP NOT NULL,
-    PRIMARY KEY (source_url)
-);
+CREATE OR REPLACE VIEW core.news_resources AS
+SELECT source, issuing_body, doc_type, doc_number, published_at, available_at, headline, summary, body, source_url, fetched_at
+FROM core.news
+WHERE symbol IS NULL;
 
 -- staging/core.macro_policy: Duy trì tương thích ngược với các pipeline cũ
-CREATE TABLE IF NOT EXISTS staging.macro_policy (
-    source        VARCHAR NOT NULL,
-    issuing_body  VARCHAR NOT NULL,
-    doc_type      VARCHAR,
-    doc_number    VARCHAR,
-    published_at  TIMESTAMP NOT NULL,
-    available_at  TIMESTAMP NOT NULL,
-    headline      VARCHAR NOT NULL,
-    summary       VARCHAR,
-    body          VARCHAR,
-    source_url    VARCHAR NOT NULL,
-    fetched_at    TIMESTAMP NOT NULL
-);
+CREATE OR REPLACE VIEW staging.macro_policy AS
+SELECT source, issuing_body, doc_type, doc_number, published_at, available_at, headline, summary, body, source_url, fetched_at
+FROM staging.news
+WHERE news_type = 'MACRO_POLICY' OR (symbol IS NULL AND source IN ('baochinhphu', 'ssc', 'mof', 'sbv', 'gdt', 'moit', 'thoibaonganhang'));
 
-CREATE TABLE IF NOT EXISTS core.macro_policy (
-    source        VARCHAR NOT NULL,
-    issuing_body  VARCHAR NOT NULL,
-    doc_type      VARCHAR,
-    doc_number    VARCHAR,
-    published_at  TIMESTAMP NOT NULL,
-    available_at  TIMESTAMP NOT NULL,
-    headline      VARCHAR NOT NULL,
-    summary       VARCHAR,
-    body          VARCHAR,
-    source_url    VARCHAR NOT NULL,
-    fetched_at    TIMESTAMP NOT NULL,
-    PRIMARY KEY (source_url)
-);
+CREATE OR REPLACE VIEW core.macro_policy AS
+SELECT source, issuing_body, doc_type, doc_number, published_at, available_at, headline, summary, body, source_url, fetched_at
+FROM core.news
+WHERE news_type = 'MACRO_POLICY' OR (symbol IS NULL AND source IN ('baochinhphu', 'ssc', 'mof', 'sbv', 'gdt', 'moit', 'thoibaonganhang'));
 
 -- core.market_foreign_flow_daily: Foreign investor trading volume & room (volume-only, B3/B4 compliant)
 CREATE TABLE IF NOT EXISTS core.market_foreign_flow_daily (

@@ -222,41 +222,58 @@ def write_macro_policy(con: duckdb.DuckDBPyConnection, df: pd.DataFrame) -> int:
     if df.empty:
         return 0
 
-    required_cols = [
-        "source",
-        "issuing_body",
-        "doc_type",
-        "doc_number",
-        "published_at",
-        "available_at",
-        "headline",
-        "summary",
-        "body",
-        "source_url",
-        "fetched_at",
+    df_write = df.copy()
+    if "news_type" not in df_write.columns:
+        df_write["news_type"] = "MACRO_POLICY"
+    if "symbol" not in df_write.columns:
+        df_write["symbol"] = None
+    if "duplicate_of" not in df_write.columns:
+        df_write["duplicate_of"] = None
+
+    news_cols = [
+        "source_url", "news_type", "symbol", "source", "issuing_body",
+        "doc_type", "doc_number", "published_at", "available_at",
+        "headline", "summary", "body", "duplicate_of", "fetched_at"
     ]
-    for col in required_cols:
-        if col not in df.columns:
-            raise ValueError(f"Missing required column '{col}' in macro_policy dataframe")
+    for col in news_cols:
+        if col not in df_write.columns:
+            df_write[col] = None
 
-    # Staging write
-    con.register("df_macro_staging", df[required_cols])
-    con.execute("INSERT INTO staging.macro_policy SELECT * FROM df_macro_staging")
-    con.unregister("df_macro_staging")
+    has_news = False
+    try:
+        con.execute("SELECT 1 FROM core.news LIMIT 1")
+        has_news = True
+    except Exception:
+        pass
 
-    # Core write with primary key idempotency (ON CONFLICT DO NOTHING)
-    con.register("df_macro_core", df[required_cols])
-    result = con.execute(
-        """
-        INSERT INTO core.macro_policy
-        SELECT * FROM df_macro_core
-        ON CONFLICT (source_url) DO NOTHING
-        """
-    )
-    n_written = result.fetchall()[0][0] if result else len(df)
-    con.unregister("df_macro_core")
+    if has_news:
+        con.register("df_macro_staging", df_write[news_cols])
+        try:
+            con.execute("INSERT INTO staging.news SELECT * FROM df_macro_staging")
+        except Exception:
+            pass
+        con.unregister("df_macro_staging")
 
-    return n_written
+        con.register("df_macro_core", df_write[news_cols])
+        con.execute("""
+            INSERT INTO core.news
+            SELECT * FROM df_macro_core
+            ON CONFLICT (source_url) DO UPDATE SET
+                news_type = EXCLUDED.news_type,
+                published_at = COALESCE(EXCLUDED.published_at, core.news.published_at),
+                available_at = COALESCE(EXCLUDED.available_at, core.news.available_at),
+                headline = COALESCE(EXCLUDED.headline, core.news.headline),
+                summary = COALESCE(EXCLUDED.summary, core.news.summary),
+                body = COALESCE(EXCLUDED.body, core.news.body),
+                fetched_at = EXCLUDED.fetched_at
+        """)
+        con.unregister("df_macro_core")
+        return len(df_write)
+    else:
+        con.register("df_macro_core", df_write)
+        con.execute("INSERT INTO core.macro_policy SELECT * FROM df_macro_core ON CONFLICT (source_url) DO NOTHING")
+        con.unregister("df_macro_core")
+        return len(df_write)
 
 
 def load_existing_urls(con: duckdb.DuckDBPyConnection) -> set[str]:

@@ -222,6 +222,7 @@ def parse_articles(html: str, symbol: str, enrich_body: bool = False) -> pd.Data
 def write_news(df: pd.DataFrame, con: "duckdb.DuckDBPyConnection | None" = None) -> int:
     """Lưu bài viết vào db/vesta_news.duckdb (core.news và staging.news).
     Idempotent deduplication theo source_url.
+    Tự động tương thích cả schema nguyên bản lẫn schema hợp nhất (kèm news_type='STOCK_NEWS').
     """
     if df.empty:
         return 0
@@ -231,18 +232,34 @@ def write_news(df: pd.DataFrame, con: "duckdb.DuckDBPyConnection | None" = None)
         raise ValueError(f"News DataFrame missing columns: {missing}")
 
     con = con or db.connect_news()
-    urls = df["source_url"].unique().tolist()
+    df_to_write = df.copy()
 
-    cols_sql = ", ".join(NEWS_COLUMNS)
+    # Kiểm tra cột thực tế của core.news
+    core_cols_info = [r[1] for r in con.execute("PRAGMA table_info('core.news')").fetchall()]
+    if "news_type" in core_cols_info and "news_type" not in df_to_write.columns:
+        df_to_write["news_type"] = "STOCK_NEWS"
+
+    urls = df_to_write["source_url"].unique().tolist()
+    temp_name = f"news_df_{id(df_to_write)}"
+
+    # Ghi vào staging.news
+    stg_cols_info = [r[1] for r in con.execute("PRAGMA table_info('staging.news')").fetchall()]
+    stg_cols = [c for c in df_to_write.columns if c in stg_cols_info]
+    stg_cols_sql = ", ".join(f'"{c}"' for c in stg_cols)
+
+    con.register(temp_name, df_to_write)
     con.execute("DELETE FROM staging.news WHERE source_url IN ?", [urls])
-    con.register("news_df", df[NEWS_COLUMNS])
-    con.execute(f"INSERT INTO staging.news ({cols_sql}) SELECT * FROM news_df")
+    con.execute(f"INSERT INTO staging.news ({stg_cols_sql}) SELECT {stg_cols_sql} FROM {temp_name}")
+
+    # Ghi vào core.news
+    core_cols = [c for c in df_to_write.columns if c in core_cols_info]
+    core_cols_sql = ", ".join(f'"{c}"' for c in core_cols)
 
     con.execute("DELETE FROM core.news WHERE source_url IN ?", [urls])
-    con.execute(f"INSERT INTO core.news ({cols_sql}) SELECT * FROM news_df")
-    con.unregister("news_df")
+    con.execute(f"INSERT INTO core.news ({core_cols_sql}) SELECT {core_cols_sql} FROM {temp_name}")
+    con.unregister(temp_name)
 
-    return len(df)
+    return len(df_to_write)
 
 
 def get_existing_urls(symbol: str, con: "duckdb.DuckDBPyConnection | None" = None) -> set[str]:

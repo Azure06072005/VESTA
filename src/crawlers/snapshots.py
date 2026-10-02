@@ -16,6 +16,7 @@ import logging
 import pathlib
 import re
 import sys
+import time
 import urllib.parse
 import urllib.request
 from typing import Any
@@ -56,33 +57,42 @@ def fetch_raw_vietcap(symbols: list[str], timeout: int = 12) -> pd.DataFrame:
         "Referer": "https://trading.vietcap.com.vn/",
         "Origin": "https://trading.vietcap.com.vn/",
     }
-    payload = json.dumps({"symbols": [s.upper() for s in symbols]}).encode("utf-8")
-    req = urllib.request.Request(url, data=payload, headers=headers, method="POST")
-
-    with urllib.request.urlopen(req, timeout=timeout) as resp:
-        raw_items = json.loads(resp.read().decode("utf-8"))
-
-    if not raw_items or not isinstance(raw_items, list):
-        raise EmptyResultError(f"Vietcap API returned no data for symbols: {symbols}")
-
     rows: list[dict[str, Any]] = []
-    for item in raw_items:
-        row: dict[str, Any] = {}
-        for k, v in item.get("listingInfo", {}).items():
-            row[f"listing_{k}"] = v
-        for k, v in item.get("matchPrice", {}).items():
-            row[f"match_{k}"] = v
-        bid_ask = item.get("bidAsk", {})
-        for k, v in bid_ask.items():
-            if k not in ("bidPrices", "askPrices"):
-                row[f"bidAsk_{k}"] = v
-        for i, b in enumerate(bid_ask.get("bidPrices", []), 1):
-            row[f"bidAsk_bid_{i}_price"] = b.get("price")
-            row[f"bidAsk_bid_{i}_volume"] = b.get("volume")
-        for i, a in enumerate(bid_ask.get("askPrices", []), 1):
-            row[f"bidAsk_ask_{i}_price"] = a.get("price")
-            row[f"bidAsk_ask_{i}_volume"] = a.get("volume")
-        rows.append(row)
+    chunk_size = 30
+    for i in range(0, len(symbols), chunk_size):
+        chunk = [s.upper() for s in symbols[i:i + chunk_size]]
+        payload = json.dumps({"symbols": chunk}).encode("utf-8")
+        req = urllib.request.Request(url, data=payload, headers=headers, method="POST")
+        try:
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
+                raw_items = json.loads(resp.read().decode("utf-8"))
+            if raw_items and isinstance(raw_items, list):
+                for item in raw_items:
+                    row: dict[str, Any] = {}
+                    info = item.get("listingInfo") or {}
+                    match = item.get("matchPrice") or {}
+                    bid_ask = item.get("bidAsk") or {}
+
+                    for k, v in info.items():
+                        row[f"listing_{k}"] = v
+                    for k, v in match.items():
+                        row[f"match_{k}"] = v
+                    for k, v in bid_ask.items():
+                        if k not in ("bidPrices", "askPrices"):
+                            row[f"bidAsk_{k}"] = v
+                    for idx_b, b in enumerate(bid_ask.get("bidPrices") or [], 1):
+                        row[f"bidAsk_bid_{idx_b}_price"] = b.get("price")
+                        row[f"bidAsk_bid_{idx_b}_volume"] = b.get("volume")
+                    for idx_a, a in enumerate(bid_ask.get("askPrices") or [], 1):
+                        row[f"bidAsk_ask_{idx_a}_price"] = a.get("price")
+                        row[f"bidAsk_ask_{idx_a}_volume"] = a.get("volume")
+                    rows.append(row)
+        except Exception as e:
+            logger.warning("Batch %d..%d failed: %s", i, i + len(chunk), e)
+        time.sleep(0.08)
+
+    if not rows:
+        raise EmptyResultError(f"Vietcap API returned no data for symbols: {symbols[:5]}...")
 
     df = pd.DataFrame(rows)
     df.columns = pd.MultiIndex.from_tuples([

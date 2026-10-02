@@ -22,7 +22,13 @@ DB_PATH = pathlib.Path(
 INTRADAY_DB_PATH = pathlib.Path(
     os.environ.get(
         "VESTA_INTRADAY_DB_PATH",
-        pathlib.Path(__file__).resolve().parents[2] / "db" / "vesta_intraday_1m.duckdb",
+        pathlib.Path(__file__).resolve().parents[2] / "db" / "vesta_ohlcv.duckdb",
+    )
+)
+OHLCV_DB_PATH = pathlib.Path(
+    os.environ.get(
+        "VESTA_OHLCV_DB_PATH",
+        pathlib.Path(__file__).resolve().parents[2] / "db" / "vesta_ohlcv.duckdb",
     )
 )
 NEWS_DB_PATH = pathlib.Path(
@@ -78,6 +84,24 @@ def attach_intraday(con: duckdb.DuckDBPyConnection, db_path: pathlib.Path | str 
         mode = " (READ_ONLY)" if read_only else ""
         try:
             con.execute(f"ATTACH IF NOT EXISTS '{db_path}' AS intraday{mode};")
+        except Exception:
+            pass
+
+
+def connect_ohlcv(db_path: pathlib.Path | str = OHLCV_DB_PATH, read_only: bool = False) -> duckdb.DuckDBPyConnection:
+    """Open a connection to the dedicated VESTA OHLCV database."""
+    db_path = pathlib.Path(db_path)
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    return duckdb.connect(str(db_path), read_only=read_only)
+
+
+def attach_ohlcv(con: duckdb.DuckDBPyConnection, db_path: pathlib.Path | str = OHLCV_DB_PATH, read_only: bool = True) -> None:
+    """Attach the OHLCV database as 'ohlcv_db' to an existing connection."""
+    db_path = pathlib.Path(db_path)
+    if db_path.exists():
+        mode = " (READ_ONLY)" if read_only else ""
+        try:
+            con.execute(f"ATTACH IF NOT EXISTS '{db_path}' AS ohlcv_db{mode};")
         except Exception:
             pass
 

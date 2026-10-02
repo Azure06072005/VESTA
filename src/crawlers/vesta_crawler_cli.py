@@ -209,10 +209,38 @@ TABLE_METADATA_SPECS = [
     },
     {
         "table": "core.realtime_quote_snapshot",
-        "name": "Bảng giá Snapshot & Định giá (F007)",
+        "name": "Bảng giá Snapshot (1,751 mã - F007)",
         "date_col": "snapshot_at",
         "sym_col": "symbol",
         "type": "streaming",
+    },
+    {
+        "table": "core.market_sentiment_snapshot",
+        "name": "Tâm lý & Độ rộng TT 26 năm",
+        "date_col": "snapshot_date",
+        "sym_col": "exchange",
+        "type": "sentiment",
+    },
+    {
+        "table": "core.market_screener_snapshot",
+        "name": "Bộ lọc Đa Nhân Tố 21 năm (Screener)",
+        "date_col": "snapshot_date",
+        "sym_col": "symbol",
+        "type": "screener",
+    },
+    {
+        "table": "core.order_book_depth",
+        "name": "Sổ lệnh Level 2 & OFI (VN100)",
+        "date_col": "timestamp",
+        "sym_col": "symbol",
+        "type": "orderbook",
+    },
+    {
+        "table": "core.intraday_trades",
+        "name": "Khớp lệnh Intraday (VN100)",
+        "date_col": "time",
+        "sym_col": "symbol",
+        "type": "trades",
     },
 ]
 
@@ -227,6 +255,7 @@ def inspect_database_status(target_db: str) -> None:
 
     try:
         con = duckdb.connect(target_db, read_only=True)
+        db.attach_ohlcv(con, read_only=True)
         db.attach_intraday(con, read_only=True)
         db.attach_news(con, read_only=True)
     except Exception as e:
@@ -236,6 +265,7 @@ def inspect_database_status(target_db: str) -> None:
             print(f"[*] Thử đọc từ cơ sở dữ liệu đệm: {buf_db}")
             try:
                 con = duckdb.connect(buf_db, read_only=True)
+                db.attach_ohlcv(con, read_only=True)
                 db.attach_intraday(con, read_only=True)
                 db.attach_news(con, read_only=True)
             except Exception as e2:
@@ -261,12 +291,12 @@ def inspect_database_status(target_db: str) -> None:
         date_col = spec["date_col"]
         sym_col = spec["sym_col"]
 
-        # Điều hướng bảng sang news_db hoặc intraday nếu cần
+        # Điều hướng bảng sang news_db hoặc ohlcv_db nếu cần
         query_tbl = tbl
         if spec.get("type") == "news":
             query_tbl = f"news_db.{tbl}"
-        elif "1m" in tbl:
-            query_tbl = f"intraday.{tbl}"
+        elif "market_ohlcv" in tbl or "market_index" in tbl or "1m" in tbl:
+            query_tbl = f"ohlcv_db.{tbl}"
 
         try:
             sym_expr = f"COUNT(DISTINCT {sym_col})" if sym_col else "'-'"
@@ -363,17 +393,21 @@ def get_target_symbols(target_db: str, symbol_arg: str = "all") -> List[str]:
 # =============================================================================
 
 def run_category_ohlcv(symbols: List[str], writer: ResilientDuckDBWriter, args: argparse.Namespace) -> int:
-    """Chạy cào phân hệ Giá nến OHLCV (1D hoặc 1m)."""
+    """Chạy cào phân hệ Giá nến OHLCV (1D hoặc 1m) lưu vào db/vesta_ohlcv.duckdb."""
     from crawlers.crawl_all_ohlcv_fundamentals import crawl_ohlcv_for_symbol
     interval = getattr(args, "interval", "1D")
     start = getattr(args, "start", "2000-01-01")
     end = getattr(args, "end", None)
     delay = getattr(args, "delay", 0.4)
 
-    logger.info(">>> [CATEGORY: OHLCV] Bắt đầu cào giá nến %s cho %d mã...", interval, len(symbols))
+    # Đảm bảo ghi đúng hồ chuyên biệt db/vesta_ohlcv.duckdb
+    ohlcv_db_path = str(db.OHLCV_DB_PATH)
+    ohlcv_writer = writer if hasattr(writer, "target_db") and writer.target_db == ohlcv_db_path else ResilientDuckDBWriter(ohlcv_db_path)
+
+    logger.info(">>> [CATEGORY: OHLCV] Bắt đầu cào giá nến %s cho %d mã (CSDL đích: %s)...", interval, len(symbols), ohlcv_db_path)
     total_bars = 0
     for idx, sym in enumerate(symbols, 1):
-        status, cnt = crawl_ohlcv_for_symbol(sym, writer, interval=interval, start_date=start, end_date=end)
+        status, cnt = crawl_ohlcv_for_symbol(sym, ohlcv_writer, interval=interval, start_date=start, end_date=end)
         if status == "success":
             total_bars += cnt
             logger.info("[%d/%d] %s: +%d nến %s.", idx, len(symbols), sym, cnt, interval)
@@ -440,7 +474,8 @@ def run_category_news_macro(symbols: List[str], writer: ResilientDuckDBWriter, a
     # 1. Báo Nhân Dân
     if source in ("all", "nhandan"):
         try:
-            cnt1 = nhandan_crawler.crawl_nhandan(db_path=news_db_path, start_year=current_year, end_year=current_year - 1, max_articles=max_pages * 20)
+            res1 = nhandan_crawler.run_nhandan_crawler(db_path=news_db_path, max_articles=max_pages * 15)
+            cnt1 = res1.get("written", 0) if isinstance(res1, dict) else int(res1 or 0)
             total += cnt1
             logger.info("  • Báo Nhân Dân: +%d tin bài (vesta_news.duckdb).", cnt1)
         except Exception as e:
@@ -449,7 +484,8 @@ def run_category_news_macro(symbols: List[str], writer: ResilientDuckDBWriter, a
     # 2. VietnamFinance
     if source in ("all", "vietnamfinance"):
         try:
-            cnt2 = vietnamfinance_crawler.crawl_vietnamfinance(db_path=news_db_path, max_pages=max_pages)
+            res2 = vietnamfinance_crawler.run_vietnamfinance_crawler(db_path=news_db_path, max_pages_per_cat=max_pages)
+            cnt2 = res2.get("written", 0) if isinstance(res2, dict) else int(res2 or 0)
             total += cnt2
             logger.info("  • VietnamFinance: +%d tin bài (vesta_news.duckdb).", cnt2)
         except Exception as e:
@@ -458,7 +494,8 @@ def run_category_news_macro(symbols: List[str], writer: ResilientDuckDBWriter, a
     # 3. Thời Báo Tài Chính Việt Nam
     if source in ("all", "thoibaotaichinh"):
         try:
-            cnt3 = thoibaotaichinh_crawler.crawl_tbtc(db_path=news_db_path, max_pages=max_pages)
+            res3 = thoibaotaichinh_crawler.run_thoibaotaichinh_crawler(db_path=news_db_path, max_offsets=max_pages)
+            cnt3 = res3.get("written", 0) if isinstance(res3, dict) else int(res3 or 0)
             total += cnt3
             logger.info("  • Thời Báo Tài Chính: +%d tin bài (vesta_news.duckdb).", cnt3)
         except Exception as e:
@@ -467,7 +504,8 @@ def run_category_news_macro(symbols: List[str], writer: ResilientDuckDBWriter, a
     # 4. Báo Chính Phủ
     if source in ("all", "baochinhphu"):
         try:
-            cnt4 = baochinhphu_crawler.crawl_baochinhphu(db_path=news_db_path, max_pages=max_pages)
+            res4 = baochinhphu_crawler.run_baochinhphu_crawler(db_path=news_db_path, max_pages=max_pages)
+            cnt4 = res4.get("written", 0) if isinstance(res4, dict) else int(res4 or 0)
             total += cnt4
             logger.info("  • Báo Chính Phủ: +%d tin bài (vesta_news.duckdb).", cnt4)
         except Exception as e:
@@ -754,6 +792,21 @@ def run_category_news_comprehensive(
     return total_all_news
 
 
+def run_category_order_book_vn100(symbols: List[str], writer: ResilientDuckDBWriter, args: argparse.Namespace) -> int:
+    """Cào sổ lệnh Level 2 & tính toán chỉ số OFI cho rổ VN100 (Vietcap Direct REST API)."""
+    from crawlers.order_book_depth_vietcap import crawl_order_book_vn100
+    target_path = str(writer.db_path) if hasattr(writer, "db_path") else "db/vesta_snapshot.duckdb"
+    res = crawl_order_book_vn100(db_path=target_path)
+    return res.get("order_book_records", 0)
+
+
+def run_category_deep_screener(symbols: List[str], writer: ResilientDuckDBWriter, args: argparse.Namespace) -> int:
+    """Cào bộ lọc đa nhân tố chuyên sâu cho toàn bộ cổ phiếu thị trường (Vietcap IQ Direct Screening API)."""
+    from crawlers.crawl_deep_screener import crawl_deep_screener
+    target_path = str(writer.db_path) if hasattr(writer, "db_path") else "db/vesta_snapshot.duckdb"
+    return crawl_deep_screener(db_path=target_path)
+
+
 CATEGORIES_REGISTRY = {
     "reference": run_category_reference,
     "ohlcv": run_category_ohlcv,
@@ -767,6 +820,8 @@ CATEGORIES_REGISTRY = {
     "macro": run_category_macro,
     "governance": run_category_governance,
     "snapshots": run_category_snapshots,
+    "order_book_vn100": run_category_order_book_vn100,
+    "deep_screener": run_category_deep_screener,
 }
 
 
@@ -961,6 +1016,10 @@ def main() -> int:
         symbols = get_target_symbols(target_db, symbol_arg=args.symbols)
         if args.limit:
             symbols = symbols[: args.limit]
+
+        # Tự động suy luận mode nếu người dùng chỉ định --category
+        if "--category" in sys.argv and "--mode" not in sys.argv:
+            args.mode = "category"
 
         # Mode: latest
         if args.mode == "latest":

@@ -217,7 +217,28 @@ class ResilientDuckDBWriter:
             fetched_at   TIMESTAMP NOT NULL
         );
 
+        -- Đảm bảo staging.news và core.news có đầy đủ các cột mở rộng trước khi tạo view
+        ALTER TABLE staging.news ADD COLUMN IF NOT EXISTS news_type VARCHAR;
+        ALTER TABLE staging.news ADD COLUMN IF NOT EXISTS issuing_body VARCHAR;
+        ALTER TABLE staging.news ADD COLUMN IF NOT EXISTS doc_type VARCHAR;
+        ALTER TABLE staging.news ADD COLUMN IF NOT EXISTS doc_number VARCHAR;
+        ALTER TABLE staging.news ADD COLUMN IF NOT EXISTS headline VARCHAR;
+        ALTER TABLE staging.news ADD COLUMN IF NOT EXISTS summary VARCHAR;
+        ALTER TABLE staging.news ADD COLUMN IF NOT EXISTS body VARCHAR;
+        ALTER TABLE staging.news ADD COLUMN IF NOT EXISTS duplicate_of VARCHAR;
+
+        ALTER TABLE core.news ADD COLUMN IF NOT EXISTS news_type VARCHAR;
+        ALTER TABLE core.news ADD COLUMN IF NOT EXISTS issuing_body VARCHAR;
+        ALTER TABLE core.news ADD COLUMN IF NOT EXISTS doc_type VARCHAR;
+        ALTER TABLE core.news ADD COLUMN IF NOT EXISTS doc_number VARCHAR;
+        ALTER TABLE core.news ADD COLUMN IF NOT EXISTS headline VARCHAR;
+        ALTER TABLE core.news ADD COLUMN IF NOT EXISTS summary VARCHAR;
+        ALTER TABLE core.news ADD COLUMN IF NOT EXISTS body VARCHAR;
+        ALTER TABLE core.news ADD COLUMN IF NOT EXISTS duplicate_of VARCHAR;
+
         -- Views tương thích ngược
+        DROP VIEW IF EXISTS core.news_resources;
+        DROP VIEW IF EXISTS core.macro_policy;
         CREATE OR REPLACE VIEW core.news_resources AS
         SELECT source, issuing_body, doc_type, doc_number, published_at, available_at, headline, summary, body, source_url, fetched_at
         FROM core.news
