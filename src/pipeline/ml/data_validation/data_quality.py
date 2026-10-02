@@ -736,7 +736,8 @@ class DataQualityPipeline:
         )
 
         # 10.3 Zero Future Timestamps (fetched_at / built_at <= now)
-        now = dt.datetime.now(dt.timezone.utc).replace(tzinfo=None)
+        # Use max of local and UTC with 5-min tolerance to prevent false positives from local timezone (UTC+7)
+        now = max(dt.datetime.now(), dt.datetime.now(dt.timezone.utc).replace(tzinfo=None)) + dt.timedelta(minutes=5)
         tables = [
             ("core.market_ohlcv_daily", "fetched_at"),
             ("core.fundamentals", "fetched_at"),

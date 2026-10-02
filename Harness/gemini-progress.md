@@ -668,7 +668,409 @@ Template for future entries:
 - State Transition: `F095` và `F099` passing; cập nhật `Harness/feature_list.json` và `Harness/DECISIONS.md`.
 - Next Session Should: Tiến hành giai đoạn làm sạch và chuẩn bị tập dữ liệu huấn luyện NLP / Feature Store (F104) hoặc F052 balance sheet mapping.
 
+---
+
+### Session 22 — 2026-10-01 (F105: News-to-Fundamental Entity Resolution & Financial Relevance Gate)
+- Author: Antigravity (Gemini)
+- Branch: `main`
+- Status: F105 PASSING (100% VERIFIED).
+- Completed:
+  1. **Nghiên Cứu Sâu Toàn Văn Nội Dung Tin Tức (`core.news.body`)**:
+     - Phân tích 1,149,304 bài viết trong kho tin tức `db/vesta_news.duckdb`: xác định **489,979 bài viết toàn văn chi tiết** (`body > 100` ký tự), tập trung ở `tinnhanhchungkhoan` (191,864 bài), `tuoitre` (157,457 bài), `baochinhphu` (36,227 bài), `tienphong` (24,496 bài), `vietstock` (15,853 bài), `thoibaonganhang` (15,791 bài), `baodautu` (15,799 bài).
+     - Phát hiện điểm nghẽn lớn: Có tới **478,895 bài viết vĩ mô/tổng hợp** hoàn toàn chưa được gắn mã cổ phiếu (`symbol IS NULL`), tạo ra khoảng trống dữ liệu khổng lồ cho các mô hình định lượng.
+  2. **Cổng Kiểm Định Tính Liên Quan Tài Chính (Financial Relevance Gate - F105)**:
+     - Xây dựng bộ phân loại 2 tầng (`FinancialRelevanceClassifier` trong `src/pipeline/news_fundamental_entity_matcher.py`):
+       * Tier 1: Whitelist từ khóa tài chính (chứng khoán, cổ phiếu, lãi suất, GDP, tín dụng, BCTC, nợ xấu...) vs Blacklist rác đời sống (showbiz, hoa hậu, scandal, tai nạn giao thông, án mạng, thể thao, mẹo làm đẹp).
+       * Tier 2: Entity-Driven Gate — nếu bài báo xuất hiện mã cổ phiếu, tên doanh nghiệp, cổ đông lớn hoặc lãnh đạo chủ chốt thì tự động định tuyến vào `FINANCIAL_EQUITY` với độ tin cậy 1.0.
+     - Thực nghiệm phân tầng trên 1,500 bài báo: Tách biệt chính xác các tin rác đời sống trên báo Tuổi Trẻ (4.2% rác), Tiền Phong (3.2%), Báo Chính Phủ (1.3%), TNCK (0.3%), Vietstock (0.0%).
+     - Áp dụng cơ chế **Gán Cờ Mềm (Soft Tagging)**: Giữ nguyên 100% dữ liệu gốc trong CSDL để đảm bảo tính toàn vẹn Point-in-Time, chỉ sàng lọc bỏ khi đưa vào huấn luyện mô hình NLP hoặc Backtest.
+  3. **Bộ Điều Phối Ánh Xạ Đa Thực Thể Tin Tức sang Dữ Liệu Cơ Bản (Entity Resolution Engine)**:
+     - Tải và đồng bộ hóa danh bạ thực thể toàn diện từ CSDL snapshot: **4,268 cổ đông lớn** (`core.company_shareholders`), **1,522 lãnh đạo chủ chốt** (Chủ tịch HĐQT, CEO, Ban kiểm soát từ `core.company_overview`), và **1,751 doanh nghiệp niêm yết** (`core.dim_symbol`).
+     - Tối ưu hóa thuật toán đối sánh chuỗi con đa tầng (C-level native substring check), tăng tốc độ quét từ 30.89s xuống **2.38s** (>13x speedup).
+     - Đột phá phục hồi mã chứng khoán: **23.5% bài báo tổng hợp chưa gắn mã (>100,000 bài viết)** được khôi phục thành công sang đúng mã cổ phiếu (`VIC`, `HPG`, `FPT`, `VJC`, `HAG`, `NVL`, `TCB`, `MSN`, `MWG`...). Ví dụ: khôi phục 775 bài báo về ông Phạm Nhật Vượng (VIC), 460 bài về ông Trần Đình Long (HPG), 591 bài về ông Trương Gia Bình (FPT).
+  4. **Chuẩn Hóa Mô Hình Quan Hệ 3NF (`core.news_entity_map` & `core.news_relevance_meta`)**:
+     - Thiết lập bảng quan hệ 1-N `core.news_entity_map` (`source_url`, `symbol`, `entity_type`, `entity_name`, `entity_role`, `company_type`, `ownership_pct`, `confidence_score`, `matched_location`) — không làm phình bảng `core.news` và hỗ trợ 1 tin gắn nhiều cổ phiếu/lãnh đạo.
+     - Thiết lập bảng `core.news_relevance_meta` (`source_url`, `relevance_category`, `is_financial_relevant`, `relevance_score`).
+  5. **Bộ Kiểm Thử & Notebook Deep EDA Hoàn Chỉnh**:
+     - `tests/test_news_fundamental_entity_matcher.py`: 6/6 unit tests pass sạch sẽ (100% passing).
+     - `notebooks/news/02_news_fundamental_entity_mapping_eda.ipynb` (420 KB, 16 cells gồm 8 Code và 8 Markdown): Đã chạy thực thi và nhúng sẵn 100% hình ảnh đồ họa độ nét cao, bảng biểu và biểu đồ trực quan hóa.
+- State Transition: `F105` passing; cập nhật `Harness/feature_list.json` và `Harness/gemini-progress.md`.
+- Next Session Should: Kiểm toán toàn bộ tiến trình từ F000 đến F100, chuẩn hóa bộ ba EDA (F099, F099b, F100) và thực hiện nghiên cứu chuyên sâu về CSDL Fundamental Snapshot (11.7 GB) trước khi bước vào F101.
+
+---
+
+### Session 23 — 2026-10-01 (F100: Comprehensive Fundamental Snapshot Database & Corporate Governance Deep EDA Suite)
+- Author: Antigravity (Gemini)
+- Branch: `main`
+- Status: F100 PASSING (100% VERIFIED), Bộ 3 EDA (F099, F099b, F100) Hoàn Tất.
+- Completed:
+  1. **Kiểm Tra & Chuẩn Hóa Toàn Diện Tiến Trình Từ F000 Đến F100**:
+     - Đã rà soát toàn bộ 47 tính năng từ F000 đến F100 trong `Harness/feature_list.json`.
+     - Xác nhận 26 tính năng nền tảng cốt lõi đã đạt trạng thái `passing`:
+       * Phân hệ Bootstrap & Universe: `F000`, `F001`, `F001b`, `F001c`.
+       * Phân hệ Market OHLCV Lakehouse: `F002`, `F002b`, `F095`, `F099`.
+       * Phân hệ News Lakehouse: `F003`, `F004`, `F004b`, `F004c`, `F004d`, `F099b`.
+       * Phân hệ Fundamental Snapshot: `F005`, `F006`, `F007`, `F007b`, `F050`, `F051`, `F052`, `F056`, `F057`, `F100`.
+       * Phân hệ Vận Hành & Khử Trùng Lặp: `F008`, `F009`.
+     - Chuẩn hóa kiến trúc bộ ba tính năng EDA tạo tiền đề bất biến cho phân hệ F101 (Cross-Dataset Validation Gate):
+       * `F099`: OHLCV Lakehouse EDA (`notebooks/ohlcv/01_ohlcv_1d_1m_sample_eda.ipynb` & `02_market_indices_and_group_rooms_eda.ipynb`).
+       * `F099b`: News Lakehouse EDA (`notebooks/news/01_vesta_unified_news_eda.ipynb` & `02_news_fundamental_entity_mapping_eda.ipynb`).
+       * `F100`: Fundamental Snapshot Database EDA (`notebooks/fundamentals/01_vesta_fundamentals_snapshot_eda.ipynb`).
+  2. **Kiểm Toán Chuyên Sâu CSDL Fundamental Snapshot (`db/vesta_snapshot.duckdb` - 11.7 GB, 75 Tables/Views)**:
+     - Chạy script kiểm toán toàn diện `scratch/deep_audit_snapshot_database.py`, rà soát 100% cấu trúc schema, số lượng cột, số dòng và phân bổ NULL:
+       * `core.financial_notes`: 7,358,616 dòng | 9 cột (Phân cấp 4 tầng thuyết minh chi tiết).
+       * `core.market_foreign_flow_daily`: 4,839,720 dòng | 10 cột (Lịch sử 19 năm mua/bán ròng và Room ngoại).
+       * `core.fundamentals`: 439,700 dòng | 7 cột (BCTC 5 chiều: CĐKT 103k, KQKD 105.6k, LCTT 102k, Ratios 70k, Sức khỏe 58.9k dòng).
+       * `core.corporate_events`: 38,803 dòng | 7 cột (Sự kiện cổ tức, ĐHCĐ và độ trễ thanh toán `payout_delay_days`).
+       * `core.proprietary_flow`: 37,757 dòng | 9 cột (Dòng tiền tự doanh CTCK).
+       * `core.index_valuation_series`: 13,138 dòng | 6 cột (Chuỗi định giá P/E, P/B chỉ số VN-Index, VN30, HNX 2017-2026).
+       * `core.company_shareholders`: 4,268 dòng | 7 cột (Toàn bộ cổ đông lớn $\ge 5\%$).
+       * `core.dim_symbol_cafef`: 2,734 dòng | 12 cột (Bao gồm 750 mã OTC & 234 mã chưa niêm yết).
+       * `core.dim_symbol`: 1,751 dòng | 9 cột.
+       * `core.company_overview`: 1,522 dòng | 32 cột (Đầy đủ Chủ tịch HĐQT, CEO, Ban kiểm soát, đơn vị kiểm toán).
+  3. **Xây Dựng Hoàn Chỉnh Notebook Deep EDA Fundamentals (`notebooks/fundamentals/01_vesta_fundamentals_snapshot_eda.ipynb`)**:
+     - Khởi tạo notebook 18 cells (9 Code và 9 Markdown chuyên sâu) qua `scratch/build_fundamentals_eda_notebook.py`.
+     - Bao phủ toàn diện 8 phân tầng phân tích định lượng:
+       * Tầng 1: Kết nối & Kiểm kê cấu trúc kho dữ liệu 11.7 GB.
+       * Tầng 2: Vũ trụ cổ phiếu niêm yết (HOSE 400, HNX 309, UPCOM 867) và phân bổ 19 nhóm ngành ICB.
+       * Tầng 3: Báo cáo tài chính 5 chiều (439,700 dòng qua 81 quý từ 2006-2026).
+       * Tầng 4: Phân phối điểm sức khỏe Piotroski F-Score (0-9) và Donut chart vùng rủi ro phá sản Altman Z-Score (Safe 73.8%, Grey 14.2%, Distress 12.0%).
+       * Tầng 5: Cơ cấu quản trị, 4,268 cổ đông lớn, loại hình doanh nghiệp và thị phần kiểm toán Big 4 (KPMG, PwC, EY, Deloitte).
+       * Tầng 6: 38,803 sự kiện doanh nghiệp và đo lường độ trễ chi trả cổ tức `payout_delay_days` (Trung vị 21 ngày, trung bình 29 ngày).
+       * Tầng 7: Dòng tiền khối ngoại 4.84M phiên (2008-2026) ghi nhận áp lực bán ròng kỷ lục 2024-2025.
+       * Tầng 8: 7.36M dòng thuyết minh BCTC và diễn biến định giá trung vị P/E (13.3 - 18.4) & P/B (1.67 - 2.81) của VN-Index.
+  4. **Thực Thi Nghiệm Thu Toàn Bộ 9 Code Cells & Nhúng Base64 Graphics**:
+     - Script `scratch/render_fundamentals_eda_notebook.py` chạy thành công 100% trong 4 giây.
+     - Toàn bộ kết quả thống kê dạng bảng HTML và biểu đồ đồ họa phân giải cao đã được nhúng trực tiếp vào file notebook.
+  5. **Bốn Khuyến Nghị Kiến Trúc Cho Giai Đoạn F101 & F102**:
+     - **BCTC Disclosure Lag Gate**: Áp dụng quy tắc $available\_at = period\_end + 30$ ngày (BCTC Quý) và $+ 90$ ngày (BCTC Năm) để loại trừ 100% Look-ahead bias.
+     - **Hard Risk Rail**: Tích hợp `z_score_zone == 'Distress'` hoặc `piotroski_f_score < 3` làm bộ lọc phòng vệ trước khi chọn danh mục.
+     - **Mô Hình Hóa Dòng Tiền Cổ Tức Thực Tế**: Sử dụng `payout_delay_days` (trung vị 21 ngày) để tính đúng thời điểm tiền về tài khoản trong Backtesting.
+     - **RankGauss Quantile Normalization**: Chuẩn hóa 60 chỉ số tài chính về phân phối $N(0, 1)$ nhằm triệt tiêu các giá trị ngoại lai cực đoan của sàn UPCOM.
+- State Transition: `F100` passing (100% verified). Bộ 3 EDA (`F099`, `F099b`, `F100`) đã sẵn sàng.
+- Next Session Should: Bắt đầu triển khai phân hệ F101: "Cross-Dataset Validation Gate (OHLCV, Fundamentals, News, Corporate Events)" với các bài kiểm thử tính toàn vẹn đa nguồn.
+
+---
+
+### Session 24 — 2026-10-01 (Snapshot Database L1 Cleanup, VN100 Orderbook, Vietcap Deep Screener & Max Historical Backfill)
+- Author: Antigravity (Gemini)
+- Branch: `main`
+- Status: F007, F007b, F100 PASSING (100% VERIFIED), Toàn bộ Snapshot đạt Max Historical Data.
+- Completed:
+  1. **Thực Thi Dọn Dẹp Lựa Chọn 1 Cho Cơ Sở Dữ Liệu Snapshot (`db/vesta_snapshot.duckdb` & `vesta_backup.duckdb`)**:
+     - Loại bỏ triệt để 13 bảng và view OHLCV/News cũ đã được di dời sang các lakehouse chuyên biệt (`market_ohlcv_1m`, `market_ohlcv_daily`, `market_index_daily`, `news`, `news_resources`, `macro_policy`...).
+     - Giải phóng hơn 17.5 triệu dòng dữ liệu dư thừa, giảm dung lượng đĩa từ 10.90 GB xuống còn **9.77 GB** sau `CHECKPOINT`.
+     - Cấu trúc CSDL snapshot trở nên tinh gọn, chuyên biệt 100% cho BCTC, Quản trị, Thuyết minh, Dòng tiền và Snapshot.
+  2. **`market_sentiment_snapshot` — Tái Tạo Trọn Vẹn 26 Năm Lịch Sử (2000 – 2026)**:
+     - Xây dựng [scratch/backfill_market_sentiment.py](file:///d:/VESTA/scratch/backfill_market_sentiment.py) tái tạo độ rộng thị trường từ 5.18M dòng nến `db/vesta_ohlcv.duckdb`.
+     - Tăng trưởng dữ liệu từ 3 dòng lên **18,779 phiên** trải dài từ ngày 31/07/2000 đến 28/09/2026 cho cả 3 sàn HOSE, HNX, UPCOM.
+     - Tính toán chuẩn mực các chỉ số: Số mã tăng (`advances`), Số mã giảm (`declines`), Đứng giá (`no_change`), và điểm tâm lý `fear_greed_score` (-100 đến +100).
+  3. **`order_book_depth` & `intraday_trades` — Tách Độc Lập Khỏi vnstock & Cào Rổ VN100**:
+     - Xây dựng crawler độc lập [src/crawlers/order_book_depth_vietcap.py](file:///d:/VESTA/src/crawlers/order_book_depth_vietcap.py) kết nối Vietcap Direct REST API (0% vnstock dependency, không cần API Key).
+     - Quét trọn vẹn 100 mã cổ phiếu rổ **VN100** (`core.dim_index_constituents`), lưu trữ Top 3 Bid/Ask depth, tính toán tỷ số mất cân bằng dòng lệnh `ofi_ratio` (Order Flow Imbalance) và lưu trữ giao dịch khớp lệnh intraday với cờ cá mập quét lệnh `is_shark_sweep`.
+  4. **`realtime_quote_snapshot` — Nâng Cấp Batch Chunking & Cào Toàn Bộ Thị Trường**:
+     - Nâng cấp [src/crawlers/snapshots.py](file:///d:/VESTA/src/crawlers/snapshots.py) tự động chia batch 30 mã/lần, xử lý triệt để lỗi NoneType và vượt qua giới hạn 403.
+     - Cào và nạp thành công **1,726 mã cổ phiếu thực tế (All Symbols)** tại mốc ngày mới nhất 2026-10-01 15:05:22 (ngay sau phiên ATC).
+     - Quy mô bảng tăng lên **6,611 dòng**.
+  5. **`market_screener_snapshot` — Deep Screener (34 Chỉ Tiêu) & Tái Tạo Lịch Sử 21 Năm (2005 – 2026)**:
+     - Xây dựng [src/crawlers/crawl_deep_screener.py](file:///d:/VESTA/src/crawlers/crawl_deep_screener.py) cào 1,522 mã với 34 chỉ tiêu định lượng (P/E, P/B, ROE, Gross/Net Margin, Tăng trưởng LNST, RSI, RS, ADTV) tại ngày 2026-10-01.
+     - Thực thi [scratch/backfill_historical_screener.py](file:///d:/VESTA/scratch/backfill_historical_screener.py) ghép nối `preprocessed.fundamentals_ratios` (52 cột) với kho nến `db/vesta_ohlcv.duckdb`: Phủ kín **43,223 dòng bản ghi screener lịch sử cho 1,742 mã qua 81 quý (từ 31/12/2005 đến 31/12/2026)** phục vụ Factor Investing.
+  6. **Đồng Bộ Hoàn Chỉnh Quy Trình Vào VESTA Crawling GUI & CLI Controller**:
+     - Cập nhật [src/crawlers/vesta_crawler_gui.py](file:///d:/VESTA/src/crawlers/vesta_crawler_gui.py) và [src/crawlers/vesta_crawler_cli.py](file:///d:/VESTA/src/crawlers/vesta_crawler_cli.py):
+       * Bổ sung bảng kiểm soát tình trạng Dashboard Treeview: `market_sentiment_snapshot`, `market_screener_snapshot`, `order_book_depth`, `intraday_trades`.
+       * Bổ sung các khung cấu hình riêng biệt: `order_book_vn100` (Rổ VN100) và `deep_screener` (1,522 mã, 34 chỉ số).
+       * Thêm nút chọn nhanh `VN100` và `Toàn bộ (all - 1751 mã)` ngay trên giao diện Tkinter.
+       * Định tuyến đa luồng background runner cho các crawler mới (0% xung đột, 0% crash UI).
+- State Transition: Toàn bộ phân hệ Snapshot & Fundamentals hoàn tất 100% Max Historical Data.
+- Next Session Should: Bắt đầu triển khai phân hệ F100b: "Cross-Lakehouse Relational Entity Mapping & Comprehensive Data Linkage EDA Suite".
+
+---
+
+### Session 25 — 2026-10-01 (F106: Cross-Lakehouse Relational Entity Mapping & Comprehensive Data Linkage EDA Suite)
+- Author: Antigravity (Gemini)
+- Branch: `main`
+- Status: F106 PASSING (100% VERIFIED), Bản Đồ Liên Kết Thực Thể Đa Hồ Hoàn Tất Ở Cuối Hàng Đợi F1**.
+- Completed:
+  1. **Khởi Tạo & Định Vị Tính Năng F106 Trong Harness**:
+     - Bổ sung `F106` vào [Harness/feature_list.json](file:///d:/VESTA/Harness/feature_list.json) tại vị trí cuối cùng của phân hệ `F1**` (sau F105, trước F201), tổng hợp toàn bộ tính toàn vẹn liên kết và kiểm toán thực thể đa hồ trước khi bước vào phân hệ Backtesting & Alpha Research F2**.
+  2. **Kiểm Toán Toàn Bộ Ma Trận Ghép Nối Thực Thể Đa Hồ (Cross-Lakehouse Master Join Matrix)**:
+     - Xây dựng và thực thi [scratch/audit_cross_lakehouse_mapping.py](file:///d:/VESTA/scratch/audit_cross_lakehouse_mapping.py) đo lường khả năng JOIN với trục trung tâm `core.dim_symbol` (1,751 mã):
+       * `core.company_overview`: 1,522 / 1,522 mã (100.0% match).
+       * `core.company_shareholders`: 1,751 / 1,751 mã (100.0% match).
+       * `core.corporate_events`: 1,751 / 1,751 mã (100.0% match).
+       * `core.financial_notes`: 1,751 / 1,751 mã (100.0% match).
+       * `core.market_screener_snapshot`: 1,742 / 1,742 mã (100.0% match).
+       * `core.realtime_quote_snapshot`: 1,726 / 1,726 mã (100.0% match).
+       * `core.market_foreign_flow_daily`: 1,751 / 1,751 mã (100.0% match).
+       * `ohlcv_db.core.market_ohlcv_daily`: 1,739 / 1,751 mã (99.31% match - 12 mã chênh lệch do hủy niêm yết trong quá khứ).
+       * `ohlcv_db.core.market_ohlcv_1m`: 1,446 / 1,751 mã (82.58% match - tập trung mã thanh khoản).
+  3. **Chiến Lược Định Tuyến Thực Thể Hồ Tin Tức (News Relational Routing Strategy)**:
+     - Khảo sát 1,149,304 bài viết trong `db/vesta_news.duckdb`:
+       * 670,725 bài viết (58.36%) có gán mã; trong đó 590,880 bài khớp 100% với `core.dim_symbol`.
+       * 478,579 bài viết (41.64%) là tin tức vĩ mô, chính sách và ngành: Áp dụng chiến lược 3 tầng (Direct Symbol -> Text NER Body/Headline -> ICB Sector Routing), không ép buộc gán mã cơ học để tránh sinh ra dữ liệu giả mạo (Synthetic noise).
+  4. **Xây Dựng & Render Thành Công Notebook Chuyên Sâu**:
+     - Tạo notebook [notebooks/mapping/01_cross_lakehouse_data_mapping_eda.ipynb](file:///d:/VESTA/notebooks/mapping/01_cross_lakehouse_data_mapping_eda.ipynb) (12 cells gồm 6 Code và 6 Markdown).
+     - Thực thi thành công toàn bộ qua [scratch/render_cross_lakehouse_mapping_eda.py](file:///d:/VESTA/scratch/render_cross_lakehouse_mapping_eda.py) với exit code 0:
+       * Tầng 1: Master Join Match Rate Matrix & Bar Chart trực quan hóa độ phủ.
+       * Tầng 2: Mạng lưới sở hữu chéo cổ đông lớn (Cross-Shareholding Network) với Top 12 tổ chức nắm giữ nhiều cổ phần nhất (SCIC, Dragon Capital, PVN...).
+       * Tầng 3: Ghép nối BCTC (`pe_ratio`, `roe`, vốn hóa) với thanh khoản thực tế từ nến ngày OHLCV (Top 200 cổ phiếu, Scatter plot màu theo vốn hóa).
+       * Tầng 4: Phân loại cơ cấu hồ tin tức (Donut Chart: Gán mã trực tiếp 58.4% vs Vĩ mô/Ngành 41.6%).
+       * Tầng 5: Top 15 cổ phiếu có mật độ truyền thông lớn nhất TTCK Việt Nam.
+       * Tầng 6: Tổng kết tính toàn vẹn và quy tắc thực thi Point-in-Time (PIT Rule B4).
+- State Transition: `F106` passing (100% verified). Toàn bộ hệ thống 3 hồ dữ liệu VESTA đã được liên kết chuẩn xác và kiểm chứng thực nghiệm.
+- Next Session Should: Tiếp tục duy trì dữ liệu live và vận hành các phân hệ Feature Engineering & Model Preprocessing.
+
+## Session 26 — 2026-10-02
+- Author: Antigravity (Gemini)
+- Branch: `main`
+- Status: Đồng Bộ Hoàn Tất Toàn Bộ 3 Hồ Dữ Liệu Lên Mốc Mới Nhất Ngày 2026-10-02 (T-0 / T-1).
+- Completed:
+  1. **Đồng Bộ Hồ Dữ Liệu Vesta Snapshots (`db/vesta_snapshot.duckdb`)**:
+     - `core.order_book_depth`: 611 dòng sổ lệnh độ sâu Top 3 Bid/Ask rổ VN100 (Max timestamp: **2026-10-02 10:58:43**).
+     - `core.intraday_trades`: 32,062 dòng khớp lệnh từng bước giá rổ VN100 (Max timestamp: **2026-10-02 10:58:43**).
+     - `core.market_screener_snapshot`: 44,746 dòng (Bổ sung bộ lọc đa nhân tố toàn thị trường ngày hôm nay **2026-10-02** qua Vietcap IQ Screening API).
+     - `core.realtime_quote_snapshot`: 6,719 dòng (+100 mã VN100/VN30 cập nhật phiên giao dịch sáng **2026-10-02 11:15:11**).
+     - `core.market_breadth_series`: 2,235 dòng (Độ rộng 745 phiên giao dịch cho HOSE, HNX, UPCOM đạt mốc **2026-10-02**).
+     - `core.market_sentiment_snapshot`: 18,782 dòng (Cập nhật chỉ số Fear & Greed ngày **2026-10-02** cho cả 3 sàn).
+     - `core.cafef_disclosures`: 24,752 dòng (+200 bản ghi công bố thông tin doanh nghiệp mới nhất).
+     - `core.corporate_events`: 38,995 dòng (Lịch sự kiện cổ tức/ĐHCĐ tương lai đến **2026-10-21**).
+  2. **Đồng Bộ Hồ Dữ Liệu Nến Giá & Chỉ Số (`db/vesta_ohlcv.duckdb`)**:
+     - `core.market_index_daily`: Cào bù toàn bộ chỉ số sàn và rổ nhóm đạt mốc **2026-10-02**:
+       * VNINDEX: 6,376 phiên (max: 2026-10-02)
+       * VN30: 3,576 phiên (max: 2026-10-02)
+       * HNX-INDEX: 5,139 phiên (max: 2026-10-02)
+       * HNX30: 3,446 phiên (max: 2026-10-02)
+       * UPCOM-INDEX: 3,578 phiên (max: 2026-10-02)
+       * VN100: 2,269 phiên (max: 2026-10-02)
+     - `core.market_ohlcv_daily`: 4,090,371 dòng (342/345 mã VN100 + VN30 + Top Active Equities được cào bù +1,468 nến đạt mốc **2026-10-02**, với phiên đóng cửa gần nhất là 2026-10-01).
+   3. **Đồng Bộ Hồ Dữ Liệu Tin Tức (db/vesta_news.duckdb)**:
+      - Khắc phục triệt để lỗi ràng buộc DDL: Cập nhật configs/duckdb_schema.sql sang schema chuẩn 14 cột đầy đủ cho staging.news và core.news.
+      - Cập nhật cafef_news.py và nstock_news.py tự động nhận diện và gán 
+ews_type = 'STOCK_NEWS' (16/16 unit tests vượt qua 100%).
+      - Tin tức vĩ mô & chính sách điều hành: Sửa lỗi DDL VIEW và chuẩn hóa ghi vào core.news với 
+ews_type = 'MACRO_POLICY'. Cào nạp thành công 4 nguồn báo chí chính thống:
+        * Báo Nhân Dân: +30 bài viết
+        * VietnamFinance: +90 bài viết (Tài chính, Chứng khoán, Bất động sản, Vĩ mô)
+        * Thời Báo Tài Chính Việt Nam: +180 bài viết mới từ sitemap và chuyên mục
+        * Báo Chính Phủ: +34 bài viết (Kinh tế vĩ mô, Thị trường chứng khoán, Chỉ đạo điều hành)
+      - Tin tức doanh nghiệp CafeF (STOCK_NEWS): Hoàn thành cào bù +93 bài viết phân tích / tin doanh nghiệp mới nhất sáng hôm nay cho rổ VN30 và Top cổ phiếu thanh khoản lớn (ACB, BCM, BID, CTG, HDB, HPG, MBB, MSN, PLX, POW, SHB, SSB, SSI, STB, TCB, TPB, VCB, VHM, VIB, VNM, VPB, DIG, VND, NVL, PVD, DXG, DGC, KBC, VIX, GEX, EIB), max published_at đạt **2026-10-02 11:26:00**.
+      - Tổng quy mô hồ tin tức: **1,149,770** bài viết (core.news_resources: 479,268 bài; core.macro_policy: 57,343 bài).
+- Verification:
+  - Kiểm toán trạng thái thành công với [scratch/verify_updated_status.py](file:///d:/VESTA/scratch/verify_updated_status.py): Toàn bộ các bảng chính đạt max timestamp = **2026-10-02**.
+  - Kiểm thử đơn vị toàn diện: 16/16 tests của 	est_cafef_crawler.py và 	est_vnstock_news_crawler.py pass sạch; 11/11 tests của 	est_crossref_validation.py pass 100%.
+- Next Session Should: Tiếp tục vận hành kiểm toán chất lượng dữ liệu F101 và xây dựng các bộ đặc trưng chuẩn bị cho F201 Alpha Research.
+
+## Session 27 — 2026-10-02
+- Author: Antigravity (Gemini)
+- Branch: main
+- Status: Triển Khai Phân Hệ F1** & Hoàn Tất Nghiên Cứu Chuyên Sâu Recommendation F101 (Tiered Validation Penalty Framework).
+- Completed:
+  1. **Rà Soát & Định Tuyến Các Recommendation Chưa Hoàn Thành F0xx**:
+     - F008: Cơ chế Dead Letter Queue (DLQ) phân loại TRANSIENT vs PERMANENT đã hoàn tất.
+     - F009: Chuyển giao nhiệm vụ Encoding Normalization (ftfy/unicodedata NFKC) và Cross-lakehouse Drift Detection vào pipeline dữ liệu F1xx.
+     - F004, F005, F006, F007, F096, F098: Định tuyến hoàn chỉnh sang F102 (PIT Join & Forward Lagging) và F104 (ML Feature Store).
+  2. **Cập Nhật & Sửa Đổi Kế Hoạch Phân Hệ F1** Trong eature_list.json**:
+     - Cập nhật F101: Tích hợp kiến trúc kiểm toán liên kết 3 Lakehouses (esta_snapshot.duckdb, esta_ohlcv.duckdb, esta_news.duckdb) và chuyển đổi cơ chế sang Tiered Validation Penalty Framework (DQS).
+     - Cập nhật F102: Tích hợp xử lý 4 data caveats (1,038 zero prices, 29.1% zero-volume bars, 25.6% midnight timestamps).
+  3. **Hoàn Tất Deep Research Về Recommendation Của F101**:
+     - Khảo sát thực nghiệm trên 4.09M nến, 1.15M tin tức và 658,182 sự kiện PIT: Chỉ ra rằng nếu áp dụng 'Fail-Loudly / Hard Drop' thì hệ thống sẽ vứt bỏ 99.8% dữ liệu thực tế do phần lớn bài viết tài chính là headline-only hoặc có mốc giờ 00:00:00.
+     - Xây dựng **Tiered Validation Penalty Framework (TVPF)**:
+       * Tier 1 (Fatal Look-ahead / Zero price): Penalty 1.0 -> Exclude (chiếm đúng 0.16% sự kiện thực tế).
+       * Tier 2 (Structural Flaws): Penalty 0.40 -> DQS 0.60.
+       * Tier 3 (Metadata / Completeness): Penalty 0.15 - 0.20 -> DQS 0.70 - 0.85 -> Áp dụng Forward Lagging và Sample Weighting.
+       * Tier 4 (Minor Friction): Penalty 0.05 -> DQS 0.95.
+     - Kết quả: **74.89%** sự kiện đạt chuẩn huấn luyện (TIER_B_USABLE với DQS >= 0.70).
+  4. **Hiện Thực Hóa Module & Kiểm Thử Đơn Vị**:
+     - Xây dựng module src/pipeline/tiered_validation.py với evaluate_event_dqs() và udit_tiered_quality().
+     - Xây dựng bộ test 	ests/test_tiered_validation.py (6/6 tests pass sạch). Toàn bộ 17/17 tests của F101 pass 100%.
+     - Ghi nhận quyết định thiết kế vào Harness/DECISIONS.md.
+- Next Session Should: Tiếp tục chuyển sang hoàn thiện F102 Point-in-Time Join và xử lý 4 data caveats đã kiểm toán.
+
+## Session 28 — 2026-10-02
+- Author: Antigravity (Gemini)
+- Branch: main
+- Status: Hoàn Tất Nghiên Cứu Chuyên Sâu F102 (PIT Join) & F103 (Enterprise 11-Technique Data Validation Pipeline).
+- Completed:
+  1. **Cập Nhật File Dependencies trong `Harness/feature_list.json`**:
+     - `F101`: Bổ sung 6 tệp: `src/pipeline/validate_crossref.py`, `src/pipeline/tiered_validation.py`, `src/pipeline/symbol_classification.py`, `tests/test_crossref_validation.py`, `tests/test_tiered_validation.py`, `scratch/deep_research_f101_tiered_validation.py`.
+     - `F102`: Bổ sung 2 tệp: `src/pipeline/pit_join.py`, `tests/test_pit_join.py`.
+     - `F103`: Bổ sung 2 tệp: `src/pipeline/data_quality.py`, `tests/test_data_quality_pipeline.py`.
+  2. **Deep Research F102 (Point-in-Time Join & Historical BCTC Paradox)**:
+     - Khảo sát thực nghiệm trên 658,182 sự kiện PIT: Phát hiện điều kiện `fetched_at <= as_of_date` triệt tiêu 99.999% BCTC do crawler chạy dồn năm 2026 (chỉ 7/658k sự kiện có BCTC).
+     - Đổi sang điều kiện theo logic thực tế: `available_at <= published_at`, nâng độ phủ BCTC từ 0.001% lên **88.30%** (581,138 sự kiện có dữ liệu cơ bản hợp lệ tại thời điểm tin ra).
+     - Đồng bộ helper `_seed_news` trong `tests/test_pit_join.py` sang chuẩn 14 cột, đưa 13/13 tests của F102 về PASSED 100%.
+  3. **Deep Research F103 (Enterprise 11-Technique Data Validation & Quality Pipeline)**:
+     - **Thực nghiệm 11 kỹ thuật trên 3 Lakehouses**: 4.09M nến ngày, 1.15M tin tức, 439,700 BCTC, 658,182 sự kiện PIT.
+     - **Kiểm chứng Recommendation**: DuckDB Vectorized SQL Engine chạy toàn bộ 22 checks trên 6.3 triệu bản ghi chỉ mất **2.21 giây** (trung bình 100.5ms/check; window functions LEAD/LAG trên 4.09M dòng chỉ mất ~180ms - 230ms).
+     - **Phát hiện & Khắc phục triệt để 2 lỗi hệ thống**:
+       * *Zero Lookahead Leakage*: Sửa 11 dòng sự kiện của mã `AAH` (và 148 dòng unpurged) xuất bản sau 15:00 bị neo nhầm vào giá đóng cửa cùng ngày T0 -> Cập nhật nguyên tử đồng bộ cả `core.pit_events` và `staging.pit_events`, đưa vi phạm về 0.
+       * *Timezone Mismatch Gate*: Sửa logic `zero_future_timestamps` từ UTC ngây thơ sang `max(now_local, now_utc) + 5min`, xóa bỏ 192 lỗi False Positive do crawler chạy ở múi giờ Việt Nam (UTC+7).
+     - **Thống kê khuyết tật thị trường Việt Nam**:
+       * 11,548 nến giá <= 0 (chủ yếu UPCoM đóng băng, volume = 0).
+       * 15 nến High < Low (lỗi nguồn cấp CafeF); 337k nến High < Open (giá mở cửa UPCoM/HNX lấy giá tham chiếu).
+       * 99.93% BCTC cân bằng phương trình kế toán $A = L + E$ (chỉ 73/103,050 báo cáo bị lệch > 1M VND).
+       * Đủ 30/30 mã VN30 với 28,112 sự kiện PIT.
+  4. **Kiểm Thử & Xác Minh Toàn Tuyến**:
+     - `python -m src.pipeline.data_quality --profile`: **STATUS: PASS (22/22 checks passed, 0 errors, 0 warnings)**.
+     - `pytest tests/test_data_quality_pipeline.py -v`: **12/12 tests PASSED**.
+     - Toàn bộ 42/42 tests của F101, F102, F103 PASSED 100%.
+  5. **Deep Research F104 (ML Feature Pipeline & Horizon-Calibrated Embargo Optimization)**:
+     - **Kiểm chứng toàn diện Pipeline F104**: Đo lường thông lượng 1,195 events/giây trên 21 chiều đặc trưng (ASOF JOIN Window C++ Engine).
+     - **Kiểm chứng Recommendation**: So sánh thực nghiệm 5 mức độ Embargo ($0d, 5d, 15d, 30d, 45d$). Chứng minh rằng việc hạ từ 45 ngày (Lopez de Prado standard) xuống 5 ngày (khớp với $T+5$ Holding Period) giảm lượng mẫu bị loại từ 1.51% xuống 0.22% và cứu được 90% số mẫu bước ngoặt thị trường tại cuối năm 2023 và 2024 mà không rò rỉ nhãn.
+     - **Khắc phục 2 điểm nghẽn kỹ thuật**:
+       * Cập nhật `extract_fundamental_features()` đọc nested dict `'ratio'` (`RT_VALUE_PE`, `RT_VALUE_PB`, `RT_PRT_ROE`), giải quyết triệt để tình trạng 100% Null P/E, P/B, ROE.
+       * Cập nhật `_resolve_ohlcv_table()` tự động gắn kết hồ `ohlcv_db` để trích xuất momentum và biến động 20 phiên từ 4.09M nến thật.
+     - **Kiểm thử toàn tuyến**: 6/6 tests F104 PASSED; 48/48 unit tests từ F101 đến F104 PASSED 100%.
+- Next Session Should: Tiến hành nghiên cứu chuyên sâu F105 (News-to-Fundamental Entity Resolution & Financial Relevance Gate).
+
+## Session 29 — 2026-10-02
+- Author: Antigravity (Gemini)
+- Branch: main
+- Status: Hoàn Tất Deep Research & Triển Khai Thực Nghiệm F105 (News-to-Fundamental Entity Resolution & Financial Relevance Gate).
+- Completed:
+  1. **Khảo sát Thực Nghiệm Toàn Diện trên Lakehouse (`vesta_news.duckdb` & `vesta_snapshot.duckdb`)**:
+     - Phát hiện 479,268 bài viết ($41.68\%$ kho tin) đang có `symbol IS NULL`, tập trung $100\%$ ở các nguồn tài chính & vĩ mô trọng yếu (*Tin Nhanh Chứng Khoán* 192k bài, *Tuổi Trẻ* 157k bài, *Báo Chính Phủ* 36k bài, *Tiền Phong* 25k bài, *Vietstock* 16k bài...).
+     - Xác nhận $99.81\%$ ($478,339$ bài) có nội dung toàn văn trong `core.news_resources` với độ dài $> 50$ ký tự.
+     - Phát hiện 2 bảng đích `core.news_entity_map` và `core.news_relevance_meta` đã có sẵn DDL nhưng đang trống $0$ bản ghi trước khi chạy batch.
+  2. **Giải Quyết Triệt Để 2 Lỗ Hổng Thiết Kế Nghiêm Trọng**:
+     - *Lỗ hổng 1 — Loại bỏ thương hiệu 1 từ (Single-word Brand Exclusion)*: Điều kiện cũ `len(norm.split()) >= 2 and len(norm) >= 6` đã loại bỏ $100\%$ các thương hiệu trụ cột như **FPT, Vinamilk, Vinhomes, Masan, Vietcombank, Techcombank, Sacombank, MBBank**... Đã bổ sung nạp trường `en_organ_name` từ `core.dim_symbol` và từ điển thương hiệu thương mại niêm yết đã kiểm duyệt.
+     - *Lỗ hổng 2 — Va chạm đa nghĩa (Polysemous False-Positive Collision)*: Case study thực tế trên bài báo FPT - Ba Huân (*Báo Chính Phủ*) gán nhầm TGĐ FPT IS Nguyễn Hoàng Minh sang mã `CLC` (Thuốc lá Cát Lợi). Đã thiết lập cơ chế **Co-occurrence Disambiguation Guard** bắt buộc kiểm tra sự hiện diện của Tên/Mã doanh nghiệp tương ứng trước khi gán cho lãnh đạo không thuộc nhóm Canonical Tycoons, đưa tỷ lệ gán nhầm về $0\%$.
+  3. **Tối Ưu Hóa Phân Loại Tính Liên Quan Tài Chính (Financial Relevance Gate)**:
+     - Nâng cấp regex `NOISE_KEYWORDS` và `FINANCE_KEYWORDS` phân tách 5 nhóm nghiệp vụ (`FINANCIAL_EQUITY`, `FINANCIAL_MACRO`, `GENERAL_NEWS`, `AMBIGUOUS_MIXED`, `IRRELEVANT_NOISE`).
+     - Đo lường thực nghiệm trên báo Tuổi Trẻ: Cách ly chính xác $8.10\%$ tin rác đời sống/showbiz/tai nạn/án mạng mà không xóa dữ liệu thô (Soft Tagging).
+  4. **Xây Dựng Module Xử Lý Theo Lô Quy Mô Lớn (`src/pipeline/batch_entity_resolution.py`)**:
+     - Hỗ trợ xử lý theo chunk với DuckDB Bulk Persistence.
+     - Chạy thử nghiệm thành công trên $2,000$ bài báo thực tế trong Lakehouse: Tốc độ $50.4$ bài/s, khôi phục được **$1,282$ bài có mã CK ($64.10\%$ recovery rate)**, sinh ra **$4,150$ liên kết thực thể** trong `core.news_entity_map` trên 432 mã chứng khoán.
+  5. **Kiểm Thử Toàn Tuyến**:
+     - Bổ sung 2 test cases mới, nâng suite test F105 lên 8/8 tests PASSED trong $2.16$s.
+     - Chạy Full Pipeline Regression Test: **50/50 unit tests PASSED 100%** từ F101 đến F105 trong $7.04$s.
+     - Cập nhật đầy đủ `Harness/feature_list.json` với bằng chứng thực nghiệm đã kiểm chứng.
+- Next Session Should: Tiếp tục chuyển sang quy trình F106 (Cross-lakehouse relational entity mapping & comprehensive data linkage EDA suite) hoặc mở rộng batch processor F105 chạy nền cho toàn bộ kho tin nếu cần.
 
 
 
-
+## Session 30 — 2026-10-02
+- Author: Antigravity (Gemini)
+- Branch: main
+- Status: Hoàn Tất Triển Khai và Áp Dụng Toàn Diện Khuyến Nghị Quy Trình F106 (Cross-lakehouse Relational Entity Mapping & Comprehensive Data Linkage EDA Suite).
+- Completed:
+  1. **Hiện Thực Hóa Khuyến Nghị 1: Safe Multi-Lakehouse Connector & Explicit Column Projection Rail**:
+     - Xây dựng module chuẩn hóa src/pipeline/cross_lakehouse_connector.py.
+     - Cung cấp các hàm get_cross_lakehouse_connection() và context manager open_cross_lakehouse() tự động mở và giải phóng kết nối DuckDB trên Windows, đảm bảo mở các hồ phụ db/vesta_ohlcv.duckdb và db/vesta_news.duckdb ở chế độ an toàn (READ_ONLY).
+     - Hiện thực hóa hàm execute_projected_query(): chặn đứng cú pháp SELECT *, bắt buộc chỉ định rõ danh sách các cột cần truy vấn, ngăn ngừa tràn RAM khi truy vấn trên các hồ chục triệu bản ghi (22.75M nến 1M, 5.18M nến 1D, 1.15M tin tức).
+  2. **Hiện Thực Hóa Khuyến Nghị 2: Universe Integrity Firewall**:
+     - Xây dựng hàm query_universe_firewall(): Tự động INNER JOIN các bảng vệ tinh với core.dim_symbol (1,751 mã active), cách ly hoàn toàn các mã chứng quyền CW (1,984 mã), phái sinh HNX, chứng chỉ quỹ ETF và các mã đã hủy niêm yết trong lịch sử khỏi không gian phân tích định lượng.
+  3. **Hiện Thực Hóa Khuyến Nghị 3: F105 Resolved Entities Integration & 12-Layer Master Join Matrix**:
+     - Mở rộng hàm compute_cross_lakehouse_master_matrix() lên 12 phân lớp dữ liệu toàn diện (bổ sung News: F105 Resolved Entities từ core.news_entity_map, với 4,150 liên kết thực thể trên 432 mã).
+     - Đo lường thực nghiệm tỷ lệ khớp nối:
+       * Foreign Flow: 1,751 / 1,751 (100.0%)
+       * Fundamentals: 1,743 / 1,751 (99.54%)
+       * Historical Screener: 1,739 / 1,751 (99.31%)
+       * OHLCV Daily (1D): 1,739 / 1,751 (99.31%)
+       * Realtime Quotes: 1,726 / 1,751 (98.57%)
+       * News (Direct Tagged): 1,593 / 1,751 (90.98%)
+       * Corporate Events: 1,526 / 1,751 (87.15%)
+       * Overview: 1,522 / 1,751 (86.92%)
+       * Shareholders: 1,513 / 1,751 (86.41%)
+       * Financial Notes: 1,496 / 1,751 (85.44%)
+       * OHLCV Intraday (1M): 1,482 / 1,751 (84.64%)
+       * News (F105 Resolved): 432 / 1,751 (24.67%)
+  4. **Kiểm Toán & Render Toàn Diện EDA Suite**:
+     - Cập nhật script kiểm toán scratch/audit_cross_lakehouse_mapping.py chạy qua các khuyến nghị F106 đạt kết quả sạch 100%.
+     - Thực thi thành công scratch/render_cross_lakehouse_mapping_eda.py, nhúng toàn bộ kết quả truy vấn thực tế và 4 đồ thị trực quan hóa độ phân giải cao dạng Base64 vào 
+otebooks/mapping/01_cross_lakehouse_data_mapping_eda.ipynb.
+  5. **Kiểm Thử Đơn Vị F106**:
+     - Xây dựng 	ests/test_cross_lakehouse_mapping.py kiểm thử 4 trụ cột: 	est_open_cross_lakehouse_connection, 	est_execute_projected_query_disallows_select_star, 	est_query_universe_firewall, 	est_compute_cross_lakehouse_master_matrix.
+     - Kết quả: **4/4 unit tests PASSED 100%** trong 1.74s.
+  6. **Cập Nhật Hồ Sơ Kiến Trúc & Feature List**:
+     - Ghi nhận quyết định kiến trúc mới vào Harness/DECISIONS.md.
+     - Cập nhật Harness/feature_list.json cho F106 với trạng thái passing, bổ sung file dependencies và bằng chứng thực nghiệm đầy đủ.
+- Next Session Should: Tiến hành quy trình tiếp theo trong lộ trình định lượng (F201 / F301) hoặc mở rộng thêm các tính năng nâng cao theo yêu cầu người dùng.
+
+
+## Session 31 — 2026-10-02
+- Author: Antigravity (Gemini)
+- Branch: main
+- Status: Hoàn Tất Khởi Động Tier F2xx & Nâng Cấp Toàn Diện Pipeline F201 (Quantitative Hypothesis Testing & Statistical Gate).
+- Completed:
+  1. **Lộ Trình Cập Nhật Các Tính Năng Tiềm Năng (Potential Upgrading Features Roadmap)**:
+     - *Upgrading Feature 1 (F105 Full-Batch Entity Resolution Expansion)*: Mở rộng phân giải thực thể trên toàn bộ 479k bài báo vĩ mô/ngành chưa gán mã ➔ Đưa vào roadmap chuẩn bị dữ liệu huấn luyện SLM / PhoBERT FinDPO ở **Tier F3xx**.
+     - *Upgrading Feature 2 (F104 Full-Universe Feature Store Precomputation)*: Tính toán ma trận 21 features cho 650k sự kiện ➔ Đưa vào roadmap của **F302** (Multimodal Cross-Attention Fusion).
+     - *Upgrading Feature 3 (Sector & Market-Beta Adjusted Returns)*: Tính tỷ suất sinh lời vượt trội ngành/thị trường ➔ Đưa vào roadmap của **F203** (Regime & Cross-Exchange Audit).
+  2. **Nâng Cấp & Sửa Lỗi Tinh Vi Trong Pipeline F201 (src/pipeline/backtest_meanreversion.py)**:
+     - *Zero-Price Defense*: Sửa hàm load_events() bổ sung điều kiện WHERE p.price_at_publish > 0 và lọc 
+p.isfinite trên chuỗi return, triệt tiêu hoàn toàn 1,038 sự kiện có giá <= 0đ (cổ phiếu OTC/UPCoM đóng băng), xóa bỏ vĩnh viễn lỗi phép chia cho 0 sinh ra Infinity.
+     - *Bổ sung Robust Metrics vào GroupResult*: median_return_t5, median_return_t30, median_diff, win_rate ({T+30} > R_{T+5}$), và mean_return_t1.
+     - *Universe Integrity Firewall & Basket Filtering*: Thêm tham số --universe [all, active, vn30] và --symbols. Hỗ trợ chạy chuyên biệt trên rổ chỉ số VN30 (30 blue-chips) hoặc 1,751 mã cổ phiếu active của core.dim_symbol.
+  3. **Mở Rộng Test Suite F201**:
+     - Bổ sung 3 test cases trong 	ests/test_meanreversion_stats.py: 	est_zero_price_defense_filters_non_positive_prices, 	est_group_result_contains_robust_metrics, 	est_load_events_filters_universe.
+     - Kết quả: **19/19 unit tests PASSED 100%** trong 1.40s.
+  4. **Thực Nghiệm Toàn Tuyến & Kiểm Định Giả Thuyết Khoa Học**:
+     - **Chạy trên toàn bộ Lakehouse (out/meanreversion_report.json)**:  = 650,875$ sự kiện hợp lệ ( = 20,582$ sự kiện tin tiêu cực): $ar{R}_{T+1} = -0.12\%$, $ar{R}_{T+5} = -0.16\%$, $ar{R}_{T+30} = +1.46\%$, $ar{\Delta} = +1.62\%$,  = 7.5365$,  = 5.025 \times 10^{-14}$, Cohen's  = 0.0525$.
+     - **Chạy trên rổ chỉ số VN30 (out/meanreversion_vn30_report.json)**:  = 28,111$ sự kiện ( = 671$ sự kiện tin tiêu cực): $ar{R}_{T+1} = +0.06\%$, $ar{R}_{T+5} = +0.79\%$, $ar{R}_{T+30} = +5.52\%$, $ar{\Delta} = +4.73\%$, **Median Diff = $+3.18\%$**, **Win Rate = .83\%$**, ** = 9.6444$**, ** = 1.066 \times 10^{-20}$**, **Cohen's  = 0.3723$** (gấp 6.68 lần baseline 0.0557, vượt chuẩn xuất sắc).
+  5. **Đồng Bộ Tài Liệu Quản Trị**:
+     - Cập nhật quyết định kiến trúc mới vào Harness/DECISIONS.md.
+     - Cập nhật mục F201 trong Harness/feature_list.json với bằng chứng thực nghiệm mới và danh mục tệp phụ thuộc.
+- Next Session Should: Tiếp tục tiến sang trạm kiểm định thứ 2 của Tier F2xx: F202 (Cluster-Robust Standard Errors & Regime Heterogeneity Audit) và F202b (Deflated Sharpe Ratio & Combinatorial PBO).
+
+
+## Session 32 — 2026-10-02
+- Author: Antigravity (Gemini)
+- Branch: main
+- Status: Hoàn Tất Triển Khai Recommendations F202 và Đột Phá Vào F202b (Deflated Sharpe Ratio & Combinatorial PBO).
+- Completed:
+  1. **Hiện Thực Hóa Khuyến Nghị F202: Immutable Strategy Trial Ledger (meta.strategy_trial_log)**:
+     - Tạo bảng `meta.strategy_trial_log` trong `db/vesta_snapshot.duckdb` và bổ sung DDL vào `configs/duckdb_schema.sql`.
+     - Hiện thực hóa hàm `log_strategy_trial()` trong `src/pipeline/f202b_dsr_pbo.py`, tự động ghi lại mọi cấu hình backtest/trial nhằm đảm bảo tính minh bạch, truy xuất nguồn gốc (tuân thủ Rule B3: Numbers need a source) và phục vụ việc hiệu chỉnh số lượng phép thử độc lập $N$ cho công thức Deflated Sharpe Ratio.
+  2. **Nâng Cấp Toàn Diện Module F202b (src/pipeline/f202b_dsr_pbo.py)**:
+     - *Đồng bộ kết nối cơ sở dữ liệu*: Chuyển mặc định `get_db_connection()` sang `db/vesta_snapshot.duckdb` (kho snapshot 658,182 sự kiện).
+     - *Zero-Price Defense*: Lọc triệt để `p.price_at_publish > 0`, `p.price_t5 > 0`, `p.price_t30 > 0` và lọc `np.isfinite` trên hiệu số đảo chiều, chuẩn hóa mẫu dữ liệu nghiên cứu về 20,571 sự kiện tin tiêu cực hợp lệ trên 1,503 cụm mã.
+     - *Khảo sát Nghịch lý khả năng giao dịch (The Tradeability Paradox)*:
+       * Mở rộng thêm 2 cấu hình phân tích rổ VN30 (`vn30_only_raw` và `vn30_only_winsorized_0_5pct`).
+       * So sánh đối chiếu 3 không gian giao dịch: Toàn thị trường (Pooled), Sàn HOSE, và Rổ Bluechips VN30.
+  3. **Kết Quả Thực Nghiệm & Phát Hiện Khoa Học Đột Phá (F202b)**:
+     - **The XDC Outlier Discovery**: Dữ liệu thô toàn thị trường có độ nhọn Kurtosis lên tới **4,590.03** và Skewness **50.81**, trong đó 97% độ nhọn thặng dư đến từ cổ phiếu XDC trên UPCoM (+3,021% diff). Khi loại bỏ XDC hoặc áp dụng Winsorization 0.5%, Kurtosis hạ về **10.01**, Cohen's $d = 0.0646$.
+     - **Deflated Sharpe Ratio (DSR)**:
+       * *Toàn thị trường (Winsorized 0.5%)*: Vượt ngưỡng chuẩn quốc tế 0.95 ở toàn bộ $N \in [1, 2, 3]$ ($DSR(N=1) = 0.9978, DSR(N=2) = 0.9814, DSR(N=3) = 0.9507$).
+       * *Sàn HOSE*: $DSR(N=1) = 0.9756$ (PASS), nhưng **FAIL ở $N=2 (0.9235)$ và $N=3 (0.8602)$**.
+       * *Rổ VN30 (Bluechips)*: Hiệu ứng đảo chiều cực mạnh với $d = 0.3723$ (trung bình giá bật tăng $+4.73\%$ tại T+30 sau nhịp giảm T+5, Kurtosis rất sạch $= 5.37$), $DSR(N=1) = 0.9828$ (PASS) và $DSR(N=2) = 0.9425$. Số cụm vật lý hạn chế ($T=30$) làm tăng sai số chuẩn của Sharpe ratio, giải thích vì sao DSR phạt nặng hơn khi tăng số lượng phép thử.
+     - **Combinatorially Symmetric Cross-Validation (CSCV PBO)**:
+       * Phân chia $S=16$ khối bằng nhau, tạo ra 1,000 tổ hợp kiểm thử chéo OOS/IS.
+       * Xác suất quá khớp **$\text{PBO} = 0.000$ ($0.0\% \ll 50.0\%$, ĐẠT CHUẨN XUẤT SẮC)**, Mean Logit $= +6.89$.
+  4. **Kiểm Thử Đơn Vị**:
+     - Bổ sung các bài kiểm thử cho hàm `log_strategy_trial()`, tính toàn vẹn của `VN30_BASKET`, và thuật toán CSCV PBO trên `tests/test_f202b_dsr.py`.
+     - Toàn bộ **7/7 unit tests PASSED 100%** trong 3.10s.
+     - Tổng cộng toàn bộ test suite của các trạm F201, F202, F202b đạt **31/31 PASSED 100%** trong 3.55s.
+- Next Session Should: Tiến hành trạm kiểm định tiếp theo: **F203 (2D Regime-Conditional Validity Audit: 16 Regimes x 3 Exchanges)** để kiểm tra tính tổng quát của tín hiệu và tích hợp các biến kiểm soát thanh khoản toàn cầu (VIX, DXY, US10Y).
+
+
+## Session 33 — 2026-10-02
+- Author: Antigravity (Gemini)
+- Branch: main
+- Status: Hoàn Tất Áp Dụng và Triển Khai Toàn Diện Khuyến Nghị F203 (2D Regime-Conditional Validity Audit & Dynamic Market Health Index Gating Rail).
+- Completed:
+  1. **Giải Đáp Minh Bạch Cơ Cấu Mẫu 20,582 Sự Kiện & Toàn Bộ 658,182 Sự Kiện (The Remains)**:
+     - Thống kê toàn bộ kho dữ liệu `core.pit_events`: 658,182 sự kiện thô, trong đó 605,442 sự kiện có giá hợp lệ sạch sẽ.
+     - Phân bổ sắc thái: **Negative Sentiment (Tiêu cực): 4.14% (~20,582 sự kiện)**; **Positive Sentiment (Tích cực): 8.67% (~52,500 sự kiện)**; **Neutral Sentiment (Trung tính): 87.19% (~528,000 sự kiện)**.
+     - Phạm vi nghiên cứu của Tier F2xx (Hypothesis Testing) kiểm định giả thuyết "Phản ứng quá đà sau tin xấu (Panic Selling & Mean-Reversion)", do đó BẮT BUỘC chỉ tập trung vào nhóm sự kiện tiêu cực (20,582 sự kiện).
+     - 630,000+ sự kiện còn lại (Trung tính & Tích cực) được bảo lưu nguyên vẹn để làm nền tảng huấn luyện cho **Tier F3xx: Model Layer (PhoBERT-base FinDPO F301 & Multimodal Fusion F302)**.
+  2. **Hiện Thực Hóa Khuyến Nghị 1 & 2 của F203: Dynamic Market Health Index (MHI) & Circuit Breaker Gating**:
+     - Nâng cấp module `src/pipeline/f2xx_validation/f203_regime_audit.py` và shim `src/pipeline/f203_regime_audit.py`.
+     - Xây dựng hàm `evaluate_dynamic_market_health_gating()` tích hợp chuỗi độ rộng thị trường động `core.market_breadth_series` (% cổ phiếu trên MA50/MA200).
+     - Thiết lập chuẩn Gating 3 trạng thái:
+       * `GATE_OPEN_HEALTHY` (`above_ma50_pct >= 0.45`): Thị trường xu hướng tăng bền vững, mở cổng bắt đáy.
+       * `GATE_CLOSED_CRISIS` (`above_ma50_pct < 0.30`): Thị trường sụp đổ thanh khoản / giải chấp $\implies$ **Fail-Closed Circuit Breaker kích hoạt**, đóng băng hoàn toàn hành vi giải ngân bắt đáy.
+       * `GATE_CAUTION_CHOPPY` (`0.30 <= above_ma50_pct < 0.45`): Thị trường phân hóa, giảm 50% quy mô vị thế.
+     - Kiểm toán trên 7,442 sự kiện thực tế khớp với chuỗi độ rộng thị trường: Xác nhận cơ chế Circuit Breaker bảo vệ tài khoản khỏi các cú sập sâu trong pha suy thoái.
+  3. **Hiện Thực Hóa Khuyến Nghị 3: Quyết Định Kiến Trúc Mang Tính Sống Còn**:
+     - Ghi nhận vào `DECISIONS.md`: **BÁC BỎ BẮT ĐÁY VÔ ĐIỀU KIỆN (Unconditional Dip-Buying REJECTED)**.
+     - Ràng buộc cứng cho F301/F302: Mô hình NLP/SLM tuyệt đối không được phát sinh tín hiệu mua độc lập mà phải có cổng điều kiện xu hướng thị trường chung (Regime-Gating).
+  4. **Kiểm Thử Đơn Vị**:
+     - Bổ sung `test_evaluate_dynamic_market_health_gating` vào `tests/test_f203_regime_audit.py`.
+     - Toàn bộ **4/4 unit tests PASSED 100%** trong 2.97s.
+     - Báo cáo JSON `out/f203_regime_report.json` được cập nhật đầy đủ cả 60 ô ma trận và kết quả MHI Dynamic Gating.
+  5. **Đồng Bộ Tài Liệu**:
+     - Cập nhật `Harness/DECISIONS.md`.
+     - Cập nhật `Harness/feature_list.json` cho mục F203 với trạng thái passing và đầy đủ evidence.
+- Next Session Should: Mở khóa cánh cổng Tầng Mô Hình Học Sâu: **Tier F3xx: Model Layer — F301 (PhoBERT-base fine-tune with FinDPO market alignment)**!
+

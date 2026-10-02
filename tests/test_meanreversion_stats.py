@@ -293,3 +293,66 @@ def test_run_dry_run_mode_produces_valid_report(tmp_path):
     assert report["total_events_loaded"] == 0
     on_disk = json.loads(out_path.read_text(encoding="utf-8"))
     assert on_disk["total_events_loaded"] == 0
+
+
+def test_zero_price_defense_filters_non_positive_prices():
+    """Events with price_at_publish <= 0 or inf/nan returns must not cause
+    division-by-zero or contaminate stats with Infinity."""
+    df = _make_synthetic_events(
+        n_negative=20, n_positive=5, n_neutral=5, reversion_effect=True
+    )
+    df.loc[0, "price_at_publish"] = 0.0
+    df.loc[1, "price_at_publish"] = -10.0
+
+    scored = bmr.score_events(df)
+    report = bmr.run_backtest(scored)
+    neg_res = report["overall"]["negative_sentiment_group"]
+    assert neg_res["status"] == "ok"
+    assert np.isfinite(neg_res["mean_return_t5"])
+    assert np.isfinite(neg_res["mean_return_t30"])
+
+
+def test_group_result_contains_robust_metrics():
+    """GroupResult must include median returns, win_rate, and return_t1."""
+    df = _make_synthetic_events(
+        n_negative=25, n_positive=5, n_neutral=5, reversion_effect=True
+    )
+    df["price_t1"] = df["price_at_publish"] * 0.99
+    report = bmr.run_backtest(df)
+    neg_res = report["overall"]["negative_sentiment_group"]
+    assert "median_return_t5" in neg_res
+    assert "median_return_t30" in neg_res
+    assert "win_rate" in neg_res
+    assert "mean_return_t1" in neg_res
+    assert 0.0 <= neg_res["win_rate"] <= 1.0
+
+
+def test_load_events_filters_universe():
+    """load_events must support symbols and universe filters."""
+    import duckdb
+    con = duckdb.connect()
+    con.execute("""
+        CREATE SCHEMA core;
+        CREATE TABLE core.pit_events (
+            symbol VARCHAR,
+            source_url VARCHAR,
+            published_at TIMESTAMP,
+            headline VARCHAR,
+            price_at_publish DOUBLE,
+            price_t1 DOUBLE,
+            price_t5 DOUBLE,
+            price_t30 DOUBLE
+        );
+        INSERT INTO core.pit_events VALUES
+            ('VCB', 'url1', '2024-01-01', 'VCB headline', 90.0, 91.0, 92.0, 95.0),
+            ('XYZ', 'url2', '2024-01-02', 'XYZ headline', 10.0, 10.5, 11.0, 12.0),
+            ('BAD', 'url3', '2024-01-03', 'BAD headline', 0.0, 0.0, 0.0, 0.0);
+    """)
+    df_all = bmr.load_events(con)
+    assert len(df_all) == 2
+    assert "BAD" not in df_all["symbol"].values
+
+    df_vn30 = bmr.load_events(con, universe="vn30")
+    assert len(df_vn30) == 1
+    assert df_vn30.iloc[0]["symbol"] == "VCB"
+    con.close()

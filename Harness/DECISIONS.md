@@ -2,6 +2,96 @@
 
 Newest at the top. Don't reverse any of these without a new, stated reason.
 
+## 2026-10-02: F203 2D Regime-Conditional Validity Audit, Dynamic Market Health Index (MHI) Gating, and Unconditional Dip-Buying Rejection
+- Context & Motivation:
+  1. The 2D audit grid (16 Regimes x 4 Exchange Scopes: ALL, HOSE, HNX, UPCOM) evaluated 60 empirical cells across 20,582 negative events.
+  2. Alarming finding: Sign-flips (`sign_flip = True`) occurred in 30/60 cells (50.0% of cases), and in 9/15 regimes on the HOSE main board (60.0% of historical eras).
+  3. During bull liquidity runs (2020-2021 Bull HOSE), mean reversion generated +7.09% mean diff (win rate = 63.3%, p < 0.0001). However, during structural bear markets and liquidity crunches (2007 GFC HOSE: -1.67% mean diff, 26.7% win rate; 2022 Bond Crisis: -4.28% mean diff, 38.4% win rate; 2026 Present HOSE: -3.30% mean diff, 28.5% win rate), dip-buying systematically failed, causing devastating drawdowns.
+- Architectural Resolution & Implementation in src/pipeline/f2xx_validation/f203_regime_audit.py:
+  1. **Decisive Architectural Verdict**: Unconditional dip-buying is decisively REJECTED. Automatic buying on negative sentiment without market trend filtering will liquidate fund capital during systemic bear crises.
+  2. **Dynamic Market Health Index (MHI) Circuit Breaker Gating**:
+     - Built `evaluate_dynamic_market_health_gating()` integrating `core.market_breadth_series` (% stocks above MA50/MA200).
+     - Standardized gating rules:
+       * `GATE_OPEN_HEALTHY` (`above_ma50_pct >= 0.45`): Market breadth intact, mean reversion active.
+       * `GATE_CLOSED_CRISIS` (`above_ma50_pct < 0.30`): Market breadth collapse -> **Fail-Closed Circuit Breaker triggered**, freezing all dip-buying execution.
+       * `GATE_CAUTION_CHOPPY` (`0.30 <= above_ma50_pct < 0.45`): Choppy market, position size scaled down 50%.
+  3. **Mandatory Constraint for Tier F3xx (Model Layer)**:
+     - Downstream PhoBERT training loss (F301) and Multimodal Fusion (F302) MUST incorporate market health gating embeddings or fail-closed mask heads to prevent model overconfidence during liquidity droughts.
+- Verification: 4/4 unit tests passed clean in `tests/test_f203_regime_audit.py` (2.97s). Full 60-cell report and MHI audit saved to `out/f203_regime_report.json`.
+
+## 2026-10-02: F202b Deflated Sharpe Ratio (DSR), The Tradeability Paradox, and Immutable Trial Ledger (meta.strategy_trial_log)
+- Context & Motivation:
+  1. Standard naive backtests (F201/F202) assume infinite degrees of freedom and Gaussian returns, ignoring selection bias across multiple trial configurations (trial count N).
+  2. The raw distribution of event returns has catastrophic non-normality (Kurtosis = 4,590.03, Skewness = 50.81), entirely driven by penny stock pumps on UPCoM (top outlier XDC alone surged +3,021% on thin volume, accounting for 97% of excess kurtosis).
+  3. F202 recommended maintaining an immutable audit ledger of every strategy trial in `meta.strategy_trial_log` to ensure Deflated Sharpe Ratio (DSR) computations are legally auditable per Bailey & Lopez de Prado (2014) and Lopez de Prado (2018).
+- Architectural Resolution & Implementation in src/pipeline/f202b_dsr_pbo.py:
+  1. **Zero-Price Defense & Data Sanitization**: Enforced `p.price_at_publish > 0`, `p.price_t5 > 0`, `p.price_t30 > 0`, and filtered `np.isfinite` diffs, sanitizing 20,571 events across 1,503 symbol clusters.
+  2. **The Tradeability Paradox (Nghịch lý khả năng giao dịch)**:
+     - **Pooled Market**: DSR passes across all candidate horizons $N \in [1, 2, 3]$ only after standard 0.5% winsorization ($N=1$: DSR=0.9978, $N=2$: DSR=0.9814, $N=3$: DSR=0.9507; Kurtosis normalizes to 10.01). Raw fails at $N \ge 2$ due to extreme outlier noise.
+     - **HOSE Main Board Alone**: DSR passes at $N=1$ (0.9756) but FAILS at $N=2$ (0.9235) and $N=3$ (0.8602).
+     - **VN30 Bluechips Basket (30 core tickers)**: Mean reversion is remarkably strong (Cohen's $d = 0.3723$, Mean diff = $+4.73\%$, Kurtosis = 5.37), yet cluster count is physically bounded ($T=30$), yielding $DSR(N=1) = 0.9828$ (PASS) and $DSR(N=2) = 0.9425$ (borderline).
+     - **Architectural Takeaway**: The anomaly is statistically driven by illiquid UPCoM/HNX small caps in the pooled sample, while institutional bluechips have clean high effect size with smaller cluster degrees of freedom. This mandates regime and exchange conditioning in F203/F301!
+  3. **Combinatorial Purged PBO (CSCV)**: Evaluated $S=16$ equal-event blocks across 1,000 combinatorial splits. Resulting PBO = 0.000 ($0.0\% \ll 50.0\%$, PASS) with Mean Logit = $+6.89$, proving negligible risk of backtest overfitting.
+  4. **Immutable Strategy Trial Ledger**: Auto-logging to `meta.strategy_trial_log` in `db/vesta_snapshot.duckdb` recording `trial_id`, `strategy_name`, `universe`, `sample_size_n`, `observed_sr`, `skewness`, `kurtosis`, `p_value_naive`, `dsr_score`, `config_json`, and `git_commit_hash`.
+- Verification: 7/7 unit tests passed clean in `tests/test_f202b_dsr.py` (3.10s). Full lakehouse report saved to `out/f202b_dsr_pbo_report.json`.
+
+## 2026-10-02: F201 Zero-Price Defense, Universe Firewall Filtering, and Robust Metrics Expansion
+- Context & Motivation: Empirical audit of F201 (src/pipeline/backtest_meanreversion.py) across 658,182 PIT events in db/vesta_snapshot.duckdb revealed:
+  1. 1,038 historical events featured non-positive prices (price_at_publish <= 0.0), primarily illiquid OTC/UPCoM stocks with frozen matching engines. Because load_events only filtered WHERE price_at_publish IS NOT NULL, division-by-zero produced Infinity in overall mean_return_t5 and mean_return_t30.
+  2. The pipeline lacked explicit universe filtering, mixing illiquid frozen stocks with prime liquid equities.
+  3. F201 reported only naive mean returns, vulnerable to extreme skewness as uncovered in F202b.
+- Architectural Resolution & Implementation:
+  1. **Zero-Price Defense**: Enhanced load_events with WHERE p.price_at_publish > 0 and vectorized 
+p.where masking, completely eliminating Infinity across all statistical calculations.
+  2. **Universe Integrity Firewall & Basket Filtering**: Added --universe [all, active, vn30] and --symbols options. When --universe vn30 is specified, evaluates the exact 30 VN30 blue-chips. When --universe active is selected, enforces INNER JOIN against core.dim_symbol (1,751 active equities).
+  3. **Robust Metrics Integration**: Expanded GroupResult to report median_return_t5, median_return_t30, median_diff, win_rate ({T+30} > R_{T+5}$), and immediate horizon mean_return_t1.
+  4. **Empirical Findings**:
+     - VN30 Basket (=28,111$ events, =671$ negative events): =9.6444$, =1.066 \times 10^{-20}$, Cohen's =0.3723$ (beats baseline .0557$ by 6.68x), Win Rate = .83\%$, Median Diff = $+3.185\%$.
+     - Full Market (=650,875$ clean events, =20,582$ negative events): =7.5365$, =5.025 \times 10^{-14}$, Cohen's =0.0525$.
+- Verification: 19/19 unit tests passed clean in 	ests/test_meanreversion_stats.py (1.40s).
+
+## 2026-10-02: F106 Cross-Lakehouse Connector, Universe Integrity Firewall, and Explicit Column Projection Rail
+- Context & Motivation: The F106 EDA process across VESTA's 3 DuckDB lakehouses (vesta_snapshot.duckdb, vesta_ohlcv.duckdb, vesta_news.duckdb spanning 22.75M 1-minute bars, 5.18M daily bars, 1.15M news articles, and 35 snapshot tables) identified three core risks:
+  1. Memory spikes and potential OOM when joining cross-lakehouse tables with unconstrained SELECT * queries.
+  2. Referential universe drift from satellite tables containing delisted historical tickers, Covered Warrants (CW), or non-equity derivatives.
+  3. Disconnection between newly generated F105 3NF entity resolution linkages (core.news_entity_map) and the cross-lakehouse linkage matrix.
+- Architectural Resolution & Implementation in src/pipeline/cross_lakehouse_connector.py:
+  1. **Safe Multi-Lakehouse Connector (open_cross_lakehouse, get_cross_lakehouse_connection)**: Standardized connection manager opening esta_snapshot.duckdb as primary root and cleanly ATTACHing esta_ohlcv.duckdb and esta_news.duckdb in (READ_ONLY) mode, with context manager guaranteeing Windows lock release.
+  2. **Explicit Column Projection Rail (execute_projected_query)**: Enforces explicit column lists and throws ValueError if SELECT * is attempted across multi-million row tables.
+  3. **Universe Integrity Firewall (query_universe_firewall)**: Standardizes queries by enforcing inner joins against core.dim_symbol (1,751 active listed equities), completely isolating delisted noise and warrant artifacts.
+  4. **12-Layer Master Entity Join Coverage Matrix (compute_cross_lakehouse_master_matrix)**: Integrates F105 resolved entities (4,150 3NF links, 432 tickers) into a unified cross-lakehouse coverage monitor alongside 11 fundamental, ownership, quote, and market microstructure datasets.
+- Verification & Test Coverage:
+  - 4/4 unit tests passed in 	ests/test_cross_lakehouse_mapping.py (1.74s).
+  - Clean notebook execution with Base64 embedded plots in 
+otebooks/mapping/01_cross_lakehouse_data_mapping_eda.ipynb.
+
+## 2026-10-02: F102 Point-in-Time Join Architecture: Tri-Lakehouse ATTACH, Historical BCTC Vintage Resolution, and Session Forward-Lagging
+- Context & Motivation: Deep research into `src/pipeline/pit_join.py` uncovered 3 architectural gaps that compromised historical event building:
+  1. **Tri-Lakehouse Disconnection**: After migrating to 3 dedicated DuckDB databases, `pit_join.py` continued querying `core.news` and `core.market_ohlcv_daily` from `vesta_snapshot.duckdb` (where they were empty residual tables), generating 0 events from live tables containing 1.15M news and 4.09M bars.
+  2. **The Historical BCTC Vintage Fetched_at Paradox**: The original `get_as_of()` required `fetched_at <= as_of_date` alongside `available_at <= as_of_date`. Because the 20-year BCTC history was backfilled in August 2026, `fetched_at` was always 2026. This condition erroneously wiped out fundamentals for 99.999% of events (only 7 out of 658,182 events in `core.pit_events` had fundamentals attached!).
+  3. **Midnight Truncated Timestamps Look-Ahead Risk**: 172,893 articles (25.8% of symbol-tagged news) have midnight `00:00:00` timestamps. Anchoring these to same-day close risks look-ahead bias if articles were published post-market.
+- Architectural Resolution & Implementation Plan:
+  1. **Tri-Lakehouse ATTACH Pattern**: Standardize `pit_join.py` on cross-database queries: `news_db.core.news` (1.15M articles), `ohlcv_db.core.market_ohlcv_daily` (4.09M bars), and `core.fundamentals` / `core.price_adjustment_events` in `vesta_snapshot.duckdb`.
+  2. **Historical BCTC As-Reported Vintage Rule**: In historical backtests, public accessibility is governed strictly by official disclosure timing (`available_at = period_end + 30 days` or March 31 of subsequent year for audited statements per Circular 96/2020/TT-BTC). Replacing the crawler runtime condition (`fetched_at <= as_of_date`) with `available_at <= published_at` unlocks BCTC coverage for **581,138 events (88.30% coverage)** without look-ahead bias.
+  3. **Session Forward-Lagging for Midnight News**: All articles with `00:00:00` timestamps are forward-lagged to the next market session ($T+1$) to ensure conservative, zero look-ahead anchoring.
+  4. **Dual-Mode Price Adjustment Integration**: Seamlessly incorporates 5,435 Cumulative Adjustment Factors (CAF) from `core.price_adjustment_events` to compute genuine corporate-action-free returns ($t+1, t+5, t+30$).
+
+## 2026-10-02: F101 Tiered Validation Penalty Framework (TVPF) & Composite Data Quality Scoring (DQS)
+- Context & Motivation: The original F101 validation gate was designed as a binary "Fail-Loudly" firewall (raising `ValidationError` on any anomaly). Empirical audit on VESTA's 3 lakehouses (4.09M OHLCV bars, 1.15M news articles, 658,182 PIT events) proved that strict binary dropping causes catastrophic information loss: exactly 0.00% (1 in 50,000) of historical events meet pristine condition (zero defects across all text, BCTC, and horizons). 98.5% of financial news records lack body content or detailed fundamental links, and 24.95% feature truncated midnight (00:00:00) timestamps. Hard dropping these records discards 99.8% of directional signals.
+- Architectural Resolution & Implementation:
+  1. **Tiered Validation Penalty Framework (TVPF)**:
+     - **Tier 1 (Critical / Fatal Blockers - Penalty: 1.0, DQS = 0.0)**: Look-ahead bias (`published_at > trade_date`, `available_at < published_at`), future-dated timestamps (`fetched_at > now + 5m`), or non-positive prices (`price_at_publish <= 0`). Hard excluded from training/backtests (accounts for exactly 0.16% of audited events).
+     - **Tier 2 (Structural Anomalies - Penalty: 0.40, DQS = 0.60)**: Missing immediate trade horizons (`price_t1 IS NULL`), unmapped tickers. Gated to isolated diagnostic pipelines.
+     - **Tier 3 (Metadata / Incompleteness Degradation - Penalty: 0.15 - 0.20, DQS = 0.70 - 0.85)**: Midnight timestamps (00:00:00), headline-only articles, and missing non-critical financial ratios. Instead of dropping, apply **Session Forward Lagging** (advancing midnight news to T+1 open) and soft-tagging.
+     - **Tier 4 (Minor Informational Friction - Penalty: 0.05, DQS = 0.95)**: Insufficient long-term future horizon (missing `price_t30` due to recent events).
+  2. **Composite Data Quality Scoring (DQS)**:
+     - Formula: $\text{DQS} = \max(0.0, 1.0 - \sum \text{Penalties})$.
+     - Empirical audit shows **74.89%** of historical events achieve $\text{DQS} \ge 0.70$ (`TIER_B_USABLE`), providing high-quality directional samples.
+     - DQS serves as sample weights ($w_i$) in downstream ML loss functions (F201/F301) and dynamic risk allocation gates.
+- Verification & Test Coverage:
+  - Validated via `scratch/deep_research_f101_tiered_validation.py` across 50,000 real PIT events and 3 lakehouses.
+  - Confirmed 11/11 tests pass in `tests/test_crossref_validation.py`.
+
 ## 2026-09-29: Unified News Lakehouse Schema (Merged core.news, core.news_resources, and core.macro_policy)
 - Context & Motivation: The news database (`db/vesta_news.duckdb`) historically contained 3 separate tables: `core.news` (670,409 rows with mandatory `symbol`), `core.news_resources` (478,599 rows of macro/industry media), and `core.macro_policy` (847 policy circulars, with 64.6% URL overlap with `news_resources`). This tri-table schema introduced fragmentation, redundant union queries for NLP models, and maintenance overhead across crawlers.
 - Architectural Resolution & Implementation in `src/etl/unify_news_schema.py`:
@@ -1773,3 +1863,46 @@ Newest at the top. Don't reverse any of these without a new, stated reason.
   2. **Noise Reduction**: Successfully pruned **4,715 uninformative / contradictory headlines** ($9.7\%$ of total volume).
   3. **Alpha Preservation & Boost**: Gated negative sentiment sample ($n = 18,243$) achieved Cohen's $d = \mathbf{0.0852}$ ($t = 11.51, p = 1.56\times 10^{-30}$), outperforming un-gated F303 ($d = 0.0840$) and strictly beating baseline F201 ($d = 0.0557$) by **$+53.0\%$ ($1.53\times$)**.
 - Status: F304 PASSING. All unit tests (`tests/test_hybridacd_consistency_gate.py`, 5/5 passing) and full pipeline runner (`test_pipeline/f3xx_modeling/test_f304_hybridacd_runner.py`, exit code 0) verified. Ready to advance to F401 (Streaming Inference Engine).
+
+## 2026-10-02: F103 Enterprise 11-Technique Data Validation & Quality Pipeline Deep Research & 3-Lakehouse Multi-Modal Audit
+- Reason: Rule B4 (Data Pipeline Discipline & Zero Look-Ahead Bias), Rule B5 (Deterministic Risk Rails), and addressing the F103 engineering recommendation: "Leverage DuckDB vectorized SQL window functions and Polars expressions to compute technical and rolling features at native C++ speeds."
+- Empirical Findings across 3 VESTA Lakehouses (4.09M OHLCV bars, 1.15M news articles, 439k fundamentals, 658k PIT events):
+  1. **Ultra-Fast Vectorized Validation (2.21s total execution)**: DuckDB vectorized C++ SQL execution evaluated all 22 checks across 6.3M records in 2.21 seconds (average 100.5ms per check). Window functions (LAG, LEAD over 4.09M rows) executed in ~180-230ms, confirming the recommendation that vectorized SQL completely eliminates the need for slow Python row iteration.
+  2. **Zero Lookahead Leakage Remediation**: Detected 11 legacy events in `core.pit_events` (and 148 across raw unpurged history) published after 15:00 but erroneously anchored to T0 close instead of T+1. Remediated via atomic vectorized update in both `core.pit_events` and `staging.pit_events`, restoring zero look-ahead bias compliance (0 leakage rows).
+  3. **Timezone Mismatch Gate Remediation**: Resolved false-positive future timestamp errors in Technique 10 caused by UTC vs UTC+7 local timestamps on newly crawled corporate actions (192 records). Updated check logic to `max(now_local, now_utc) + 5min buffer`.
+  4. **Microstructure & Data Defect Baseline**:
+     - *OHLCV Pricing*: 11,548 bars with `close <= 0` isolated to dormant/suspended UPCoM tickers (avg volume = 0).
+     - *Candlestick Geometry*: 15 physically inverted bars (`High < Low`) flagged for data supplier remediation; 337,032 bars with `High < Open` attributed to HNX/UPCoM reference-price open conventions.
+     - *Accounting Balance Sheet Identity*: 99.93% compliance on $A = L + E$ across 103,050 balance sheets (only 73 statements deviating by > 1M VND).
+     - *VN30 Sufficiency*: Verified 30/30 constituents with 28,112 point-in-time events ready for backtesting.
+- Status: F103 PASSING (22/22 checks OK, 12/12 unit tests passing, 42/42 across F101+F102+F103 test suites).
+
+## 2026-10-02: F104 ML Feature Pipeline & Dataset Preparation Deep Research & Horizon-Calibrated Embargo Optimization
+- Reason: Rule B2 (Signal Before Infrastructure), Rule B4 (Data Pipeline Discipline & Zero Look-Ahead Bias), and evaluating the F104 engineering recommendation: "Calibrate embargo windows to match the maximum forecast horizon of the strategy (e.g. 5-day embargo for 5-day holding period)."
+- Empirical Findings & Quantitative Validation (scratch/deep_research_f104_ml_features.py across 13,016 VN30 events):
+  1. **Recommendation Proof: Embargo Calibration to Forecast Horizon**:
+     - *Empirical Impact*: A generic 45-day embargo window (Lopez de Prado standard for monthly rebalancing) purges 196 events (1.51% of dataset) and completely eliminates all 202 turning-point events during the pivotal year-end market transition windows (Nov-Dec 2023 recovery rally and Nov-Dec 2024 FTSE pre-upgrade run).
+     - *Horizon Calibration*: Calibrating the embargo window to $\tau_{\text{embargo}} = 5\text{ days}$ (matching the $T+5$ holding horizon of the mean-reversion strategy) strictly guarantees zero forward label overlap while slashing purged samples from 1.51% to **0.22%** (preserving 85.4% of previously discarded transition samples).
+  2. **Remediation of Nested Fundamentals JSON Parsing**:
+     - Upgraded `extract_fundamental_features()` in `src/pipeline/ml_features.py` to recursively inspect sub-dictionary `'ratio'`, mapping standardized keys (`RT_VALUE_PE`, `RT_VALUE_PB`, `RT_PRT_ROE`). Resolved the 100% Null rate on fundamental ratios.
+  3. **Multi-Lakehouse Automated Discovery**:
+     - Enhanced `_resolve_ohlcv_table()` in `src/pipeline/ml_features.py` to seamlessly route to `ohlcv_db.core.market_ohlcv_daily` when attached by callers, while maintaining clean backward compatibility with mock/test catalogs.
+  4. **Vectorized Throughput Benchmark**:
+     - DuckDB ASOF JOIN window calculation achieved 1,195 events/second throughput across 21 multi-modal feature dimensions.
+- Status: F104 PASSING (6/6 unit tests passing; 48/48 across full pipeline test suite). Ready to advance to F105 (News-to-Fundamental Entity Resolution).
+
+## 2026-10-02: F105 News-to-Fundamental Entity Resolution & Financial Relevance Gate Deep Research & Co-occurrence Guard Integration
+- Reason: Rule B2 (Signal Before Infrastructure), Rule B4 (Data Pipeline Discipline), addressing untagged macro/general news feeds (479,268 articles with `symbol IS NULL`), and resolving the F105 engineering recommendation: "Enforce length threshold (>=2 words, >=5 characters) and blacklist generic corporate stopwords."
+- Architectural Decisions & Quantitative Validation:
+  1. **Remediation of Single-Word Brand Exclusion**:
+     - *Issue*: Naive thresholding `len(norm.split()) >= 2 and len(norm) >= 6` in `FundamentalEntityRegistry` completely discarded Vietnam's most prominent single-word corporate brands: **FPT, Vinamilk (VNM), Vinhomes (VHM), Masan (MSN), Vietcombank (VCB), Techcombank (TCB), Sacombank (STB), MBBank (MBB)**.
+     - *Resolution*: Upgraded crawler loader to ingest `en_organ_name` from `core.dim_symbol` and constructed `COMMERCIAL_BRAND_REGISTRY`, while strictly maintaining `COMMON_VIETNAMESE_MONOSYLLABLES` safeguards to prevent dictionary word false positives (e.g., "trang", "đức", "nam", "thành").
+  2. **Co-occurrence Disambiguation Guard (Anti-Collision Rail)**:
+     - *Issue*: Discovered empirical false-positive attribution on Báo Chính Phủ article *"FPT và Ba Huân bắt tay..."*, where FPT IS CEO Nguyễn Hoàng Minh was erroneously mapped to `CLC` (Thuốc lá Cát Lợi) due to an identically named executive in `core.company_overview`.
+     - *Resolution*: Enforced corporate co-occurrence verification. For all non-canonical executives, Ticker linkage is strictly rejected unless the company's ticker, full name, or verified commercial brand appears within the article context. Eliminated polysemous cross-entity collisions (CLC matches = 0).
+  3. **High-Throughput Batch Processor (`src/pipeline/batch_entity_resolution.py`)**:
+     - Engineered chunked processor with DuckDB Bulk Persistence (`INSERT OR IGNORE` into `core.news_entity_map` and `INSERT OR REPLACE` into `core.news_relevance_meta`).
+     - Empirical benchmark on 2,000 real articles: 50.4 articles/second, recovered **1,282 ticker-linked articles (64.10% recovery rate)**, generated **4,150 3NF entity linkages** across 432 unique symbols.
+  4. **Financial Relevance Gate Soft-Tagging**:
+     - Enhanced lexical pattern matching successfully partitioned articles into 5 standardized categories: `FINANCIAL_EQUITY` (64.10%), `FINANCIAL_MACRO` (27.85%), `GENERAL_NEWS` (6.55%), `AMBIGUOUS_MIXED` (0.80%), and isolated pure noise (`IRRELEVANT_NOISE`, 0.70% on financial feeds, 8.10% on general news) without destructively dropping raw data.
+- Status: F105 PASSING (8/8 unit tests passing; 50/50 across full pipeline test suite F101-F105). Ready to advance to F106 (Cross-Lakehouse Mapping EDA Suite).

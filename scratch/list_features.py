@@ -1,9 +1,7 @@
-import json
 import sys
+import json
+
 sys.stdout.reconfigure(encoding='utf-8')
-
-with open('Harness/feature_list.json', encoding='utf-8') as f:
-    data = json.load(f)
-
-for feat in data['features']:
-    print(f"{feat['id']}: {feat['name']} [{feat['state']}]")
+data = json.load(open('Harness/feature_list.json', encoding='utf-8'))
+for f in data['features']:
+    print(f"{f['id']}: {f['name'][:50]} [{f['state']}]")

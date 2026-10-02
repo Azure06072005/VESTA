@@ -83,6 +83,13 @@ REGIME_BOUNDARIES: tuple[tuple[str, dt.date, dt.date], ...] = (
     ("2025_2026_other", dt.date(2025, 1, 1), dt.date(2027, 1, 1)),
 )
 
+# Standard VN30 index constituent basket
+VN30_BASKET: tuple[str, ...] = (
+    "ACB", "BCM", "BID", "CTG", "DGC", "FPT", "GAS", "GVR", "HDB", "HPG",
+    "LPB", "MBB", "MSN", "MWG", "PLX", "SAB", "SHB", "SSB", "SSI", "STB",
+    "TCB", "TPB", "VCB", "VHM", "VIB", "VIC", "VJC", "VNM", "VPB", "VRE",
+)
+
 
 class InsufficientSampleError(Exception):
     """Raised when a requested regime/group has fewer than MIN_SAMPLE_SIZE
@@ -95,6 +102,11 @@ class GroupResult:
     n: int
     mean_return_t5: float | None = None
     mean_return_t30: float | None = None
+    median_return_t5: float | None = None
+    median_return_t30: float | None = None
+    median_diff: float | None = None
+    win_rate: float | None = None
+    mean_return_t1: float | None = None
     t_statistic: float | None = None
     p_value: float | None = None
     cohens_d: float | None = None
@@ -110,20 +122,45 @@ def assign_regime(published_at: dt.datetime) -> str:
     return "unclassified"
 
 
-def load_events(con: duckdb.DuckDBPyConnection) -> pd.DataFrame:
+def load_events(
+    con: duckdb.DuckDBPyConnection,
+    symbols: list[str] | None = None,
+    universe: str | None = None,
+) -> pd.DataFrame:
     """Load core.pit_events, sorted deterministically for reproducibility.
 
-    Only rows with a non-NULL price_at_publish are usable (return_t5/t30
-    cannot be computed without an anchor price) -- rows with NULL
-    price_at_publish are dropped here, not treated as zero-return.
+    Only rows with a positive price_at_publish are usable (return_t5/t30
+    cannot be computed without an anchor price) -- rows with NULL or non-positive
+    price_at_publish are dropped here, preventing division-by-zero Infinity.
     """
-    df = con.execute(
-        "SELECT symbol, source_url, published_at, headline, "
-        "price_at_publish, price_t1, price_t5, price_t30 "
-        "FROM core.pit_events "
-        "WHERE price_at_publish IS NOT NULL "
-        "ORDER BY symbol, published_at, source_url"
-    ).df()
+    if universe == "vn30" and not symbols:
+        symbols = list(VN30_BASKET)
+
+    where_clauses = ["p.price_at_publish > 0"]
+    if symbols:
+        sym_list = ", ".join([f"'{s.strip().upper()}'" for s in symbols])
+        where_clauses.append(f"p.symbol IN ({sym_list})")
+    
+    where_str = " AND ".join(where_clauses)
+    
+    if universe == "active":
+        query = f"""
+            SELECT p.symbol, p.source_url, p.published_at, p.headline,
+                   p.price_at_publish, p.price_t1, p.price_t5, p.price_t30
+            FROM core.pit_events p
+            JOIN core.dim_symbol d ON p.symbol = d.symbol
+            WHERE {where_str}
+            ORDER BY p.symbol, p.published_at, p.source_url
+        """
+    else:
+        query = f"""
+            SELECT p.symbol, p.source_url, p.published_at, p.headline,
+                   p.price_at_publish, p.price_t1, p.price_t5, p.price_t30
+            FROM core.pit_events p
+            WHERE {where_str}
+            ORDER BY p.symbol, p.published_at, p.source_url
+        """
+    df = con.execute(query).df()
     return df
 
 
@@ -143,8 +180,27 @@ def score_events(df: pd.DataFrame) -> pd.DataFrame:
     out["sentiment_class"] = out["sentiment_score"].apply(
         lambda s: "neutral" if abs(s) <= NEUTRAL_BAND else ("positive" if s > 0 else "negative")
     )
-    out["return_t5"] = (out["price_t5"] - out["price_at_publish"]) / out["price_at_publish"]
-    out["return_t30"] = (out["price_t30"] - out["price_at_publish"]) / out["price_at_publish"]
+    
+    valid_price = (out["price_at_publish"] > 0) & out["price_at_publish"].notna()
+    if "price_t1" in out.columns:
+        out["return_t1"] = np.where(
+            valid_price & out["price_t1"].notna(),
+            (out["price_t1"] - out["price_at_publish"]) / out["price_at_publish"],
+            np.nan,
+        )
+    else:
+        out["return_t1"] = np.nan
+        
+    out["return_t5"] = np.where(
+        valid_price & out["price_t5"].notna(),
+        (out["price_t5"] - out["price_at_publish"]) / out["price_at_publish"],
+        np.nan,
+    )
+    out["return_t30"] = np.where(
+        valid_price & out["price_t30"].notna(),
+        (out["price_t30"] - out["price_at_publish"]) / out["price_at_publish"],
+        np.nan,
+    )
     out["regime"] = out["published_at"].apply(assign_regime)
     return out
 
@@ -214,7 +270,18 @@ def _paired_reversion_test(sub: pd.DataFrame) -> GroupResult:
     event's own t5 and t30 outcomes being compared, not two independent
     samples.
     """
-    valid = sub.dropna(subset=["return_t5", "return_t30"])
+    if len(sub) == 0:
+        return GroupResult(n=0, status="insufficient_data")
+
+    valid = sub.dropna(subset=["return_t5", "return_t30"]).copy()
+    if len(valid) == 0:
+        return GroupResult(n=0, status="insufficient_data")
+
+    # Ép kiểu numeric an toàn tránh ufunc error trên empty object Series
+    r5 = pd.to_numeric(valid["return_t5"], errors="coerce")
+    r30 = pd.to_numeric(valid["return_t30"], errors="coerce")
+    finite_mask = np.isfinite(r5) & np.isfinite(r30)
+    valid = valid[finite_mask]
     n = len(valid)
     if n < MIN_SAMPLE_SIZE:
         return GroupResult(n=n, status="insufficient_data")
@@ -233,10 +300,27 @@ def _paired_reversion_test(sub: pd.DataFrame) -> GroupResult:
         p_val = 1.0
         d = 0.0
 
+    win_rate = float((diffs > 0).mean()) if len(diffs) > 0 else 0.0
+    median_return_t5 = float(valid["return_t5"].median())
+    median_return_t30 = float(valid["return_t30"].median())
+    median_diff = float(diffs.median())
+
+    mean_return_t1 = None
+    if "return_t1" in valid.columns:
+        valid_t1 = pd.to_numeric(valid["return_t1"], errors="coerce").dropna()
+        valid_t1 = valid_t1[np.isfinite(valid_t1)]
+        if len(valid_t1) > 0:
+            mean_return_t1 = float(valid_t1.mean())
+
     return GroupResult(
         n=n,
         mean_return_t5=float(valid["return_t5"].mean()),
         mean_return_t30=float(valid["return_t30"].mean()),
+        median_return_t5=median_return_t5,
+        median_return_t30=median_return_t30,
+        median_diff=median_diff,
+        win_rate=win_rate,
+        mean_return_t1=mean_return_t1,
         t_statistic=float(t_stat),
         p_value=float(p_val),
         cohens_d=d,
@@ -547,6 +631,8 @@ def run(
     model_path: str = "out/models/multimodal_fusion/best_model.pt",
     use_consistency_gate: bool = False,
     noise_threshold: float = 0.40,
+    symbols: list[str] | None = None,
+    universe: str | None = None,
 ) -> dict[str, object]:
     """Entry point used by both the CLI and verification.md's smoke run."""
     if dry_run:
@@ -576,7 +662,7 @@ def run(
         else:
             target_db = db_path or db.DB_PATH
             con = db.connect(db_path=target_db, read_only=True)
-            events_df = load_events(con)
+            events_df = load_events(con, symbols=symbols, universe=universe)
         report = run_backtest(
             events_df,
             sentiment_source="multimodal",
@@ -587,7 +673,7 @@ def run(
     else:
         target_db = db_path or db.DB_PATH
         con = db.connect(db_path=target_db, read_only=True)
-        events_df = load_events(con)
+        events_df = load_events(con, symbols=symbols, universe=universe)
         report = run_backtest(events_df, sentiment_source="rule_based")
 
     write_report(report, pathlib.Path(report_path))
@@ -622,11 +708,24 @@ if __name__ == "__main__":
         help="Maximum allowable consistency violation before neutralizing headline",
     )
     parser.add_argument(
+        "--universe",
+        choices=["all", "active", "vn30"],
+        default="all",
+        help="Universe filtering: all, active (core.dim_symbol), or vn30 (VN30 index basket)",
+    )
+    parser.add_argument(
+        "--symbols",
+        default="",
+        help="Comma-separated list of symbols (e.g. VCB,FPT,HPG)",
+    )
+    parser.add_argument(
         "--dry-run",
         action="store_true",
         help="run against an empty DataFrame (verification.md smoke-run mode)",
     )
     args = parser.parse_args()
+
+    symbol_filter = [s.strip().upper() for s in args.symbols.split(",") if s.strip()] if args.symbols else None
 
     result = run(
         report_path=args.report,
@@ -637,6 +736,8 @@ if __name__ == "__main__":
         model_path=args.model_path,
         use_consistency_gate=args.consistency_gate,
         noise_threshold=args.noise_threshold,
+        symbols=symbol_filter,
+        universe=args.universe,
     )
     print(f"Report written to {args.report}")
     print(f"total_events_loaded={result['total_events_loaded']}")

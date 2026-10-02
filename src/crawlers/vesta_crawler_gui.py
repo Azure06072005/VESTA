@@ -256,7 +256,9 @@ class VestaCrawlerApp(tk.Tk):
             "events": "5. Lịch sự kiện doanh nghiệp & Cổ tức",
             "macro": "6. 9 Chỉ số vĩ mô & Lãi suất LH",
             "governance": "7. Hồ sơ doanh nghiệp & Cổ đông lớn",
-            "snapshots": "8. Bảng giá Snapshot & Định giá (F007 Vietcap/CafeF)",
+            "snapshots": "8. Bảng giá Snapshot Toàn Thị Trường (1,751 mã - F007)",
+            "order_book_vn100": "9. Sổ lệnh Level 2 & OFI Rổ VN100 (Vietcap Direct)",
+            "deep_screener": "10. Bộ lọc Đa Nhân Tố Chuyên Sâu (1,522 mã - Vietcap IQ)",
         }
         self.combo_cat = ttk.Combobox(self.ctrl_card, values=list(self.cat_map.values()), state="readonly")
         self.combo_cat.current(0)
@@ -463,15 +465,32 @@ class VestaCrawlerApp(tk.Tk):
         # 8. Khung cấu hình SNAPSHOTS (F007 Vietcap/CafeF Direct REST API)
         f_snap = ttk.Frame(self.dynamic_config_container, style="Card.TFrame")
         self.frames["snapshots"] = f_snap
-        ttk.Label(f_snap, text="Cấu hình Bảng Giá Snapshot & Định Giá (F007):", font=("Segoe UI", 9, "bold")).pack(anchor="w", pady=(0, 4))
-        self.var_snap_symbols = tk.StringVar(value="vn30")
+        ttk.Label(f_snap, text="Cấu hình Bảng Giá Snapshot Toàn Thị Trường (F007):", font=("Segoe UI", 9, "bold")).pack(anchor="w", pady=(0, 4))
+        self.var_snap_symbols = tk.StringVar(value="all")
         ttk.Label(f_snap, text="Mã cổ phiếu:").pack(anchor="w")
         ttk.Entry(f_snap, textvariable=self.var_snap_symbols).pack(fill="x", pady=2)
         q_snap = ttk.Frame(f_snap, style="Card.TFrame")
         q_snap.pack(fill="x", pady=2)
-        ttk.Button(q_snap, text="VN30", command=lambda: self.var_snap_symbols.set("vn30")).pack(side="left", padx=(0, 2))
-        ttk.Button(q_snap, text="Toàn bộ (all)", command=lambda: self.var_snap_symbols.set("all")).pack(side="left", padx=2)
+        ttk.Button(q_snap, text="Toàn bộ (all - 1751 mã)", command=lambda: self.var_snap_symbols.set("all")).pack(side="left", padx=(0, 2))
+        ttk.Button(q_snap, text="VN100", command=lambda: self.var_snap_symbols.set("vn100")).pack(side="left", padx=2)
+        ttk.Button(q_snap, text="VN30", command=lambda: self.var_snap_symbols.set("vn30")).pack(side="left", padx=2)
         ttk.Label(f_snap, text="* Nguồn: Vietcap Direct REST API (82 cột Level 2 Depth) + CafeF Fallback.", font=("Segoe UI", 8), foreground=self.color_text_muted).pack(anchor="w", pady=(4, 0))
+
+        # 8b. Khung cấu hình ORDER BOOK LEVEL 2 VN100
+        f_ob = ttk.Frame(self.dynamic_config_container, style="Card.TFrame")
+        self.frames["order_book_vn100"] = f_ob
+        ttk.Label(f_ob, text="Cấu hình Sổ Lệnh Level 2 & OFI Rổ VN100:", font=("Segoe UI", 9, "bold")).pack(anchor="w", pady=(0, 4))
+        ttk.Label(f_ob, text="Mục tiêu: Rổ VN100 (100 mã vốn hóa & thanh khoản lớn nhất HOSE)", font=("Segoe UI", 8, "bold")).pack(anchor="w", pady=2)
+        ttk.Label(f_ob, text="* Dữ liệu: Top 3 Bid/Ask Depth, Khớp lệnh Intraday, OFI Ratio (Mất cân bằng dòng lệnh).", font=("Segoe UI", 8), foreground=self.color_text_muted).pack(anchor="w", pady=1)
+        ttk.Label(f_ob, text="* Nguồn: Vietcap Direct REST API (0% vnstock dependency, không cần API Key).", font=("Segoe UI", 8), foreground=self.color_text_muted).pack(anchor="w", pady=1)
+
+        # 8c. Khung cấu hình DEEP SCREENER
+        f_scr = ttk.Frame(self.dynamic_config_container, style="Card.TFrame")
+        self.frames["deep_screener"] = f_scr
+        ttk.Label(f_scr, text="Cấu hình Bộ Lọc Đa Nhân Tố Chuyên Sâu (Deep Screener):", font=("Segoe UI", 9, "bold")).pack(anchor="w", pady=(0, 4))
+        ttk.Label(f_scr, text="Mục tiêu: Toàn bộ 1,522 mã cổ phiếu trên cả 3 sàn (HOSE, HNX, UPCOM)", font=("Segoe UI", 8, "bold")).pack(anchor="w", pady=2)
+        ttk.Label(f_scr, text="* 34 chỉ tiêu: P/E, P/B, ROE, Gross/Net Margin, Tăng trưởng LNST, RSI, RS, ADTV, Vốn hóa.", font=("Segoe UI", 8), foreground=self.color_text_muted).pack(anchor="w", pady=1)
+        ttk.Label(f_scr, text="* Nguồn: Vietcap IQ Screening Direct API (Max Date - Ngày hiện tại).", font=("Segoe UI", 8), foreground=self.color_text_muted).pack(anchor="w", pady=1)
 
         # 9. Khung LATEST (Cập nhật dữ liệu mới nhất - F001 -> F009)
         f_latest = ttk.Frame(self.dynamic_config_container, style="Card.TFrame")
@@ -564,6 +583,7 @@ class VestaCrawlerApp(tk.Tk):
 
         try:
             con = duckdb.connect(self.target_db, read_only=True)
+            db.attach_ohlcv(con, read_only=True)
             db.attach_intraday(con, read_only=True)
             db.attach_news(con, read_only=True)
         except Exception:
@@ -571,6 +591,7 @@ class VestaCrawlerApp(tk.Tk):
             if os.path.exists(buf_db):
                 try:
                     con = duckdb.connect(buf_db, read_only=True)
+                    db.attach_ohlcv(con, read_only=True)
                     db.attach_intraday(con, read_only=True)
                     db.attach_news(con, read_only=True)
                 except Exception:
@@ -592,8 +613,8 @@ class VestaCrawlerApp(tk.Tk):
                 query_tbl = tbl
                 if spec.get("type") == "news":
                     query_tbl = f"news_db.{tbl}"
-                elif "1m" in tbl:
-                    query_tbl = f"intraday.{tbl}"
+                elif "market_ohlcv" in tbl or "market_index" in tbl or "1m" in tbl:
+                    query_tbl = f"ohlcv_db.{tbl}"
 
                 sym_expr = f"COUNT(DISTINCT {sym_col})" if sym_col else "'-'"
                 
@@ -947,6 +968,12 @@ class VestaCrawlerApp(tk.Tk):
                         runner = CATEGORIES_REGISTRY["intraday_1m"]
                     elif cat_key == "news":
                         runner = lambda syms, w, a: run_category_news_comprehensive(syms, w, a, stop_check=lambda: not self.is_running)
+                    elif cat_key == "order_book_vn100":
+                        from crawlers.order_book_depth_vietcap import crawl_order_book_vn100
+                        runner = lambda syms, w, a: crawl_order_book_vn100(target_db)["order_book_records"]
+                    elif cat_key == "deep_screener":
+                        from crawlers.crawl_deep_screener import crawl_deep_screener
+                        runner = lambda syms, w, a: crawl_deep_screener(target_db)
                     else:
                         runner = CATEGORIES_REGISTRY[cat_key]
                     cnt = runner(symbols, writer, args)

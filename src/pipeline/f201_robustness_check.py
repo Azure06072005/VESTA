@@ -112,7 +112,10 @@ def load_events(con: duckdb.DuckDBPyConnection) -> pd.DataFrame:
     query = f"""
         SELECT {cols}
         FROM {SOURCE_TABLE}
-        WHERE price_at_publish IS NOT NULL AND price_t5 IS NOT NULL AND price_t30 IS NOT NULL
+        WHERE price_at_publish IS NOT NULL 
+          AND price_at_publish > 0 
+          AND price_t5 IS NOT NULL 
+          AND price_t30 IS NOT NULL
     """
     df = con.execute(query).fetchdf()
 
@@ -233,7 +236,7 @@ def regime_heterogeneity_flag(regime_results: list[dict]) -> dict:
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--db", default="db/vesta.duckdb")
+    parser.add_argument("--db", default="db/vesta_snapshot.duckdb")
     parser.add_argument("--report", default="out/f201_robustness_report.json")
     args = parser.parse_args()
 

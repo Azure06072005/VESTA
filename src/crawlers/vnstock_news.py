@@ -185,28 +185,43 @@ def normalize_news(raw_df: pd.DataFrame, symbol: str) -> pd.DataFrame:
 
 
 def write_news(df: pd.DataFrame, con: "duckdb.DuckDBPyConnection | None" = None) -> int:
-    """Validate + write to staging, then promote to core, deduped on
-    source_url (the PRIMARY KEY -- see F003/F004's shared schema).
+    """Lưu bài viết vào db/vesta_news.duckdb (core.news và staging.news).
     Idempotent: re-running with overlapping articles doesn't duplicate.
+    Tự động tương thích cả schema nguyên bản lẫn schema hợp nhất (kèm news_type='STOCK_NEWS').
     """
     missing = set(NEWS_COLUMNS) - set(df.columns)
     if missing:
         raise ValueError(f"News DataFrame missing columns: {missing}")
 
     con = con or (db.connect_news() if hasattr(db, "connect_news") else db.bootstrap_schema())
-    urls = df["source_url"].unique().tolist()
+    df_to_write = df.copy()
 
-    cols_sql = ", ".join(NEWS_COLUMNS)
-    temp_name = f"news_df_{id(df)}"
+    # Kiểm tra cột thực tế của core.news
+    core_cols_info = [r[1] for r in con.execute("PRAGMA table_info('core.news')").fetchall()]
+    if "news_type" in core_cols_info and "news_type" not in df_to_write.columns:
+        df_to_write["news_type"] = "STOCK_NEWS"
+
+    urls = df_to_write["source_url"].unique().tolist()
+    temp_name = f"news_df_{id(df_to_write)}"
+
+    # Ghi vào staging.news
+    stg_cols_info = [r[1] for r in con.execute("PRAGMA table_info('staging.news')").fetchall()]
+    stg_cols = [c for c in df_to_write.columns if c in stg_cols_info]
+    stg_cols_sql = ", ".join(f'"{c}"' for c in stg_cols)
+
+    con.register(temp_name, df_to_write)
     con.execute("DELETE FROM staging.news WHERE source_url IN ?", [urls])
-    con.register(temp_name, df[NEWS_COLUMNS])
-    con.execute(f"INSERT INTO staging.news ({cols_sql}) SELECT * FROM {temp_name}")
+    con.execute(f"INSERT INTO staging.news ({stg_cols_sql}) SELECT {stg_cols_sql} FROM {temp_name}")
+
+    # Ghi vào core.news
+    core_cols = [c for c in df_to_write.columns if c in core_cols_info]
+    core_cols_sql = ", ".join(f'"{c}"' for c in core_cols)
 
     con.execute("DELETE FROM core.news WHERE source_url IN ?", [urls])
-    con.execute(f"INSERT INTO core.news ({cols_sql}) SELECT * FROM {temp_name}")
+    con.execute(f"INSERT INTO core.news ({core_cols_sql}) SELECT {core_cols_sql} FROM {temp_name}")
     con.unregister(temp_name)
 
-    return len(df)
+    return len(df_to_write)
 
 
 def run(symbol: str, con: "duckdb.DuckDBPyConnection | None" = None) -> int:

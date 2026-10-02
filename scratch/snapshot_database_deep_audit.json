@@ -1,0 +1,4077 @@
+{
+  "core.cafef_disclosures": {
+    "schema": "core",
+    "table": "cafef_disclosures",
+    "type": "BASE TABLE",
+    "row_count": 24600,
+    "col_count": 15,
+    "columns": [
+      {
+        "name": "doc_id",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "symbol",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "company_name",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "trade_center_id",
+        "type": "INTEGER"
+      },
+      {
+        "name": "exchange",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "year",
+        "type": "INTEGER"
+      },
+      {
+        "name": "quarter",
+        "type": "INTEGER"
+      },
+      {
+        "name": "report_type",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "content",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "file_name",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "file_url",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "lnstctm",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "published_at",
+        "type": "TIMESTAMP"
+      },
+      {
+        "name": "raw_json",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "fetched_at",
+        "type": "TIMESTAMP"
+      }
+    ]
+  },
+  "core.company_overview": {
+    "schema": "core",
+    "table": "company_overview",
+    "type": "BASE TABLE",
+    "row_count": 1522,
+    "col_count": 32,
+    "columns": [
+      {
+        "name": "symbol",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "business_model",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "founded_date",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "charter_capital",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "number_of_employees",
+        "type": "INTEGER"
+      },
+      {
+        "name": "listing_date",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "par_value",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "exchange",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "listing_price",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "listed_volume",
+        "type": "BIGINT"
+      },
+      {
+        "name": "ceo_name",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "ceo_position",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "inspector_name",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "inspector_position",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "establishment_license",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "business_code",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "tax_id",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "auditor",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "company_type",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "address",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "phone",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "fax",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "email",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "website",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "branches",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "history",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "free_float_percentage",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "free_float",
+        "type": "BIGINT"
+      },
+      {
+        "name": "outstanding_shares",
+        "type": "BIGINT"
+      },
+      {
+        "name": "as_of_date",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "source",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "fetched_at",
+        "type": "TIMESTAMP"
+      }
+    ]
+  },
+  "core.company_shareholders": {
+    "schema": "core",
+    "table": "company_shareholders",
+    "type": "BASE TABLE",
+    "row_count": 4268,
+    "col_count": 7,
+    "columns": [
+      {
+        "name": "symbol",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "shareholder_name",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "shares_owned",
+        "type": "BIGINT"
+      },
+      {
+        "name": "ownership_percentage",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "update_date",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "source",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "fetched_at",
+        "type": "TIMESTAMP"
+      }
+    ]
+  },
+  "core.corporate_events": {
+    "schema": "core",
+    "table": "corporate_events",
+    "type": "BASE TABLE",
+    "row_count": 38803,
+    "col_count": 7,
+    "columns": [
+      {
+        "name": "symbol",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "event_id",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "event_type",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "event_date",
+        "type": "DATE"
+      },
+      {
+        "name": "detail_json",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "fetched_at",
+        "type": "TIMESTAMP"
+      },
+      {
+        "name": "payout_delay_days",
+        "type": "INTEGER"
+      }
+    ]
+  },
+  "core.dim_icb_hierarchy": {
+    "schema": "core",
+    "table": "dim_icb_hierarchy",
+    "type": "BASE TABLE",
+    "row_count": 177,
+    "col_count": 18,
+    "columns": [
+      {
+        "name": "icb_code",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "level",
+        "type": "INTEGER"
+      },
+      {
+        "name": "icb_name_vi",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "icb_name_en",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "parent_code",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "industry_code",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "industry_name_vi",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "industry_name_en",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "supersector_code",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "supersector_name_vi",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "supersector_name_en",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "sector_code",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "sector_name_vi",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "sector_name_en",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "subsector_code",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "subsector_name_vi",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "subsector_name_en",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMP"
+      }
+    ]
+  },
+  "core.dim_index_constituents": {
+    "schema": "core",
+    "table": "dim_index_constituents",
+    "type": "BASE TABLE",
+    "row_count": 1727,
+    "col_count": 8,
+    "columns": [
+      {
+        "name": "index_code",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "symbol",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "weight",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "rank",
+        "type": "INTEGER"
+      },
+      {
+        "name": "effective_date",
+        "type": "DATE"
+      },
+      {
+        "name": "is_current",
+        "type": "BOOLEAN"
+      },
+      {
+        "name": "source",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "fetched_at",
+        "type": "TIMESTAMP"
+      }
+    ]
+  },
+  "core.dim_index_metadata": {
+    "schema": "core",
+    "table": "dim_index_metadata",
+    "type": "BASE TABLE",
+    "row_count": 22,
+    "col_count": 7,
+    "columns": [
+      {
+        "name": "index_code",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "index_name",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "exchange",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "category",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "description",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "rebalance_cycle",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMP"
+      }
+    ]
+  },
+  "core.dim_sector": {
+    "schema": "core",
+    "table": "dim_sector",
+    "type": "BASE TABLE",
+    "row_count": 25,
+    "col_count": 2,
+    "columns": [
+      {
+        "name": "sector_id",
+        "type": "INTEGER"
+      },
+      {
+        "name": "sector_name",
+        "type": "VARCHAR"
+      }
+    ]
+  },
+  "core.dim_symbol": {
+    "schema": "core",
+    "table": "dim_symbol",
+    "type": "BASE TABLE",
+    "row_count": 1751,
+    "col_count": 9,
+    "columns": [
+      {
+        "name": "symbol",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "organ_name",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "en_organ_name",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "exchange",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "industry_code",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "industry_name",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "delisted_date",
+        "type": "DATE"
+      },
+      {
+        "name": "fetched_at",
+        "type": "TIMESTAMP"
+      },
+      {
+        "name": "is_delisted",
+        "type": "BOOLEAN"
+      }
+    ]
+  },
+  "core.dim_symbol_cafef": {
+    "schema": "core",
+    "table": "dim_symbol_cafef",
+    "type": "BASE TABLE",
+    "row_count": 2734,
+    "col_count": 12,
+    "columns": [
+      {
+        "name": "symbol",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "org_name",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "exchange",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "center_id",
+        "type": "INTEGER"
+      },
+      {
+        "name": "is_vn30",
+        "type": "BOOLEAN"
+      },
+      {
+        "name": "is_hnx30",
+        "type": "BOOLEAN"
+      },
+      {
+        "name": "slug_base",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "source",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "fetched_at",
+        "type": "TIMESTAMP"
+      },
+      {
+        "name": "raw_json",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "tradeable_flag",
+        "type": "BOOLEAN"
+      },
+      {
+        "name": "subuniverse",
+        "type": "VARCHAR"
+      }
+    ]
+  },
+  "core.dim_symbol_sector": {
+    "schema": "core",
+    "table": "dim_symbol_sector",
+    "type": "BASE TABLE",
+    "row_count": 930,
+    "col_count": 2,
+    "columns": [
+      {
+        "name": "symbol",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "sector_id",
+        "type": "INTEGER"
+      }
+    ]
+  },
+  "core.financial_notes": {
+    "schema": "core",
+    "table": "financial_notes",
+    "type": "BASE TABLE",
+    "row_count": 7358616,
+    "col_count": 9,
+    "columns": [
+      {
+        "name": "symbol",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "period",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "note_id",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "note_name",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "item_order",
+        "type": "INTEGER"
+      },
+      {
+        "name": "item_level",
+        "type": "INTEGER"
+      },
+      {
+        "name": "unit",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "value",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "fetched_at",
+        "type": "TIMESTAMP"
+      }
+    ]
+  },
+  "core.foreign_flow_intraday": {
+    "schema": "core",
+    "table": "foreign_flow_intraday",
+    "type": "BASE TABLE",
+    "row_count": 2,
+    "col_count": 8,
+    "columns": [
+      {
+        "name": "symbol",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "timestamp",
+        "type": "TIMESTAMP"
+      },
+      {
+        "name": "foreign_buy_volume",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "foreign_sell_volume",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "foreign_net_volume",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "foreign_ownership_pct",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "close_price",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "fetched_at",
+        "type": "TIMESTAMP"
+      }
+    ]
+  },
+  "core.foreign_ownership_room": {
+    "schema": "core",
+    "table": "foreign_ownership_room",
+    "type": "BASE TABLE",
+    "row_count": 2,
+    "col_count": 7,
+    "columns": [
+      {
+        "name": "symbol",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "date",
+        "type": "DATE"
+      },
+      {
+        "name": "foreign_ownership_pct",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "foreign_buy_volume",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "foreign_sell_volume",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "foreign_net_volume",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "fetched_at",
+        "type": "TIMESTAMP"
+      }
+    ]
+  },
+  "core.fundamentals": {
+    "schema": "core",
+    "table": "fundamentals",
+    "type": "BASE TABLE",
+    "row_count": 439700,
+    "col_count": 7,
+    "columns": [
+      {
+        "name": "symbol",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "report_type",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "period_end",
+        "type": "DATE"
+      },
+      {
+        "name": "available_at",
+        "type": "DATE"
+      },
+      {
+        "name": "data_json",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "fetched_at",
+        "type": "TIMESTAMP"
+      },
+      {
+        "name": "source",
+        "type": "VARCHAR"
+      }
+    ]
+  },
+  "core.index_valuation_series": {
+    "schema": "core",
+    "table": "index_valuation_series",
+    "type": "BASE TABLE",
+    "row_count": 13138,
+    "col_count": 6,
+    "columns": [
+      {
+        "name": "index_code",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "ratio_code",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "report_date",
+        "type": "DATE"
+      },
+      {
+        "name": "ratio_value",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "source",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "fetched_at",
+        "type": "TIMESTAMP"
+      }
+    ]
+  },
+  "core.intraday_trades": {
+    "schema": "core",
+    "table": "intraday_trades",
+    "type": "BASE TABLE",
+    "row_count": 31863,
+    "col_count": 8,
+    "columns": [
+      {
+        "name": "symbol",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "trade_id",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "time",
+        "type": "TIMESTAMP"
+      },
+      {
+        "name": "price",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "volume",
+        "type": "BIGINT"
+      },
+      {
+        "name": "match_type",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "is_shark_sweep",
+        "type": "BOOLEAN"
+      },
+      {
+        "name": "fetched_at",
+        "type": "TIMESTAMP"
+      }
+    ]
+  },
+  "core.macro_economic_series": {
+    "schema": "core",
+    "table": "macro_economic_series",
+    "type": "BASE TABLE",
+    "row_count": 15067,
+    "col_count": 9,
+    "columns": [
+      {
+        "name": "indicator",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "sub_indicator",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "report_period",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "period_date",
+        "type": "DATE"
+      },
+      {
+        "name": "numeric_value",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "unit",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "meta_json",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "source",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "fetched_at",
+        "type": "TIMESTAMP"
+      }
+    ]
+  },
+  "core.macro_policy": {
+    "schema": "core",
+    "table": "macro_policy",
+    "type": "BASE TABLE",
+    "row_count": 479037,
+    "col_count": 11,
+    "columns": [
+      {
+        "name": "source",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "issuing_body",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "doc_type",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "doc_number",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "published_at",
+        "type": "TIMESTAMP"
+      },
+      {
+        "name": "available_at",
+        "type": "TIMESTAMP"
+      },
+      {
+        "name": "headline",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "summary",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "body",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "source_url",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "fetched_at",
+        "type": "TIMESTAMP"
+      }
+    ]
+  },
+  "core.macro_rates": {
+    "schema": "core",
+    "table": "macro_rates",
+    "type": "BASE TABLE",
+    "row_count": 10328,
+    "col_count": 6,
+    "columns": [
+      {
+        "name": "rate_type",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "term",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "date",
+        "type": "DATE"
+      },
+      {
+        "name": "rate_value",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "source",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "fetched_at",
+        "type": "TIMESTAMP"
+      }
+    ]
+  },
+  "core.market_breadth_series": {
+    "schema": "core",
+    "table": "market_breadth_series",
+    "type": "BASE TABLE",
+    "row_count": 2223,
+    "col_count": 12,
+    "columns": [
+      {
+        "name": "exchange",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "trade_date",
+        "type": "DATE"
+      },
+      {
+        "name": "pe",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "pb",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "above_ma20_pct",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "above_ma50_pct",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "above_ma200_pct",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "avg_20d_above_ma50_pct",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "position_line",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "close_index",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "source",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "fetched_at",
+        "type": "TIMESTAMP"
+      }
+    ]
+  },
+  "core.market_foreign_flow_daily": {
+    "schema": "core",
+    "table": "market_foreign_flow_daily",
+    "type": "BASE TABLE",
+    "row_count": 4839720,
+    "col_count": 10,
+    "columns": [
+      {
+        "name": "symbol",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "date",
+        "type": "DATE"
+      },
+      {
+        "name": "buy_volume",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "sell_volume",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "buy_value",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "sell_value",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "net_volume",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "net_value",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "foreign_room",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "fetched_at",
+        "type": "TIMESTAMP"
+      }
+    ]
+  },
+  "core.market_global_equity_daily": {
+    "schema": "core",
+    "table": "market_global_equity_daily",
+    "type": "BASE TABLE",
+    "row_count": 40050,
+    "col_count": 8,
+    "columns": [
+      {
+        "name": "symbol",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "date",
+        "type": "DATE"
+      },
+      {
+        "name": "open",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "high",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "low",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "close",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "volume",
+        "type": "BIGINT"
+      },
+      {
+        "name": "fetched_at",
+        "type": "TIMESTAMP"
+      }
+    ]
+  },
+  "core.market_index_daily": {
+    "schema": "core",
+    "table": "market_index_daily",
+    "type": "BASE TABLE",
+    "row_count": 216960,
+    "col_count": 8,
+    "columns": [
+      {
+        "name": "index_code",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "date",
+        "type": "TIMESTAMP"
+      },
+      {
+        "name": "open",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "high",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "low",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "close",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "volume",
+        "type": "BIGINT"
+      },
+      {
+        "name": "fetched_at",
+        "type": "TIMESTAMP"
+      }
+    ]
+  },
+  "core.market_ohlcv_1m": {
+    "schema": "core",
+    "table": "market_ohlcv_1m",
+    "type": "BASE TABLE",
+    "row_count": 6808414,
+    "col_count": 8,
+    "columns": [
+      {
+        "name": "symbol",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "time",
+        "type": "TIMESTAMP"
+      },
+      {
+        "name": "open",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "high",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "low",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "close",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "volume",
+        "type": "BIGINT"
+      },
+      {
+        "name": "fetched_at",
+        "type": "TIMESTAMP"
+      }
+    ]
+  },
+  "core.market_ohlcv_daily": {
+    "schema": "core",
+    "table": "market_ohlcv_daily",
+    "type": "BASE TABLE",
+    "row_count": 5185989,
+    "col_count": 8,
+    "columns": [
+      {
+        "name": "symbol",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "date",
+        "type": "DATE"
+      },
+      {
+        "name": "open",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "high",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "low",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "close",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "volume",
+        "type": "BIGINT"
+      },
+      {
+        "name": "fetched_at",
+        "type": "TIMESTAMP"
+      }
+    ]
+  },
+  "core.market_screener_snapshot": {
+    "schema": "core",
+    "table": "market_screener_snapshot",
+    "type": "BASE TABLE",
+    "row_count": 1522,
+    "col_count": 15,
+    "columns": [
+      {
+        "name": "symbol",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "snapshot_date",
+        "type": "DATE"
+      },
+      {
+        "name": "exchange",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "price",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "reference_price",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "ceiling_price",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "floor_price",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "price_change_percent",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "market_cap",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "accumulated_value",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "accumulated_volume",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "stock_strength",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "data_json",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "source",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "fetched_at",
+        "type": "TIMESTAMP"
+      }
+    ]
+  },
+  "core.market_sentiment_snapshot": {
+    "schema": "core",
+    "table": "market_sentiment_snapshot",
+    "type": "BASE TABLE",
+    "row_count": 3,
+    "col_count": 13,
+    "columns": [
+      {
+        "name": "exchange",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "snapshot_date",
+        "type": "DATE"
+      },
+      {
+        "name": "fear_greed_score",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "advances",
+        "type": "INTEGER"
+      },
+      {
+        "name": "declines",
+        "type": "INTEGER"
+      },
+      {
+        "name": "no_change",
+        "type": "INTEGER"
+      },
+      {
+        "name": "mfi",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "rsi",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "index_change",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "volume_change",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "raw_json",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "source",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "fetched_at",
+        "type": "TIMESTAMP"
+      }
+    ]
+  },
+  "core.news": {
+    "schema": "core",
+    "table": "news",
+    "type": "BASE TABLE",
+    "row_count": 2857,
+    "col_count": 9,
+    "columns": [
+      {
+        "name": "symbol",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "source",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "published_at",
+        "type": "TIMESTAMP"
+      },
+      {
+        "name": "available_at",
+        "type": "TIMESTAMP"
+      },
+      {
+        "name": "headline",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "body",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "source_url",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "fetched_at",
+        "type": "TIMESTAMP"
+      },
+      {
+        "name": "duplicate_of",
+        "type": "VARCHAR"
+      }
+    ]
+  },
+  "core.news_resources": {
+    "schema": "core",
+    "table": "news_resources",
+    "type": "BASE TABLE",
+    "row_count": 15678,
+    "col_count": 11,
+    "columns": [
+      {
+        "name": "source",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "issuing_body",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "doc_type",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "doc_number",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "published_at",
+        "type": "TIMESTAMP"
+      },
+      {
+        "name": "available_at",
+        "type": "TIMESTAMP"
+      },
+      {
+        "name": "headline",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "summary",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "body",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "source_url",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "fetched_at",
+        "type": "TIMESTAMP"
+      }
+    ]
+  },
+  "core.order_book_depth": {
+    "schema": "core",
+    "table": "order_book_depth",
+    "type": "BASE TABLE",
+    "row_count": 311,
+    "col_count": 19,
+    "columns": [
+      {
+        "name": "symbol",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "timestamp",
+        "type": "TIMESTAMP"
+      },
+      {
+        "name": "bid_price_1",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "bid_vol_1",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "bid_price_2",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "bid_vol_2",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "bid_price_3",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "bid_vol_3",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "ask_price_1",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "ask_vol_1",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "ask_price_2",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "ask_vol_2",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "ask_price_3",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "ask_vol_3",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "total_bid_depth",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "total_ask_depth",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "spread",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "ofi_ratio",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "fetched_at",
+        "type": "TIMESTAMP"
+      }
+    ]
+  },
+  "core.pit_events": {
+    "schema": "core",
+    "table": "pit_events",
+    "type": "BASE TABLE",
+    "row_count": 658182,
+    "col_count": 12,
+    "columns": [
+      {
+        "name": "symbol",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "source_url",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "published_at",
+        "type": "TIMESTAMP"
+      },
+      {
+        "name": "headline",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "sentiment",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "price_at_publish",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "price_t1",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "price_t5",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "price_t30",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "fundamentals_json",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "fundamentals_as_of",
+        "type": "DATE"
+      },
+      {
+        "name": "built_at",
+        "type": "TIMESTAMP"
+      }
+    ]
+  },
+  "core.price_adjustment_events": {
+    "schema": "core",
+    "table": "price_adjustment_events",
+    "type": "BASE TABLE",
+    "row_count": 5435,
+    "col_count": 11,
+    "columns": [
+      {
+        "name": "symbol",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "ex_date",
+        "type": "DATE"
+      },
+      {
+        "name": "adjustment_type",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "cash_dividend",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "stock_dividend_ratio",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "cum_close_price",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "ex_reference_price",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "multiplier",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "cumulative_adjustment_factor",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "source_event_ids",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "computed_at",
+        "type": "TIMESTAMP"
+      }
+    ]
+  },
+  "core.proprietary_flow": {
+    "schema": "core",
+    "table": "proprietary_flow",
+    "type": "BASE TABLE",
+    "row_count": 37757,
+    "col_count": 9,
+    "columns": [
+      {
+        "name": "symbol",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "date",
+        "type": "DATE"
+      },
+      {
+        "name": "buy_vol",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "sell_vol",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "net_vol",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "buy_val",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "sell_val",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "net_val",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "fetched_at",
+        "type": "TIMESTAMP"
+      }
+    ]
+  },
+  "core.realtime_quote_snapshot": {
+    "schema": "core",
+    "table": "realtime_quote_snapshot",
+    "type": "BASE TABLE",
+    "row_count": 3476,
+    "col_count": 4,
+    "columns": [
+      {
+        "name": "symbol",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "snapshot_at",
+        "type": "TIMESTAMP"
+      },
+      {
+        "name": "data_json",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "fetched_at",
+        "type": "TIMESTAMP"
+      }
+    ]
+  },
+  "core.sector_news_signal": {
+    "schema": "core",
+    "table": "sector_news_signal",
+    "type": "BASE TABLE",
+    "row_count": 0,
+    "col_count": 7,
+    "columns": [
+      {
+        "name": "source_url",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "sector_id",
+        "type": "INTEGER"
+      },
+      {
+        "name": "sector_name",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "matched_keyword",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "match_tier",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "market_anchor",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "fetched_at",
+        "type": "TIMESTAMP"
+      }
+    ]
+  },
+  "core.stock_research_reports": {
+    "schema": "core",
+    "table": "stock_research_reports",
+    "type": "BASE TABLE",
+    "row_count": 777,
+    "col_count": 12,
+    "columns": [
+      {
+        "name": "report_id",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "symbol",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "broker",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "title",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "recommendation",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "target_price",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "upside_pct",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "report_date",
+        "type": "DATE"
+      },
+      {
+        "name": "report_url",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "pdf_url",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "summary",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "fetched_at",
+        "type": "TIMESTAMP"
+      }
+    ]
+  },
+  "core.symbol_caf_timeline": {
+    "schema": "core",
+    "table": "symbol_caf_timeline",
+    "type": "BASE TABLE",
+    "row_count": 6292,
+    "col_count": 4,
+    "columns": [
+      {
+        "name": "symbol",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "start_date",
+        "type": "DATE"
+      },
+      {
+        "name": "end_date",
+        "type": "DATE"
+      },
+      {
+        "name": "caf",
+        "type": "DOUBLE"
+      }
+    ]
+  },
+  "core.symbol_exchange_history": {
+    "schema": "core",
+    "table": "symbol_exchange_history",
+    "type": "BASE TABLE",
+    "row_count": 2063,
+    "col_count": 9,
+    "columns": [
+      {
+        "name": "symbol",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "exchange",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "start_date",
+        "type": "DATE"
+      },
+      {
+        "name": "end_date",
+        "type": "DATE"
+      },
+      {
+        "name": "is_current",
+        "type": "BOOLEAN"
+      },
+      {
+        "name": "listing_price",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "event_note",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "source",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMP"
+      }
+    ]
+  },
+  "core.v_active_index_constituents": {
+    "schema": "core",
+    "table": "v_active_index_constituents",
+    "type": "VIEW",
+    "row_count": 1727,
+    "col_count": 10,
+    "columns": [
+      {
+        "name": "index_code",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "index_name",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "category",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "exchange",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "symbol",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "organ_name",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "weight",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "rank",
+        "type": "INTEGER"
+      },
+      {
+        "name": "effective_date",
+        "type": "DATE"
+      },
+      {
+        "name": "source",
+        "type": "VARCHAR"
+      }
+    ]
+  },
+  "core.v_market_ohlcv_1m_dual": {
+    "schema": "core",
+    "table": "v_market_ohlcv_1m_dual",
+    "type": "VIEW",
+    "row_count": 6808414,
+    "col_count": 14,
+    "columns": [
+      {
+        "name": "symbol",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "time",
+        "type": "TIMESTAMP"
+      },
+      {
+        "name": "adj_open",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "adj_high",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "adj_low",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "adj_close",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "adj_volume",
+        "type": "BIGINT"
+      },
+      {
+        "name": "caf",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "raw_open",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "raw_high",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "raw_low",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "raw_close",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "raw_volume",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "fetched_at",
+        "type": "TIMESTAMP"
+      }
+    ]
+  },
+  "core.v_market_ohlcv_dual": {
+    "schema": "core",
+    "table": "v_market_ohlcv_dual",
+    "type": "VIEW",
+    "row_count": 5185989,
+    "col_count": 14,
+    "columns": [
+      {
+        "name": "symbol",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "date",
+        "type": "DATE"
+      },
+      {
+        "name": "adj_open",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "adj_high",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "adj_low",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "adj_close",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "adj_volume",
+        "type": "BIGINT"
+      },
+      {
+        "name": "caf",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "raw_open",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "raw_high",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "raw_low",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "raw_close",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "raw_volume",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "fetched_at",
+        "type": "TIMESTAMP"
+      }
+    ]
+  },
+  "core.v_symbol_universe": {
+    "schema": "core",
+    "table": "v_symbol_universe",
+    "type": "VIEW",
+    "row_count": 4485,
+    "col_count": 8,
+    "columns": [
+      {
+        "name": "symbol",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "org_name",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "exchange",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "is_delisted",
+        "type": "BOOLEAN"
+      },
+      {
+        "name": "tradeable_flag",
+        "type": "BOOLEAN"
+      },
+      {
+        "name": "subuniverse",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "source",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "fetched_at",
+        "type": "TIMESTAMP"
+      }
+    ]
+  },
+  "meta.continuous_training_history": {
+    "schema": "meta",
+    "table": "continuous_training_history",
+    "type": "BASE TABLE",
+    "row_count": 0,
+    "col_count": 14,
+    "columns": [
+      {
+        "name": "training_run_id",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "triggered_at",
+        "type": "TIMESTAMP"
+      },
+      {
+        "name": "trigger_reason",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "samples_count",
+        "type": "INTEGER"
+      },
+      {
+        "name": "epochs",
+        "type": "INTEGER"
+      },
+      {
+        "name": "train_loss_start",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "train_loss_final",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "prev_val_accuracy",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "shadow_val_accuracy",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "prev_val_brier",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "shadow_val_brier",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "is_promoted",
+        "type": "BOOLEAN"
+      },
+      {
+        "name": "checkpoint_path",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "metadata_json",
+        "type": "VARCHAR"
+      }
+    ]
+  },
+  "meta.crawl_progress": {
+    "schema": "meta",
+    "table": "crawl_progress",
+    "type": "BASE TABLE",
+    "row_count": 20055,
+    "col_count": 5,
+    "columns": [
+      {
+        "name": "dataset_name",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "symbol",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "status",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "retry_count",
+        "type": "INTEGER"
+      },
+      {
+        "name": "last_attempt",
+        "type": "TIMESTAMP"
+      }
+    ]
+  },
+  "meta.crawl_progress_1m": {
+    "schema": "meta",
+    "table": "crawl_progress_1m",
+    "type": "BASE TABLE",
+    "row_count": 0,
+    "col_count": 8,
+    "columns": [
+      {
+        "name": "symbol",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "earliest_time",
+        "type": "TIMESTAMP"
+      },
+      {
+        "name": "latest_time",
+        "type": "TIMESTAMP"
+      },
+      {
+        "name": "total_bars",
+        "type": "INTEGER"
+      },
+      {
+        "name": "trading_days",
+        "type": "INTEGER"
+      },
+      {
+        "name": "is_complete_3y",
+        "type": "BOOLEAN"
+      },
+      {
+        "name": "last_status",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMP"
+      }
+    ]
+  },
+  "meta.model_drift_telemetry": {
+    "schema": "meta",
+    "table": "model_drift_telemetry",
+    "type": "BASE TABLE",
+    "row_count": 0,
+    "col_count": 11,
+    "columns": [
+      {
+        "name": "run_id",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "audit_timestamp",
+        "type": "TIMESTAMP"
+      },
+      {
+        "name": "window_size",
+        "type": "INTEGER"
+      },
+      {
+        "name": "rolling_directional_accuracy_t5",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "rolling_brier_score_t5",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "rolling_spearman_ic_t5",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "rolling_spearman_ic_t30",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "total_evaluated",
+        "type": "INTEGER"
+      },
+      {
+        "name": "total_pending",
+        "type": "INTEGER"
+      },
+      {
+        "name": "circuit_breaker_status",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "alert_message",
+        "type": "VARCHAR"
+      }
+    ]
+  },
+  "meta.prediction_feedback_log": {
+    "schema": "meta",
+    "table": "prediction_feedback_log",
+    "type": "BASE TABLE",
+    "row_count": 682,
+    "col_count": 30,
+    "columns": [
+      {
+        "name": "prediction_id",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMP"
+      },
+      {
+        "name": "symbol",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "headline",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "source",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "source_trust_weight",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "raw_sentiment_score",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "consistent_alpha_score",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "sentiment_class",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "p_star_neg",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "p_star_neu",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "p_star_pos",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "violation_score",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "is_consistent",
+        "type": "BOOLEAN"
+      },
+      {
+        "name": "is_duplicate",
+        "type": "BOOLEAN"
+      },
+      {
+        "name": "action_recommendation",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "regime_safe_to_trade",
+        "type": "BOOLEAN"
+      },
+      {
+        "name": "matched_shareholder",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "event_date",
+        "type": "DATE"
+      },
+      {
+        "name": "realized_price_t0",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "realized_price_t1",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "realized_price_t5",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "realized_price_t30",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "return_t1",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "return_t5",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "return_t30",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "direction_hit_t5",
+        "type": "INTEGER"
+      },
+      {
+        "name": "brier_score_t5",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "is_backfilled",
+        "type": "BOOLEAN"
+      },
+      {
+        "name": "backfilled_at",
+        "type": "TIMESTAMP"
+      }
+    ]
+  },
+  "preprocessed.events": {
+    "schema": "preprocessed",
+    "table": "events",
+    "type": "BASE TABLE",
+    "row_count": 581944,
+    "col_count": 69,
+    "columns": [
+      {
+        "name": "symbol",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "exchange",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "event_date",
+        "type": "DATE"
+      },
+      {
+        "name": "published_at",
+        "type": "TIMESTAMP"
+      },
+      {
+        "name": "is_midnight_ts",
+        "type": "BOOLEAN"
+      },
+      {
+        "name": "headline_clean",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "is_duplicate",
+        "type": "BOOLEAN"
+      },
+      {
+        "name": "entity_tag",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "sentiment_score",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "rankgauss_sentiment_z",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "p0",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "p5",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "p30",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "ret_t5_pct",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "ret_t30_pct",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "raw_diff_pct",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "winsorized_diff_pct",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "market_regime",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "vni_fracdiff_d020",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "rankgauss_volume_z",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "bctc_period_end",
+        "type": "DATE"
+      },
+      {
+        "name": "bctc_available_at",
+        "type": "DATE"
+      },
+      {
+        "name": "pe_ratio",
+        "type": "FLOAT"
+      },
+      {
+        "name": "pb_ratio",
+        "type": "FLOAT"
+      },
+      {
+        "name": "ps_ratio",
+        "type": "FLOAT"
+      },
+      {
+        "name": "p_cf_ratio",
+        "type": "FLOAT"
+      },
+      {
+        "name": "ev_ebitda",
+        "type": "FLOAT"
+      },
+      {
+        "name": "dividend_yield",
+        "type": "FLOAT"
+      },
+      {
+        "name": "market_cap",
+        "type": "FLOAT"
+      },
+      {
+        "name": "outstanding_shares",
+        "type": "FLOAT"
+      },
+      {
+        "name": "ebit",
+        "type": "FLOAT"
+      },
+      {
+        "name": "ebitda",
+        "type": "FLOAT"
+      },
+      {
+        "name": "equity_val",
+        "type": "FLOAT"
+      },
+      {
+        "name": "roe",
+        "type": "FLOAT"
+      },
+      {
+        "name": "roa",
+        "type": "FLOAT"
+      },
+      {
+        "name": "roic",
+        "type": "FLOAT"
+      },
+      {
+        "name": "gross_margin",
+        "type": "FLOAT"
+      },
+      {
+        "name": "ebit_margin",
+        "type": "FLOAT"
+      },
+      {
+        "name": "pre_tax_margin",
+        "type": "FLOAT"
+      },
+      {
+        "name": "net_margin",
+        "type": "FLOAT"
+      },
+      {
+        "name": "asset_turnover",
+        "type": "FLOAT"
+      },
+      {
+        "name": "fixed_asset_turnover",
+        "type": "FLOAT"
+      },
+      {
+        "name": "days_sales_outstanding",
+        "type": "FLOAT"
+      },
+      {
+        "name": "days_inventory_outstanding",
+        "type": "FLOAT"
+      },
+      {
+        "name": "days_payable_outstanding",
+        "type": "FLOAT"
+      },
+      {
+        "name": "cash_conversion_cycle",
+        "type": "FLOAT"
+      },
+      {
+        "name": "current_ratio",
+        "type": "FLOAT"
+      },
+      {
+        "name": "quick_ratio",
+        "type": "FLOAT"
+      },
+      {
+        "name": "cash_ratio",
+        "type": "FLOAT"
+      },
+      {
+        "name": "debt_to_equity",
+        "type": "FLOAT"
+      },
+      {
+        "name": "loan_to_equity",
+        "type": "FLOAT"
+      },
+      {
+        "name": "financial_leverage",
+        "type": "FLOAT"
+      },
+      {
+        "name": "equity_to_liabilities",
+        "type": "FLOAT"
+      },
+      {
+        "name": "equity_to_assets",
+        "type": "FLOAT"
+      },
+      {
+        "name": "bank_nim",
+        "type": "FLOAT"
+      },
+      {
+        "name": "bank_yiea",
+        "type": "FLOAT"
+      },
+      {
+        "name": "bank_cof",
+        "type": "FLOAT"
+      },
+      {
+        "name": "bank_noii",
+        "type": "FLOAT"
+      },
+      {
+        "name": "bank_cir",
+        "type": "FLOAT"
+      },
+      {
+        "name": "bank_loan_growth",
+        "type": "FLOAT"
+      },
+      {
+        "name": "bank_deposit_growth",
+        "type": "FLOAT"
+      },
+      {
+        "name": "bank_ldr",
+        "type": "FLOAT"
+      },
+      {
+        "name": "bank_npl",
+        "type": "FLOAT"
+      },
+      {
+        "name": "bank_npl_coverage",
+        "type": "FLOAT"
+      },
+      {
+        "name": "bank_provision_to_loans",
+        "type": "FLOAT"
+      },
+      {
+        "name": "bank_car",
+        "type": "FLOAT"
+      },
+      {
+        "name": "bank_casa",
+        "type": "FLOAT"
+      },
+      {
+        "name": "bank_equity_to_loans",
+        "type": "FLOAT"
+      },
+      {
+        "name": "bank_llr_to_loans",
+        "type": "FLOAT"
+      }
+    ]
+  },
+  "preprocessed.fundamentals_ratios": {
+    "schema": "preprocessed",
+    "table": "fundamentals_ratios",
+    "type": "BASE TABLE",
+    "row_count": 46337,
+    "col_count": 52,
+    "columns": [
+      {
+        "name": "symbol",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "period_end",
+        "type": "DATE"
+      },
+      {
+        "name": "available_at",
+        "type": "DATE"
+      },
+      {
+        "name": "report_type",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "pe_ratio",
+        "type": "FLOAT"
+      },
+      {
+        "name": "pb_ratio",
+        "type": "FLOAT"
+      },
+      {
+        "name": "ps_ratio",
+        "type": "FLOAT"
+      },
+      {
+        "name": "p_cf_ratio",
+        "type": "FLOAT"
+      },
+      {
+        "name": "ev_ebitda",
+        "type": "FLOAT"
+      },
+      {
+        "name": "dividend_yield",
+        "type": "FLOAT"
+      },
+      {
+        "name": "market_cap",
+        "type": "FLOAT"
+      },
+      {
+        "name": "outstanding_shares",
+        "type": "FLOAT"
+      },
+      {
+        "name": "ebit",
+        "type": "FLOAT"
+      },
+      {
+        "name": "ebitda",
+        "type": "FLOAT"
+      },
+      {
+        "name": "equity_val",
+        "type": "FLOAT"
+      },
+      {
+        "name": "roe",
+        "type": "FLOAT"
+      },
+      {
+        "name": "roa",
+        "type": "FLOAT"
+      },
+      {
+        "name": "roic",
+        "type": "FLOAT"
+      },
+      {
+        "name": "gross_margin",
+        "type": "FLOAT"
+      },
+      {
+        "name": "ebit_margin",
+        "type": "FLOAT"
+      },
+      {
+        "name": "pre_tax_margin",
+        "type": "FLOAT"
+      },
+      {
+        "name": "net_margin",
+        "type": "FLOAT"
+      },
+      {
+        "name": "asset_turnover",
+        "type": "FLOAT"
+      },
+      {
+        "name": "fixed_asset_turnover",
+        "type": "FLOAT"
+      },
+      {
+        "name": "days_sales_outstanding",
+        "type": "FLOAT"
+      },
+      {
+        "name": "days_inventory_outstanding",
+        "type": "FLOAT"
+      },
+      {
+        "name": "days_payable_outstanding",
+        "type": "FLOAT"
+      },
+      {
+        "name": "cash_conversion_cycle",
+        "type": "FLOAT"
+      },
+      {
+        "name": "current_ratio",
+        "type": "FLOAT"
+      },
+      {
+        "name": "quick_ratio",
+        "type": "FLOAT"
+      },
+      {
+        "name": "cash_ratio",
+        "type": "FLOAT"
+      },
+      {
+        "name": "debt_to_equity",
+        "type": "FLOAT"
+      },
+      {
+        "name": "loan_to_equity",
+        "type": "FLOAT"
+      },
+      {
+        "name": "financial_leverage",
+        "type": "FLOAT"
+      },
+      {
+        "name": "equity_to_liabilities",
+        "type": "FLOAT"
+      },
+      {
+        "name": "equity_to_assets",
+        "type": "FLOAT"
+      },
+      {
+        "name": "bank_nim",
+        "type": "FLOAT"
+      },
+      {
+        "name": "bank_yiea",
+        "type": "FLOAT"
+      },
+      {
+        "name": "bank_cof",
+        "type": "FLOAT"
+      },
+      {
+        "name": "bank_noii",
+        "type": "FLOAT"
+      },
+      {
+        "name": "bank_cir",
+        "type": "FLOAT"
+      },
+      {
+        "name": "bank_loan_growth",
+        "type": "FLOAT"
+      },
+      {
+        "name": "bank_deposit_growth",
+        "type": "FLOAT"
+      },
+      {
+        "name": "bank_ldr",
+        "type": "FLOAT"
+      },
+      {
+        "name": "bank_npl",
+        "type": "FLOAT"
+      },
+      {
+        "name": "bank_npl_coverage",
+        "type": "FLOAT"
+      },
+      {
+        "name": "bank_provision_to_loans",
+        "type": "FLOAT"
+      },
+      {
+        "name": "bank_car",
+        "type": "FLOAT"
+      },
+      {
+        "name": "bank_casa",
+        "type": "FLOAT"
+      },
+      {
+        "name": "bank_equity_to_loans",
+        "type": "FLOAT"
+      },
+      {
+        "name": "bank_llr_to_loans",
+        "type": "FLOAT"
+      },
+      {
+        "name": "raw_payload_json",
+        "type": "VARCHAR"
+      }
+    ]
+  },
+  "preprocessed.macro_policy": {
+    "schema": "preprocessed",
+    "table": "macro_policy",
+    "type": "BASE TABLE",
+    "row_count": 477733,
+    "col_count": 12,
+    "columns": [
+      {
+        "name": "source_url",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "source",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "issuing_body",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "doc_type",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "published_at",
+        "type": "TIMESTAMP"
+      },
+      {
+        "name": "headline_clean",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "summary_clean",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "policy_pillar",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "is_misrouted_corporate",
+        "type": "BOOLEAN"
+      },
+      {
+        "name": "affected_sectors",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "entity_tag",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "is_duplicate",
+        "type": "BOOLEAN"
+      }
+    ]
+  },
+  "preprocessed.market_regimes": {
+    "schema": "preprocessed",
+    "table": "market_regimes",
+    "type": "BASE TABLE",
+    "row_count": 6357,
+    "col_count": 5,
+    "columns": [
+      {
+        "name": "date",
+        "type": "DATE"
+      },
+      {
+        "name": "close",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "volatility_20d_ann",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "market_regime",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "vni_fracdiff_d020",
+        "type": "DOUBLE"
+      }
+    ]
+  },
+  "staging.cafef_disclosures": {
+    "schema": "staging",
+    "table": "cafef_disclosures",
+    "type": "BASE TABLE",
+    "row_count": 80,
+    "col_count": 15,
+    "columns": [
+      {
+        "name": "doc_id",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "symbol",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "company_name",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "trade_center_id",
+        "type": "INTEGER"
+      },
+      {
+        "name": "exchange",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "year",
+        "type": "INTEGER"
+      },
+      {
+        "name": "quarter",
+        "type": "INTEGER"
+      },
+      {
+        "name": "report_type",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "content",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "file_name",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "file_url",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "lnstctm",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "published_at",
+        "type": "TIMESTAMP"
+      },
+      {
+        "name": "raw_json",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "fetched_at",
+        "type": "TIMESTAMP"
+      }
+    ]
+  },
+  "staging.corporate_events": {
+    "schema": "staging",
+    "table": "corporate_events",
+    "type": "BASE TABLE",
+    "row_count": 38795,
+    "col_count": 7,
+    "columns": [
+      {
+        "name": "symbol",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "event_id",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "event_type",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "event_date",
+        "type": "DATE"
+      },
+      {
+        "name": "detail_json",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "fetched_at",
+        "type": "TIMESTAMP"
+      },
+      {
+        "name": "payout_delay_days",
+        "type": "INTEGER"
+      }
+    ]
+  },
+  "staging.financial_notes": {
+    "schema": "staging",
+    "table": "financial_notes",
+    "type": "BASE TABLE",
+    "row_count": 7141285,
+    "col_count": 9,
+    "columns": [
+      {
+        "name": "symbol",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "period",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "note_id",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "note_name",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "item_order",
+        "type": "INTEGER"
+      },
+      {
+        "name": "item_level",
+        "type": "INTEGER"
+      },
+      {
+        "name": "unit",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "value",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "fetched_at",
+        "type": "TIMESTAMP"
+      }
+    ]
+  },
+  "staging.foreign_flow_intraday": {
+    "schema": "staging",
+    "table": "foreign_flow_intraday",
+    "type": "BASE TABLE",
+    "row_count": 2,
+    "col_count": 8,
+    "columns": [
+      {
+        "name": "symbol",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "timestamp",
+        "type": "TIMESTAMP"
+      },
+      {
+        "name": "foreign_buy_volume",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "foreign_sell_volume",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "foreign_net_volume",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "foreign_ownership_pct",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "close_price",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "fetched_at",
+        "type": "TIMESTAMP"
+      }
+    ]
+  },
+  "staging.foreign_ownership_room": {
+    "schema": "staging",
+    "table": "foreign_ownership_room",
+    "type": "BASE TABLE",
+    "row_count": 2,
+    "col_count": 7,
+    "columns": [
+      {
+        "name": "symbol",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "date",
+        "type": "DATE"
+      },
+      {
+        "name": "foreign_ownership_pct",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "foreign_buy_volume",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "foreign_sell_volume",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "foreign_net_volume",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "fetched_at",
+        "type": "TIMESTAMP"
+      }
+    ]
+  },
+  "staging.fundamentals": {
+    "schema": "staging",
+    "table": "fundamentals",
+    "type": "BASE TABLE",
+    "row_count": 440140,
+    "col_count": 7,
+    "columns": [
+      {
+        "name": "symbol",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "report_type",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "period_end",
+        "type": "DATE"
+      },
+      {
+        "name": "available_at",
+        "type": "DATE"
+      },
+      {
+        "name": "data_json",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "fetched_at",
+        "type": "TIMESTAMP"
+      },
+      {
+        "name": "source",
+        "type": "VARCHAR"
+      }
+    ]
+  },
+  "staging.index_valuation_series": {
+    "schema": "staging",
+    "table": "index_valuation_series",
+    "type": "BASE TABLE",
+    "row_count": 21894,
+    "col_count": 6,
+    "columns": [
+      {
+        "name": "index_code",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "ratio_code",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "report_date",
+        "type": "DATE"
+      },
+      {
+        "name": "ratio_value",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "source",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "fetched_at",
+        "type": "TIMESTAMP"
+      }
+    ]
+  },
+  "staging.intraday_trades": {
+    "schema": "staging",
+    "table": "intraday_trades",
+    "type": "BASE TABLE",
+    "row_count": 31868,
+    "col_count": 8,
+    "columns": [
+      {
+        "name": "symbol",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "trade_id",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "time",
+        "type": "TIMESTAMP"
+      },
+      {
+        "name": "price",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "volume",
+        "type": "BIGINT"
+      },
+      {
+        "name": "match_type",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "is_shark_sweep",
+        "type": "BOOLEAN"
+      },
+      {
+        "name": "fetched_at",
+        "type": "TIMESTAMP"
+      }
+    ]
+  },
+  "staging.macro_economic_series": {
+    "schema": "staging",
+    "table": "macro_economic_series",
+    "type": "BASE TABLE",
+    "row_count": 41472,
+    "col_count": 9,
+    "columns": [
+      {
+        "name": "indicator",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "sub_indicator",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "report_period",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "period_date",
+        "type": "DATE"
+      },
+      {
+        "name": "numeric_value",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "unit",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "meta_json",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "source",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "fetched_at",
+        "type": "TIMESTAMP"
+      }
+    ]
+  },
+  "staging.macro_policy": {
+    "schema": "staging",
+    "table": "macro_policy",
+    "type": "BASE TABLE",
+    "row_count": 72759,
+    "col_count": 11,
+    "columns": [
+      {
+        "name": "source",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "issuing_body",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "doc_type",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "doc_number",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "published_at",
+        "type": "TIMESTAMP"
+      },
+      {
+        "name": "available_at",
+        "type": "TIMESTAMP"
+      },
+      {
+        "name": "headline",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "summary",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "body",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "source_url",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "fetched_at",
+        "type": "TIMESTAMP"
+      }
+    ]
+  },
+  "staging.macro_rates": {
+    "schema": "staging",
+    "table": "macro_rates",
+    "type": "BASE TABLE",
+    "row_count": 26400,
+    "col_count": 6,
+    "columns": [
+      {
+        "name": "rate_type",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "term",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "date",
+        "type": "DATE"
+      },
+      {
+        "name": "rate_value",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "source",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "fetched_at",
+        "type": "TIMESTAMP"
+      }
+    ]
+  },
+  "staging.market_breadth_series": {
+    "schema": "staging",
+    "table": "market_breadth_series",
+    "type": "BASE TABLE",
+    "row_count": 2223,
+    "col_count": 12,
+    "columns": [
+      {
+        "name": "exchange",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "trade_date",
+        "type": "DATE"
+      },
+      {
+        "name": "pe",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "pb",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "above_ma20_pct",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "above_ma50_pct",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "above_ma200_pct",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "avg_20d_above_ma50_pct",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "position_line",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "close_index",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "source",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "fetched_at",
+        "type": "TIMESTAMP"
+      }
+    ]
+  },
+  "staging.market_global_equity_daily": {
+    "schema": "staging",
+    "table": "market_global_equity_daily",
+    "type": "BASE TABLE",
+    "row_count": 40050,
+    "col_count": 8,
+    "columns": [
+      {
+        "name": "symbol",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "date",
+        "type": "DATE"
+      },
+      {
+        "name": "open",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "high",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "low",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "close",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "volume",
+        "type": "BIGINT"
+      },
+      {
+        "name": "fetched_at",
+        "type": "TIMESTAMP"
+      }
+    ]
+  },
+  "staging.market_ohlcv_daily": {
+    "schema": "staging",
+    "table": "market_ohlcv_daily",
+    "type": "BASE TABLE",
+    "row_count": 4847608,
+    "col_count": 8,
+    "columns": [
+      {
+        "name": "symbol",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "date",
+        "type": "DATE"
+      },
+      {
+        "name": "open",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "high",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "low",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "close",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "volume",
+        "type": "BIGINT"
+      },
+      {
+        "name": "fetched_at",
+        "type": "TIMESTAMP"
+      }
+    ]
+  },
+  "staging.market_screener_snapshot": {
+    "schema": "staging",
+    "table": "market_screener_snapshot",
+    "type": "BASE TABLE",
+    "row_count": 1522,
+    "col_count": 15,
+    "columns": [
+      {
+        "name": "symbol",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "snapshot_date",
+        "type": "DATE"
+      },
+      {
+        "name": "exchange",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "price",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "reference_price",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "ceiling_price",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "floor_price",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "price_change_percent",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "market_cap",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "accumulated_value",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "accumulated_volume",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "stock_strength",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "data_json",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "source",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "fetched_at",
+        "type": "TIMESTAMP"
+      }
+    ]
+  },
+  "staging.market_sentiment_snapshot": {
+    "schema": "staging",
+    "table": "market_sentiment_snapshot",
+    "type": "BASE TABLE",
+    "row_count": 3,
+    "col_count": 13,
+    "columns": [
+      {
+        "name": "exchange",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "snapshot_date",
+        "type": "DATE"
+      },
+      {
+        "name": "fear_greed_score",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "advances",
+        "type": "INTEGER"
+      },
+      {
+        "name": "declines",
+        "type": "INTEGER"
+      },
+      {
+        "name": "no_change",
+        "type": "INTEGER"
+      },
+      {
+        "name": "mfi",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "rsi",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "index_change",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "volume_change",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "raw_json",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "source",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "fetched_at",
+        "type": "TIMESTAMP"
+      }
+    ]
+  },
+  "staging.news": {
+    "schema": "staging",
+    "table": "news",
+    "type": "BASE TABLE",
+    "row_count": 0,
+    "col_count": 9,
+    "columns": [
+      {
+        "name": "symbol",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "source",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "published_at",
+        "type": "TIMESTAMP"
+      },
+      {
+        "name": "available_at",
+        "type": "TIMESTAMP"
+      },
+      {
+        "name": "headline",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "body",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "source_url",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "fetched_at",
+        "type": "TIMESTAMP"
+      },
+      {
+        "name": "duplicate_of",
+        "type": "VARCHAR"
+      }
+    ]
+  },
+  "staging.news_resources": {
+    "schema": "staging",
+    "table": "news_resources",
+    "type": "BASE TABLE",
+    "row_count": 0,
+    "col_count": 11,
+    "columns": [
+      {
+        "name": "source",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "issuing_body",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "doc_type",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "doc_number",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "published_at",
+        "type": "TIMESTAMP"
+      },
+      {
+        "name": "available_at",
+        "type": "TIMESTAMP"
+      },
+      {
+        "name": "headline",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "summary",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "body",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "source_url",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "fetched_at",
+        "type": "TIMESTAMP"
+      }
+    ]
+  },
+  "staging.order_book_depth": {
+    "schema": "staging",
+    "table": "order_book_depth",
+    "type": "BASE TABLE",
+    "row_count": 311,
+    "col_count": 19,
+    "columns": [
+      {
+        "name": "symbol",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "timestamp",
+        "type": "TIMESTAMP"
+      },
+      {
+        "name": "bid_price_1",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "bid_vol_1",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "bid_price_2",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "bid_vol_2",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "bid_price_3",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "bid_vol_3",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "ask_price_1",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "ask_vol_1",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "ask_price_2",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "ask_vol_2",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "ask_price_3",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "ask_vol_3",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "total_bid_depth",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "total_ask_depth",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "spread",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "ofi_ratio",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "fetched_at",
+        "type": "TIMESTAMP"
+      }
+    ]
+  },
+  "staging.pit_events": {
+    "schema": "staging",
+    "table": "pit_events",
+    "type": "BASE TABLE",
+    "row_count": 658182,
+    "col_count": 12,
+    "columns": [
+      {
+        "name": "symbol",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "source_url",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "published_at",
+        "type": "TIMESTAMP"
+      },
+      {
+        "name": "headline",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "sentiment",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "price_at_publish",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "price_t1",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "price_t5",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "price_t30",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "fundamentals_json",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "fundamentals_as_of",
+        "type": "DATE"
+      },
+      {
+        "name": "built_at",
+        "type": "TIMESTAMP"
+      }
+    ]
+  },
+  "staging.price_adjustment_events": {
+    "schema": "staging",
+    "table": "price_adjustment_events",
+    "type": "BASE TABLE",
+    "row_count": 0,
+    "col_count": 6,
+    "columns": [
+      {
+        "name": "symbol",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "ex_date",
+        "type": "DATE"
+      },
+      {
+        "name": "adjustment_type",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "multiplier",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "source_event_id",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "computed_at",
+        "type": "TIMESTAMP"
+      }
+    ]
+  },
+  "staging.proprietary_flow": {
+    "schema": "staging",
+    "table": "proprietary_flow",
+    "type": "BASE TABLE",
+    "row_count": 35190,
+    "col_count": 9,
+    "columns": [
+      {
+        "name": "symbol",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "date",
+        "type": "DATE"
+      },
+      {
+        "name": "buy_vol",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "sell_vol",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "net_vol",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "buy_val",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "sell_val",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "net_val",
+        "type": "DOUBLE"
+      },
+      {
+        "name": "fetched_at",
+        "type": "TIMESTAMP"
+      }
+    ]
+  },
+  "staging.realtime_quote_snapshot": {
+    "schema": "staging",
+    "table": "realtime_quote_snapshot",
+    "type": "BASE TABLE",
+    "row_count": 3476,
+    "col_count": 4,
+    "columns": [
+      {
+        "name": "symbol",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "snapshot_at",
+        "type": "TIMESTAMP"
+      },
+      {
+        "name": "data_json",
+        "type": "VARCHAR"
+      },
+      {
+        "name": "fetched_at",
+        "type": "TIMESTAMP"
+      }
+    ]
+  }
+}
