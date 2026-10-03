@@ -1158,3 +1158,30 @@ p.isfinite trên chuỗi return, triệt tiêu hoàn toàn 1,038 sự kiện có
   6. Kiểm Thử Đơn Vị Tự Động: tests/test_priority_tables_curriculum.py (2/2 PASSED 100%).
   7. Cập nhật Mục 6 vào Progress Report/05_TIER_F3XX_NLP_MULTIMODAL_CONSISTENCY.md.
 
+---
+
+## Session 37: 2026-10-03 — Kiểm Toán Trùng Lặp 68 Features & Hiện Thực Hóa Cầu Nối EOD Reconciliation Worker (Tier F4**)
+- Branch: main
+- Status: Kiểm toán hoàn tất 68 features (0 duplicates); Phân tích toàn diện Pros/Cons/Recommendations cho F401, F402, F403; Hiện thực hóa thành công module `src/service/eod_reconciliation_worker.py` kết nối F402 -> F403; Toàn bộ 28/28 tests Tier F4** PASSED 100%.
+- Completed:
+  1. **Kiểm Toán Trùng Lặp Toàn Diện 68 Features Trong `Harness/feature_list.json`**:
+     - Kiểm tra toàn bộ 68 features: 68 IDs độc nhất (0 duplicates), 68 Names độc nhất (0 duplicates).
+     - Phát hiện và khắc phục 2 lỗi trỏ trùng crawler command:
+       * F050 (`cafef_data_market.py`) trỏ đúng `python src/crawlers/cafef_data_market.py`.
+       * F052 (`cafef_finance_enhancer.py`) trỏ đúng `python src/crawlers/cafef_finance_enhancer.py`.
+     - Xác nhận độc nhất 100% về ID, Name, verification, run_command và test_command.
+  2. **Phân Tích Chi Tiết Tier F4** (F401, F402, F403)**:
+     - Phân tích chi tiết kiến trúc, ưu điểm (Pros), nhược điểm (Cons) và khuyến nghị kỹ thuật từ cả `Harness/feature_list.json` và `Progress Report/06_TIER_F4XX_F9XX_PRODUCTION_EXECUTION_COMPLIANCE.md`.
+  3. **Hiện Thực Hóa Cầu Nối EOD Reconciliation Worker Khuyến Nghị F402/F403**:
+     - Tạo module `src/service/eod_reconciliation_worker.py`:
+       * Khâu 1: Tự động đối soát giá đóng cửa OHLCV sau phiên (15:30) cho các dự báo đang chờ (`is_backfilled=FALSE`), tính toán lợi nhuận thực tế $T+1, T+5, T+30$.
+       * Khâu 2: Tính toán chỉ số trôi dạt (Drift Telemetry): Brier score trượt, Directional Accuracy trượt, Spearman Rank IC, kích hoạt Circuit Breaker nếu có suy thoái.
+       * Khâu 3: Tự động phát lệnh tái huấn luyện thích ứng liên tục (F403 Continuous Retraining) khi Brier $> 0.050$, Acc $< 40\%$ hoặc tích lũy đủ $\ge 2,000$ mẫu.
+       * Khâu 4: Tuân thủ nghiêm ngặt Quy tắc B1 (Strictly Read-Only, zero broker/order code).
+       * Khâu 5: Tối ưu cơ chế Cold-start thăng hạng baseline ban đầu trong `src/service/continuous_training.py`.
+  4. **Kiểm Thử Đơn Vị & Hồi Quy Toàn Diện**:
+     - `tests/test_eod_reconciliation_worker.py`: 4/4 PASSED (initialization, dry-run, reconciliation cycle, Rule B1 compliance).
+     - Bộ kiểm thử hồi quy toàn bộ Tier F4**: **28/28 tests PASSED 100%** trong 76.56s.
+- Next Session Should: Tiến hành trạm tiếp theo: Chuẩn bị tài liệu & thủ tục nghiệm thu cho Tier F9xx (Hành lang pháp lý F901 & Môi trường Sandbox F902).
+
+

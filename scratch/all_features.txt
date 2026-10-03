@@ -1,0 +1,68 @@
+F000 [passing]: Environment & schema bootstrap
+F001 [passing]: Reference crawler: dim_symbol master data
+F001b [passing]: dim_symbol supplement: cafef.vn company directory cross-reference
+F001c [passing]: Index constituents & group rooms crawler
+F002 [passing]: Market OHLCV daily crawler
+F002b [passing]: Market OHLCV 1-minute intraday crawler (2023 - 2026)
+F003 [passing]: vnstock News crawler
+F004 [passing]: cafef.vn news crawler (secondary source)
+F004b [passing]: cafef article body enrichment
+F004c [passing]: cafef.vn editorial category-page crawler and orchestrator
+F004d [passing]: Sector-level news-to-symbol matcher & taxonomy engine
+F005 [passing]: Fundamental crawler suite (balance sheet, income statement, cash flow, ratio, financial health score)
+F006 [passing]: Corporate events crawler (dividends, issuance, meetings, payout delay quantification)
+F007 [passing]: Insights/Analytics snapshot crawler + retention policy decision
+F007b [passing]: Market Insights, Screener, Valuation & Macroeconomic Direct REST API Module (Replaced vnstock_data)
+F050 [passing]: cafef.vn market index daily crawler (market_index_daily)
+F051 [passing]: cafef.vn foreign investor flow crawler (market_foreign_flow_daily)
+F052 [passing]: cafef.vn BCTC financial-statement enhancer -- balance_sheet gap fix
+F053 [not_started]: Batch equity enhancer -- fundamentals/corporate_events gap-fill orchestrator
+F054 [not_started]: Vietstock Finance equity research report crawler (core.stock_research_reports)
+F055 [not_started]: Vietstock general macro/market news crawler (core.macro_policy)
+F056 [passing]: World Bank Open Data macro indicator crawler
+F057 [passing]: SBV monetary policy crawler (Decommissioned & Superseded)
+F058 [not_started]: Báo Chính phủ regulatory/macro crawler
+F059 [not_started]: SSC (State Securities Commission) enforcement/regulation crawler
+F060 [not_started]: VnEconomy macro/industry policy crawler
+F061 [not_started]: Tin Nhanh Chung Khoan crawler
+F062 [not_started]: Bao Dau Tu crawler
+F063 [not_started]: Thoi Bao Ngan Hang crawler
+F064 [not_started]: VINAPRINT (printing association) sector policy crawler
+F065 [not_started]: VBA (beverage association) sector policy crawler
+F066 [not_started]: NDA (national data association) tech-policy crawler
+F067 [not_started]: Hoi Nong Dan (farmers association) agri-policy crawler
+F068 [not_started]: MOIT (Ministry of Industry & Trade) energy/trade policy crawler
+F069 [not_started]: VITA (tourism association) sector policy crawler
+F070 [not_started]: VASEP (seafood export association) crawler
+F071 [not_started]: HoREA (HCMC real-estate association) regulatory crawler
+F072 [not_started]: TIER CHECKPOINT: F05x auxiliary-data audit gate
+F008 [passing]: Retry/reconciliation module
+F009 [passing]: TIER CHECKPOINT: F0xx final audit, remediation & re-verification gate
+F095 [passing]: Market index & group room OHLCV coverage expansion (VNINDEX, VN30, HNX, UPCOM, ETF baskets)
+F096 [not_started]: OHLCV 1D zero-volume normalization & suspended-day forward-fill engine
+F097 [not_started]: Intraday 1M timezone harmonization & session alignment engine
+F098 [not_started]: Dual-mode price adjustment engine (Raw Microstructure vs Corporate Action CAF Adjustment)
+F099 [passing]: OHLCV exploratory data analysis & empirical anomaly profiling suite
+F099b [passing]: Financial news lakehouse exploratory data analysis & relevance profiling suite
+F100 [passing]: Fundamental snapshot database exploratory data analysis & corporate governance profiling suite
+F101 [passing]: Cross-dataset validation gate & Tiered Data Quality Scoring
+F102 [passing]: Point-in-time news+price+fundamental join
+F103 [passing]: Enterprise 11-Technique Data Validation & Quality Pipeline
+F104 [passing]: ML Feature Pipeline & Dataset Preparation
+F105 [passing]: News-to-Fundamental Entity Resolution & Financial Relevance Gate
+F106 [passing]: Cross-lakehouse relational entity mapping & comprehensive data linkage EDA suite
+F201 [passing]: PROOF: sentiment mean-reversion backtest on VN30 (gate for the model layer)
+F202 [passing]: TIER GATE: Cluster-robust standard errors & regime heterogeneity audit
+F202b [passing]: Formal Deflated Sharpe Ratio / Probability of Backtest Overfitting calculation
+F203 [passing]: Regime-conditional validity audit -- is mean-reversion a general effect or a bull-liquidity artifact?
+F301 [passing]: PhoBERT-base fine-tune with FinDPO market alignment
+F302 [passing]: Multimodal Cross-Attention Fusion (PhoBERT + RankGauss Fundamentals + Macro Gray)
+F303 [passing]: Re-run F201 backtest using fine-tuned SLM and multimodal scores
+F304 [passing]: HybridACD Token-Constrained Decoding consistency gate
+F305 [passing]: Local Deep Reasoning SLM Integration (Vietnamese Financial Chain-of-Thought)
+F401 [passing]: Local inference service (read-only, no trading logic)
+F402 [passing]: Feedback log for scored predictions vs realized returns
+F403 [passing]: Automated Continuous Training (CT) pipeline with rolling-window Fusion head adaptation
+F501 [passing]: Multi-Bot Strategy Arena & Monte Carlo Decision Tournament across Vietnam Market Regimes
+F901 [blocked]: [BLOCKED] Broker compliance confirmation for autonomous execution
+F902 [blocked]: [BLOCKED] Paper trading against DNSE/SSI sandbox
