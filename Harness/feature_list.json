@@ -481,7 +481,7 @@
       "recommendation": [
         "Use VN-Index and VN30 as the primary benchmark for institutional market regime classification, excluding early UPCOM series from macro gating."
       ],
-      "run_command": "python src/crawlers/market_index_crawler.py",
+      "run_command": "python src/crawlers/cafef_data_market.py",
       "test_command": "pytest tests/test_cafef_data_market.py -v"
     },
     {
@@ -527,7 +527,7 @@
       "recommendation": [
         "[x] Construct a unified fundamental mapping schema between CafeF line descriptions and standard VAS financial statement line items (Completed in src/etl/vas_dictionary.py)."
       ],
-      "run_command": "python src/crawlers/vietstock_finance_enhancer.py",
+      "run_command": "python src/crawlers/cafef_finance_enhancer.py",
       "test_command": "pytest tests/test_cafef_finance_enhancer.py -v"
     },
     {

@@ -313,7 +313,8 @@ class ContinuousTrainingPipeline:
         )
 
         # Load active checkpoint if exists
-        if os.path.exists(self.active_checkpoint):
+        has_active_ckpt = os.path.exists(self.active_checkpoint)
+        if has_active_ckpt:
             try:
                 state_dict = torch.load(self.active_checkpoint, map_location="cpu")
                 model.load_state_dict(state_dict, strict=False)
@@ -380,7 +381,16 @@ class ContinuousTrainingPipeline:
         # Save shadow model weights
         torch.save(model.state_dict(), shadow_ckpt_path)
 
-        if shadow_acc >= (prev_acc - 0.05) or (prev_acc < 0.40 and shadow_acc >= 0.40):
+        if not has_active_ckpt:
+            # Cold start: No active model exists yet; promote candidate to establish active checkpoint
+            is_promoted = True
+            pathlib.Path(self.active_checkpoint).parent.mkdir(parents=True, exist_ok=True)
+            torch.save(model.state_dict(), self.active_checkpoint)
+            promotion_msg = (
+                f"PROMOTED: Initial baseline established (shadow accuracy: {shadow_acc*100:.1f}%)."
+            )
+            logger.info(f"[{run_id}] {promotion_msg}")
+        elif shadow_acc >= (prev_acc - 0.05) or (prev_acc < 0.40 and shadow_acc >= 0.40):
             # Promote shadow model to active checkpoint
             is_promoted = True
             pathlib.Path(self.active_checkpoint).parent.mkdir(parents=True, exist_ok=True)
