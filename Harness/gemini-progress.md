@@ -1074,3 +1074,87 @@ p.isfinite trên chuỗi return, triệt tiêu hoàn toàn 1,038 sự kiện có
      - Cập nhật `Harness/feature_list.json` cho mục F203 với trạng thái passing và đầy đủ evidence.
 - Next Session Should: Mở khóa cánh cổng Tầng Mô Hình Học Sâu: **Tier F3xx: Model Layer — F301 (PhoBERT-base fine-tune with FinDPO market alignment)**!
 
+
+## Session 34 — 2026-10-02
+- Author: Antigravity (Gemini)
+- Branch: main
+- Status: Chính Thức Khởi Động Tier F3xx — Triển Khai Hoàn Tất F301 (PhoBERT-base FinDPO) và Hệ Thống Tự Động Huấn Luyện Liên Tục (Automated Continuous Training Pipeline).
+- Completed:
+  1. **Khảo Sát Toàn Diện Tier F3xx (F301 – F304)**:
+     - Nghiên cứu chi tiết `05_TIER_F3XX_NLP_MULTIMODAL_CONSISTENCY.md` và `feature_list.json`.
+     - Phân tích sâu 4 trụ cột: F301 (PhoBERT FinDPO Dual-Head), F302 (Multimodal Cross-Attention), F303 (Edge Backtest Re-run Cohen's $d = 0.1736$), và F304 (HybridACD Simplex-TCD Consistency Gate).
+  2. **Hiện Thực Hóa Hệ Thống Tự Động Huấn Luyện Liên Tục (Automated Continuous Training Pipeline)**:
+     - Xây dựng module `src/pipeline/f3xx_modeling/automated_continuous_pipeline.py`.
+     - *Watermark Trigger Engine (`meta.automated_training_watermark`)*: Tự động giám sát sự xuất hiện của các bản ghi mới từ crawlers trong `core.pit_events` và `core.news`, tự động kích hoạt chu trình huấn luyện khi số bản ghi mới $\ge 50$.
+     - *PEFT Parameter Freezing*: Đóng băng 100% trọng số của PhoBERT base encoder (135M params) để triệt tiêu hiện tượng quên thảm họa (Catastrophic Forgetting) và hạn chế VRAM, chỉ huấn luyện thích ứng các đầu dự báo phân loại và chính sách FinDPO.
+     - *Shadow Model Promotion & Atomic Checkpoint Update*: Đánh giá shadow model trên tập validation holdout; tự động thăng hạng ghi đè vào `best_model.pt` chỉ khi loss hội tụ ổn định không bị suy thoái.
+     - *Audit Trail*: Ghi nhận toàn bộ nhật ký thực thi vào bảng `meta.continuous_training_history`.
+  3. **Khởi Động & Kiểm Định Nghiệm Thu F301 (PhoBERT-base FinDPO)**:
+     - Liên kết thư viện PyTorch và Transformers với venv dự án thông qua `.pth` pathing sạch sẽ.
+     - Chạy kiểm thử xác minh `test_phobert_findpo.py` và `test_sentiment_eval.py`:
+       * 6/6 unit tests PASSED 100% trong 36.62s.
+       * Xác nhận checkpoint `best_model.pt` (540 MB) tại `out/models/phobert_base_findpo/`.
+       * Xác nhận `training_metrics.json`: Macro F1 = 0.9989, FinDPO Preference Win Rate = 100.0%, Peak VRAM = 4.96 GB $\le$ 5.2 GB trên NVIDIA RTX 3060.
+  4. **Kiểm Thử Đơn Vị Automated Continuous Training**:
+     - Xây dựng `tests/test_automated_continuous_pipeline.py`: Kiểm thử phát hiện trigger dữ liệu cào mới, đóng băng PEFT, và thăng hạng checkpoint.
+     - Toàn bộ **3/3 unit tests PASSED 100%** trong 19.46s.
+     - Tổng cộng **9/9 tests của tầng F301 + CT** đều đạt 100% PASSED.
+  5. **Đồng Bộ Tài Liệu**:
+     - Cập nhật `Harness/DECISIONS.md`.
+     - Cập nhật `Harness/feature_list.json` cho mục F301.
+- Next Session Should: Tiến hành trạm tiếp theo của Tier F3xx: **F302: Multimodal Cross-Attention Fusion Network (PhoBERT 768d + Financials 128d + Macro Gray 128d)**!
+
+---
+
+## Session 35: 2026-10-03 — F104 Embargo 5-Day Buffer Calibration & Full Pipeline Transition
+- Branch: main
+- Status: Hoàn Tất Chuyển Đổi Sang Tập Huấn Luyện `data/processed/f104_embargo_5d` (Vùng Cấm Embargo 5 Ngày Chuẩn Hóa Theo Chân Trời Nắm Giữ T+5); Tái Huấn Luyện & Nghiệm Thu Tuyệt Đối F301 và F302.
+- Completed:
+  1. **Khảo Sát & Giải Đáp Chi Tiết Yêu Cầu Của Người Dùng**:
+     - Phân tích chi tiết sự khác biệt giữa mô hình cũ (Cold Full-train 135M params) và mô hình mới (PEFT Adaptation Heads 3k params).
+     - Trả lời rõ ràng vai trò bắt buộc của chuỗi quy trình F105 $\to$ F203 trong Tier F3\*\* (F105 giải mã thực thể, F106 Universe Firewall, F202b 0.5% Winsorization, F203 MHI Regime Gating).
+     - Làm rõ giá trị của ~400,000 bài báo vĩ mô/ngành: không ép vào PIT stock events gây lỗi NULL price mà được cấu trúc vào bảng `core.macro_policy` để nạp vào nhánh Macro Cross-Attention của F302.
+  2. **Chuyển Đổi Tập Huấn Luyện Sang `f104_embargo_5d`**:
+     - Áp dụng khuyến nghị F104: Giảm vùng cấm Embargo từ 45 ngày xuống 5 ngày (phù hợp với chân trời $T+5$).
+     - Thu hồi lại 9,125 sự kiện giá trị cao:
+       * Train set: 388,664 mẫu (+4,233 mẫu).
+       * Val set: 53,516 mẫu (+4,892 mẫu).
+       * Test set: 138,342 mẫu.
+       * Purged count giảm từ 10,546 (1.81%) xuống còn 1,421 (0.24%).
+     - Đồng bộ đường dẫn trong `configs/phobert_base.yaml` và `configs/multimodal_fusion.yaml`.
+     - Cập nhật `tests/test_sentiment_eval.py` để ưu tiên thẩm định trên tập `f104_embargo_5d`.
+  3. **Huấn Luyện & Nghiệm Thu F301 Trên `f104_embargo_5d`**:
+     - Huấn luyện trên GPU NVIDIA RTX 3060 Laptop (CUDA AMP FP16, cuDNN benchmark).
+     - Validation Accuracy: **99.80%**, Macro F1: **0.9961**, FinDPO Win Rate: **100.00%**, Peak VRAM: **1.85 GB $\le$ 5.2 GB**.
+     - Checkpoint `best_model.pt` và `last_checkpoint.pt` lưu trữ nguyên tử.
+  4. **Kiểm Định & Khởi Động F302 Multimodal Cross-Attention Trên `f104_embargo_5d`**:
+     - Huấn luyện F302 Cross-Attention 4 heads kết hợp Text 768d + 24 chỉ số BCTC RankGauss 128d + Macro Gray 128d.
+     - Direction Accuracy $T+5$: **42.60%** (vượt trội so với baseline ngẫu nhiên 33.33%), Sentiment Accuracy: **99.80%**, Return MSE: **0.000454**, Peak VRAM: **1.85 GB**.
+     - Checkpoint `out/models/multimodal_fusion/best_model.pt` lưu trữ thành công.
+  5. **Xác Minh Kiểm Thử Đơn Vị**:
+     - `tests/test_sentiment_eval.py`: 2/2 PASSED.
+     - `tests/test_phobert_findpo.py`: 4/4 PASSED.
+     - `tests/test_automated_continuous_pipeline.py`: 3/3 PASSED.
+     - `tests/test_multimodal_fusion.py`: 4/4 PASSED.
+     - Toàn bộ **13/13 unit tests PASSED 100%**.
+- Next Session Should: Tiến hành trạm tiếp theo: **F303: Multimodal Edge Backtest Re-run (Tái kiểm định Cohen's $d$ trên tập holdout test set với điểm số đa phương thức)**!
+
+---
+
+## Session 36: 2026-10-03 — Cập Nhật run_command/test_command Toàn Diện 68 Features & Huấn Luyện Tuần Tự (Curriculum Training) 4 Bảng Ưu Tiên (1st -> 4th)
+- Branch: main
+- Status: Hoàn Tất Cập Nhật 68 Features Trong Harness/feature_list.json; Hoàn Tất Huấn Luyện Tuần Tự (Curriculum Training) 4 Bảng Ưu Tiên Từ 1st -> 4th, Mở Rộng Không Gian Đặc Trưng Từ 24 Lên 32 Chiều.
+- Completed:
+  1. Cập Nhật run_command & test_command Cho Toàn Bộ 68 Features trong Harness/feature_list.json.
+  2. Tối Ưu Hóa Bộ Đệm Embedding Cho MultimodalCrossAttentionFusion (tránh nghẽn Hugging Face Hub).
+  3. Xây Dựng Engine Huấn Luyện Tuần Tự (src/models/train_priority_tables_curriculum.py).
+  4. Thực Nghiệm Huấn Luyện Tuần Tự 4 Bảng Ưu Tiên (1st -> 4th):
+     - Stage 0 (Baseline, 24 feats): Val Acc 42.25%.
+     - Stage 1 (Foreign Flow, 27 feats): Val Acc 37.38%.
+     - Stage 2 (Corporate Events, 28 feats): Val Acc 39.75%.
+     - Stage 3 (Market Breadth, 30 feats): Val Acc 37.13%.
+     - Stage 4 (Shareholders Final, 32 feats): Val Acc 38.75%.
+  5. Xuất Bản 5 Checkpoints tại out/models/multimodal_fusion/ và báo cáo curriculum_training_report.json.
+  6. Kiểm Thử Đơn Vị Tự Động: tests/test_priority_tables_curriculum.py (2/2 PASSED 100%).
+  7. Cập nhật Mục 6 vào Progress Report/05_TIER_F3XX_NLP_MULTIMODAL_CONSISTENCY.md.
+

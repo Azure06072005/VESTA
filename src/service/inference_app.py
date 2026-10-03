@@ -34,6 +34,7 @@ SRC_DIR = REPO_ROOT / "src"
 if str(SRC_DIR) not in sys.path:
     sys.path.insert(0, str(SRC_DIR))
 
+from models.local_reasoning_slm import LocalReasoningSLMEngine, ReasoningThesisOutput
 from pipeline.f3xx_modeling.hybridacd_gate import HybridACDConsistencyGate
 from pipeline.sentiment_lexicon import score_headline as lexicon_score
 from pipeline.shareholder_entity_matcher import shareholder_registry
@@ -127,6 +128,10 @@ class HeadlineScoreResponse(BaseModel):
     regime_safe_to_trade: bool
     latency_ms: float
     prediction_id: Optional[str] = None
+    deep_reasoning_applied: bool = False
+    reasoning_thesis: Optional[str] = None
+    risk_flags: List[str] = Field(default_factory=list)
+    reasoning_model: Optional[str] = None
 
 
 class BatchScoreRequest(BaseModel):
@@ -163,6 +168,7 @@ class LocalInferenceEngine:
         self.tokenizer: Any = None
         self.gate = HybridACDConsistencyGate(noise_threshold=0.35, discard_inconsistent=True)
         self.dedup_cache = SimHashDedupCache(ttl_seconds=21600.0, hamming_threshold=4)
+        self.slm_engine = LocalReasoningSLMEngine()
         self.feedback_logger: Optional[InferenceFeedbackLogger] = None
         try:
             self.feedback_logger = InferenceFeedbackLogger()
@@ -218,7 +224,6 @@ class LocalInferenceEngine:
                         texts,
                         return_tensors="pt",
                         truncation=True,
-                        max_length=128,
                         padding=True,
                     )
                     input_ids = enc["input_ids"].to(self.device)
@@ -242,7 +247,7 @@ class LocalInferenceEngine:
                         text,
                         return_tensors="pt",
                         truncation=True,
-                        max_length=128,
+                        max_length=64,
                         padding=False,
                     )
                     input_ids = enc["input_ids"].to(self.device)
@@ -275,27 +280,12 @@ class LocalInferenceEngine:
             url=req.url,
         )
 
-        # Step 2: Shareholder & Executive Entity Resolution
-        resolved_sym = req.symbol.strip().upper() if req.symbol else None
-        matched_holder: Optional[str] = None
-
-        if not resolved_sym:
-            # Check headline and body for major shareholders
-            matches = shareholder_registry.match_shareholders(req.headline)
-            if not matches and req.body:
-                matches = shareholder_registry.match_shareholders(req.body[:500])
-            if matches:
-                matches.sort(key=lambda m: (m.ownership_percentage or 0.0), reverse=True)
-                resolved_sym = matches[0].symbol
-                matched_holder = matches[0].matched_name
-
-        # Step 3: Source Authenticity Weighting (W_source) & Regime Check
-        w_source = get_source_weight(req.source)
-        regime_safe = True if req.regime_override is None else req.regime_override
-
         # Early return on duplicate wire syndicated articles to meet sub-5ms SLA
         if is_dup:
             latency_ms = (time.perf_counter() - t0) * 1000.0
+            w_source = get_source_weight(req.source)
+            regime_safe = True if req.regime_override is None else req.regime_override
+            resolved_sym = req.symbol.strip().upper() if req.symbol else None
             dup_action = "AVOID" if not regime_safe else "IGNORE_NOISE"
             resp = HeadlineScoreResponse(
                 symbol=resolved_sym,
@@ -309,7 +299,7 @@ class LocalInferenceEngine:
                 is_duplicate=True,
                 original_article_id=orig_id,
                 source_trust_weight=round(w_source, 2),
-                matched_shareholder=matched_holder,
+                matched_shareholder=None,
                 action_recommendation=dup_action,
                 regime_safe_to_trade=regime_safe,
                 latency_ms=round(latency_ms, 2),
@@ -320,6 +310,29 @@ class LocalInferenceEngine:
                 except Exception as err:
                     logger.debug(f"Feedback log skipped on duplicate: {err}")
             return resp
+
+        # Step 2: Shareholder & Executive Entity Resolution
+        resolved_sym = req.symbol.strip().upper() if req.symbol else None
+        matched_holder: Optional[str] = None
+
+        # Check headline and body for major shareholders
+        matches = shareholder_registry.match_shareholders(req.headline)
+        if not matches and req.body:
+            matches = shareholder_registry.match_shareholders(req.body[:500])
+        if matches:
+            if resolved_sym:
+                sym_matches = [m for m in matches if m.symbol == resolved_sym]
+                target_matches = sym_matches if sym_matches else matches
+            else:
+                target_matches = matches
+            target_matches.sort(key=lambda m: (m.ownership_percentage or 0.0), reverse=True)
+            if not resolved_sym:
+                resolved_sym = target_matches[0].symbol
+            matched_holder = target_matches[0].matched_name
+
+        # Step 3: Source Authenticity Weighting (W_source) & Regime Check
+        w_source = get_source_weight(req.source)
+        regime_safe = True if req.regime_override is None else req.regime_override
 
         # Step 4: Neural / Calibrated Probability Inference & Consistency Gating
         full_text = f"{req.headline} {req.body[:200] if req.body else ''}".strip()
@@ -362,6 +375,44 @@ class LocalInferenceEngine:
         else:
             action = "HOLD"
 
+        # Step 7: Tier 2 Deep Reasoning SLM Cascade (F305)
+        should_deep = self.slm_engine.should_trigger_deep_reasoning(
+            consistent_alpha=calibrated_alpha,
+            violation_score=gate_res.violation_score,
+            source=req.source,
+            source_weight=w_source,
+            matched_shareholder=matched_holder,
+            headline=req.headline,
+            is_consistent=gate_res.is_consistent,
+        )
+
+        deep_applied = False
+        thesis_chain: Optional[str] = None
+        flags: List[str] = []
+        slm_model: Optional[str] = None
+
+        if should_deep:
+            thesis_out = self.slm_engine.generate_thesis(
+                headline=req.headline,
+                body=req.body,
+                symbol=resolved_sym,
+                source=req.source,
+                source_weight=w_source,
+                matched_shareholder=matched_holder,
+                fast_path_sentiment=sentiment_cls,
+                fast_path_alpha=calibrated_alpha,
+            )
+            deep_applied = True
+            thesis_chain = thesis_out.reasoning_chain
+            flags = thesis_out.risk_flags
+            slm_model = thesis_out.model_used
+
+            # Defensive refinement of action recommendation based on critical risk flags
+            if "REGULATORY_PENALTY_OR_FRAUD" in flags:
+                action = "AVOID"
+            elif "UNVERIFIED_SOURCE_RUMOR" in flags and action == "BUY_DIP":
+                action = "IGNORE_NOISE"
+
         latency_ms = (time.perf_counter() - t0) * 1000.0
 
         resp = HeadlineScoreResponse(
@@ -388,6 +439,10 @@ class LocalInferenceEngine:
             action_recommendation=action,
             regime_safe_to_trade=regime_safe,
             latency_ms=round(latency_ms, 2),
+            deep_reasoning_applied=deep_applied,
+            reasoning_thesis=thesis_chain,
+            risk_flags=flags,
+            reasoning_model=slm_model,
         )
         if self.feedback_logger is not None:
             try:

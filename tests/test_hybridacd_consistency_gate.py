@@ -5,15 +5,22 @@ Tests mathematical guarantees, V-FAN latency, Brier calibration, and noise filte
 """
 from __future__ import annotations
 
+import pathlib
+import sys
 import time
 import numpy as np
 import pytest
+
+root_src = pathlib.Path(__file__).resolve().parents[1] / "src"
+if str(root_src) not in sys.path:
+    sys.path.insert(0, str(root_src))
 
 from pipeline.f3xx_modeling.hybridacd_gate import (
     HybridACDConsistencyGate,
     VietnameseFinancialFastAdversarialNegator,
     FINANCIAL_ANTONYM_PAIRS,
 )
+
 
 
 def test_vfan_antonym_negation():

@@ -20,10 +20,10 @@ model:
     return: 0.20
 
 data:
-  dataset_manifest: "data/processed/f104/dataset_manifest.json"
-  train_path: "data/processed/f104/f104_train.parquet"
-  val_path: "data/processed/f104/f104_val.parquet"
-  test_path: "data/processed/f104/f104_test.parquet"
+  dataset_manifest: "data/processed/f104_embargo_5d/dataset_manifest.json"
+  train_path: "data/processed/f104_embargo_5d/f104_train.parquet"
+  val_path: "data/processed/f104_embargo_5d/f104_val.parquet"
+  test_path: "data/processed/f104_embargo_5d/f104_test.parquet"
   text_column: "context_text"
   sentiment_label_column: "sentiment_label"
   direction_label_column: "target_dir_t5"

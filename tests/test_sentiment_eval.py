@@ -49,7 +49,9 @@ def test_model_inference_on_validation_batch():
     model.to(device)
     model.eval()
 
-    val_path = "data/processed/f104/f104_val.parquet"
+    val_path = "data/processed/f104_embargo_5d/f104_val.parquet"
+    if not os.path.exists(val_path):
+        val_path = "data/processed/f104/f104_val.parquet"
     assert os.path.exists(val_path), f"Missing validation set: {val_path}"
 
     con = duckdb.connect()

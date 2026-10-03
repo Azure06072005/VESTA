@@ -49,6 +49,7 @@ import math
 from dataclasses import dataclass
 
 import duckdb
+import numpy as np
 import pandas as pd
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
@@ -328,7 +329,156 @@ def _paired_reversion_test(sub: pd.DataFrame) -> GroupResult:
     )
 
 
-import numpy as np
+def compute_dynamic_kelly_metrics(
+    df: pd.DataFrame,
+    conviction_col: str = "alpha_score",
+    neutral_threshold: float = 45.0,
+    half_kelly: bool = True,
+    max_position_cap: float = 0.15,
+) -> dict[str, object]:
+    """Computes Dynamic Kelly Criterion Sizing conditioned on Multimodal Conviction S.
+
+    Reference: Thorp (2006) The Kelly Criterion in Investing; Bailey & Lopez de Prado (2014).
+    Integrates:
+    1. Conviction-scaled win probability p(S) based on alpha score depth.
+    2. Empirical Win/Loss payoff ratio b = E[diff | diff > 0] / |E[diff | diff <= 0]|.
+    3. Fractional Half-Kelly scaling (0.5 * f*) with institutional position cap (15% NAV).
+    4. Macro Regime Gating (suppressing allocation by 75% under Bear/Crisis regimes).
+    5. Comparison between Equal-Weight (1/N) vs Dynamic Kelly Sizing.
+    """
+    valid = df.copy()
+    if "return_t5" not in valid.columns or "return_t30" not in valid.columns:
+        return {}
+
+    valid = valid.dropna(subset=["return_t5", "return_t30"])
+    if len(valid) < 10:
+        return {"status": "insufficient_data"}
+
+    diffs = valid["return_t30"] - valid["return_t5"]
+    valid["trade_diff"] = diffs
+
+    # Filter to tradeable signals (negative sentiment dip-buying)
+    if conviction_col in valid.columns:
+        signals = valid[valid[conviction_col] < neutral_threshold].copy()
+    else:
+        signals = valid[valid["sentiment_class"] == "negative"].copy()
+
+    if len(signals) < 10:
+        return {"status": "insufficient_signals", "signal_count": len(signals)}
+
+    sig_diffs = signals["trade_diff"].to_numpy()
+    wins = sig_diffs[sig_diffs > 0]
+    losses = sig_diffs[sig_diffs <= 0]
+
+    base_win_rate = float(len(wins) / len(sig_diffs)) if len(sig_diffs) > 0 else 0.5
+    mean_win = float(wins.mean()) if len(wins) > 0 else 0.03
+    mean_loss = float(abs(losses.mean())) if len(losses) > 0 else 0.02
+    b_ratio = float(mean_win / max(mean_loss, 1e-4))
+
+    # Conviction scaling: S ranges from 0 to 45 (depth delta = (45 - S) / 45)
+    s_vals = signals[conviction_col].to_numpy() if conviction_col in signals.columns else np.full(len(signals), 40.0)
+    depth = np.clip((neutral_threshold - s_vals) / neutral_threshold, 0.0, 1.0)
+
+    # Win probability scales with conviction depth: p(S) in [p_base, min(p_base + 0.20, 0.85)]
+    p_s = np.clip(base_win_rate + 0.20 * depth, 0.45, 0.85)
+    q_s = 1.0 - p_s
+
+    # Kelly formula: f* = (p * b - q) / b
+    f_star = (p_s * b_ratio - q_s) / max(b_ratio, 1e-4)
+    f_star = np.maximum(f_star, 0.0)  # No negative allocation on dip-buying
+
+    # Half-Kelly multiplier for risk mitigation
+    fraction = 0.5 if half_kelly else 1.0
+    f_alloc = f_star * fraction
+
+    # Macro Regime Multiplier
+    if "regime" in signals.columns or "market_regime" in signals.columns:
+        reg_col = "regime" if "regime" in signals.columns else "market_regime"
+        reg_mult = np.where(
+            signals[reg_col].astype(str).str.upper().isin(["BEAR", "CRISIS_HIGH_VOL", "2022_REALESTATE_BOND_CRISIS"]),
+            0.25,  # 75% risk suppression during crisis/bear regimes
+            1.0,
+        )
+        f_alloc = f_alloc * reg_mult
+
+    # Cap at maximum allowable single-position weight (default: 15% NAV)
+    f_alloc = np.minimum(f_alloc, max_position_cap)
+    signals["kelly_weight"] = f_alloc
+
+    # Portfolio simulation: Equal-Weight vs Kelly-Weighted
+    eq_returns = sig_diffs
+    eq_mean = float(np.mean(eq_returns))
+    eq_std = float(np.std(eq_returns, ddof=1)) if len(eq_returns) > 1 else 1e-4
+    eq_sharpe = float((eq_mean / eq_std) * np.sqrt(252 / 25)) if eq_std > 0 else 0.0
+
+    total_weight = float(np.sum(f_alloc))
+    if total_weight > 0:
+        norm_weights = f_alloc / total_weight
+        kw_mean = float(np.sum(norm_weights * sig_diffs))
+        kw_std = float(np.sqrt(np.sum(norm_weights * (sig_diffs - kw_mean) ** 2)))
+        kw_sharpe = float((kw_mean / kw_std) * np.sqrt(252 / 25)) if kw_std > 0 else 0.0
+    else:
+        kw_mean, kw_std, kw_sharpe = eq_mean, eq_std, eq_sharpe
+
+    sharpe_improvement = float((kw_sharpe - eq_sharpe) / abs(eq_sharpe)) if abs(eq_sharpe) > 0 else 0.0
+
+    # Max Drawdown simulation over chronological trades
+    # Equal-weight NAV curve
+    eq_nav = np.cumprod(1.0 + eq_returns)
+    eq_running_max = np.maximum.accumulate(eq_nav)
+    eq_dd = (eq_nav - eq_running_max) / eq_running_max
+    eq_max_dd = float(abs(np.min(eq_dd))) if len(eq_dd) > 0 else 0.0
+
+    # Kelly-weighted trade return sequence: r_trade = w_i * diff_i
+    kw_returns = f_alloc * sig_diffs
+    kw_nav = np.cumprod(1.0 + kw_returns)
+    kw_running_max = np.maximum.accumulate(kw_nav)
+    kw_dd = (kw_nav - kw_running_max) / kw_running_max
+    kw_max_dd = float(abs(np.min(kw_dd))) if len(kw_dd) > 0 else 0.0
+
+    # Conviction tier breakdown
+    tier_high = signals[signals[conviction_col] < 35.0] if conviction_col in signals.columns else pd.DataFrame()
+    tier_med = signals[(signals[conviction_col] >= 35.0) & (signals[conviction_col] < 40.0)] if conviction_col in signals.columns else pd.DataFrame()
+    tier_std = signals[(signals[conviction_col] >= 40.0) & (signals[conviction_col] < neutral_threshold)] if conviction_col in signals.columns else pd.DataFrame()
+
+    def _tier_summary(sub: pd.DataFrame) -> dict[str, object]:
+        if len(sub) == 0:
+            return {"n": 0, "mean_weight_pct": 0.0, "mean_return_pct": 0.0, "win_rate_pct": 0.0}
+        sub_d = sub["trade_diff"].to_numpy()
+        return {
+            "n": int(len(sub)),
+            "mean_weight_pct": round(float(sub["kelly_weight"].mean() * 100), 2),
+            "mean_return_pct": round(float(sub_d.mean() * 100), 3),
+            "win_rate_pct": round(float((sub_d > 0).mean() * 100), 2),
+        }
+
+    return {
+        "status": "ok",
+        "method": "Dynamic Half-Kelly Sizing with Macro Gating Rail",
+        "total_signals_evaluated": int(len(signals)),
+        "base_win_rate_pct": round(base_win_rate * 100, 2),
+        "empirical_payoff_ratio_b": round(b_ratio, 3),
+        "half_kelly_applied": half_kelly,
+        "max_position_cap_pct": round(max_position_cap * 100, 1),
+        "mean_kelly_weight_pct": round(float(f_alloc.mean() * 100), 2),
+        "equal_weight_portfolio": {
+            "mean_trade_return_pct": round(eq_mean * 100, 3),
+            "annualized_sharpe": round(eq_sharpe, 4),
+            "max_drawdown_pct": round(eq_max_dd * 100, 2),
+        },
+        "dynamic_kelly_portfolio": {
+            "mean_trade_return_pct": round(kw_mean * 100, 3),
+            "annualized_sharpe": round(kw_sharpe, 4),
+            "max_drawdown_pct": round(kw_max_dd * 100, 2),
+        },
+        "sharpe_improvement_ratio": round(kw_sharpe / max(eq_sharpe, 1e-4), 3),
+        "sharpe_improvement_pct": round(sharpe_improvement * 100, 2),
+        "conviction_tiers": {
+            "high_conviction_S_lt_35": _tier_summary(tier_high),
+            "medium_conviction_S_35_40": _tier_summary(tier_med),
+            "standard_conviction_S_40_45": _tier_summary(tier_std),
+        },
+    }
 
 
 def score_events_multimodal(
@@ -397,8 +547,11 @@ def score_events_multimodal(
             p = fallback_p
 
     if p.exists():
-        state = torch.load(p, map_location=device)
-        model.load_state_dict(state["model_state_dict"] if "model_state_dict" in state else state)
+        try:
+            state = torch.load(p, map_location=device, weights_only=False)
+        except TypeError:
+            state = torch.load(p, map_location=device)
+        model.load_state_dict(state["model_state_dict"] if "model_state_dict" in state else state, strict=False)
     
     if device.type == "cuda":
         model = model.half()
@@ -559,6 +712,7 @@ def run_backtest(
     )
 
     continuous_alpha_metrics = None
+    dynamic_kelly_metrics = None
     if sentiment_source == "multimodal" and "alpha_score" in scored.columns and len(scored) > 0:
         sweep_results = {}
         for th in [45, 40, 35, 30, 25, 20]:
@@ -571,6 +725,14 @@ def run_backtest(
             "std_alpha_score": float(scored["alpha_score"].std()),
             "threshold_sweep": sweep_results,
         }
+        # Compute Dynamic Kelly Criterion Sizing conditioned on Conviction Score S
+        dynamic_kelly_metrics = compute_dynamic_kelly_metrics(
+            scored,
+            conviction_col="alpha_score",
+            neutral_threshold=45.0,
+            half_kelly=True,
+            max_position_cap=0.15,
+        )
 
     report = {
         "hypothesis": (
@@ -600,6 +762,7 @@ def run_backtest(
         },
         "per_regime_negative_sentiment": per_regime,
         "continuous_alpha_metrics": continuous_alpha_metrics,
+        "dynamic_kelly_metrics": dynamic_kelly_metrics,
         "consistency_gate_metrics": {
             "enabled": bool(use_consistency_gate),
             "noise_threshold": float(noise_threshold),
@@ -651,9 +814,13 @@ def run(
         )
     elif sentiment_source == "multimodal":
         target_dataset = dataset_path or (
-            "data/processed/f104/f104_val.parquet"
-            if pathlib.Path("data/processed/f104/f104_val.parquet").exists()
-            else None
+            "data/processed/f104_embargo_5d/f104_val.parquet"
+            if pathlib.Path("data/processed/f104_embargo_5d/f104_val.parquet").exists()
+            else (
+                "data/processed/f104/f104_val.parquet"
+                if pathlib.Path("data/processed/f104/f104_val.parquet").exists()
+                else None
+            )
         )
         if target_dataset and pathlib.Path(target_dataset).exists():
             con = duckdb.connect()
