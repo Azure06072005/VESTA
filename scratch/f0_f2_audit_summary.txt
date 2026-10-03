@@ -1,0 +1,384 @@
+Total features in list: 67
+
+=== F000 [passing]: Environment & schema bootstrap ===
+  [PRO] Superior Analytical Performance: DuckDB is an in-process columnar OLAP database, executing analytical scans over millions of records 10-50x faster than traditional row-oriented SQLite or PostgreSQL engines.
+  [PRO] Integrity Protection (Zero Dirty Ingestion): Never writes raw API payloads directly into core.* tables; all ingested data must pass through schema validation in promote.py.
+  [PRO] Granular Execution Traceability: The meta.crawl_progress table records the exact state, HTTP status codes, and retry counts for every crawled ticker.
+  [CON] Exclusive File Locking on Windows: DuckDB uses LockFileEx on Windows, prohibiting multi-process concurrent writes and raising IOException when multiple processes attempt write access.
+  [CON] Memory Bloat on Complex Joins: Analytical queries joining multi-million-row time-series without explicit PRAGMA threads or memory_limit settings can exhaust system RAM.
+  [REC] [x] Standardize on exactly 1 canonical Main Database (db/vesta_snapshot.duckdb) as the Single Source of Truth, containing all 17 core tables (5.18M daily bars, 6.81M 1m bars, 7.36M financial notes, 669k news, 477k macro articles, 189k fundamentals).
+  [REC] [x] Implement automated disaster recovery and backup tooling (db/vesta_backup.duckdb via src/etl/backup_main_db.py) to enable instantaneous recovery whenever the primary database crashes or gets corrupted.
+  [REC] [x] Synchronize all crawlers and pipelines (db_writer.py, track_crawling_progress.py, boundary_manager.py, db.py) to write to and query from the single main database.
+  [REC] [x] Resolve and prevent Windows PID file lock conflicts before running ingestion batches, ensuring 492 unit tests pass cleanly.
+
+=== F001 [passing]: Reference crawler: dim_symbol master data ===
+  [PRO] Survivorship Bias Guard: Ingests all 1,108 delisted and suspended tickers alongside active equities, preventing quantitative models from training solely on winning stocks.
+  [PRO] Comprehensive Coverage: Covers 3,446 equity tickers across HOSE, HNX, and UPCOM with 100% of records strictly satisfying NOT NULL constraints on organ_name.
+  [CON] Missing Historical Delisting Dates: Free upstream vnstock API endpoints do not supply exact historical delisting dates for all legacy tickers, necessitating controlled NULL handling.
+  [CON] Ticker Reassignment & Exchange Transfers: Lacks automated point-in-time tracking for stocks transferring between exchanges (e.g., from UPCOM to HOSE).
+  [REC] [x] Construct a static 4-tier ICB industry mapping dictionary (Supersector, Sector, Subsector) based on official HOSE/HNX listing notices rather than vendor strings.
+  [REC] [x] Create a secondary core.symbol_exchange_history table to track exact exchange migration dates over continuous time.
+
+=== F001b [passing]: dim_symbol supplement: cafef.vn company directory cross-reference ===
+  [PRO] Unlisted / OTC Market Discovery: Adds 984 enterprises (750 OTC tickers and 234 unlisted entities) omitted by vnstock from CafeF's 3,016 company directory records.
+  [PRO] Precise Exchange Segmentation: Accurately maps CenterId values (1: HOSE, 2: HNX/HASTC, 8: OTC, 9: UPCOM) verified via client-side HAR capture, matching 30/30 VN30 and HNX30 tickers.
+  [CON] Thin liquidity and wide bid-ask spreads in the OTC segment can introduce severe distortions into quantitative signal backtesting.
+  [CON] Missing corporate governance and continuous financial reporting history for smaller unlisted companies.
+  [REC] [x] Segregate the 750 OTC tickers into a distinct OTC-Subuniverse, tagging them with tradeable_flag = False during backtests to prevent execution noise in liquid models.
+
+=== F001c [passing]: Index constituents & group rooms crawler ===
+  [PRO] Comprehensive Group Room Mapping: Captures 22 index groups and thematic rooms (VNDIAMOND, VNFINLEAD) that drive massive ETF flows and institutional asset allocations.
+  [PRO] Point-in-Time Index Membership: Tracks historical effective dates of index rebalancing, preventing survivorship bias in quantitative index-arbitrage and basket-trading strategies.
+  [CON] Index Constituent Weight Dynamics: Daily floating cap adjustments and cash dividend divisor changes require periodic weight recalibration.
+  [CON] Exchange Notice Latency: Official exchange rebalancing announcements are typically published 1-2 weeks before actual implementation dates.
+  [REC] [x] Construct core.dim_index_metadata and core.dim_index_constituents to model the 22 standard group rooms and thematic indices (VN30, VN100, VNMID, VNSML, VNSI, VNX50, HNX30, VNDIAMOND, VNFINLEAD, VNFINSELECT, and 10 HOSE Sector indices).
+  [REC] [x] Provide a unified analytical view (core.v_active_index_constituents) joined with core.dim_symbol for seamless index constituent filtering in quantitative backtests.
+  [REC] [x] Implement dual-source cross-verification engine combining SSI iBoard constituent feeds with vnstock_data KBS provider.
+
+=== F002 [passing]: Market OHLCV daily crawler ===
+  [PRO] Idempotent Upsert Guarantee: Re-running ingestion never generates duplicate rows due to the composite primary key (symbol, time). Successfully ingested 2,847,192 daily bars.
+  [PRO] Candlestick Geometry Validation: Enforces strict price logic (Low <= Open, Close <= High), immediately rejecting erroneous vendor bars.
+  [PRO] Zero Missing Bars: Complete historical daily bar coverage for VN30 constituents from initial listing dates to the present.
+  [PRO] Dual-Mode Price Analysis: Dynamic view core.v_market_ohlcv_dual provides instantaneous access to both raw unadjusted prices and adjusted prices without duplicating 5.18M rows.
+  [CON] Vendor Backward Price Adjustments: Historical split and dividend price recalculations from upstream vendors can trigger massive diffs against raw historical bars.
+  [CON] Network Rate Limiting: High-frequency queries against vnstock can encounter HTTP 429 throttling during broad market-wide backfills.
+  [REC] [x] Maintain raw unadjusted OHLCV bars in core.market_ohlcv_daily while recording corporate actions separately in core.price_adjustment_events to dynamically calculate adjusted prices on demand.
+  [REC] [x] Integrate automated Cumulative Adjustment Factor (CAF) timeline to enable simultaneous dual-mode analysis: raw unadjusted prices (for tick size and order book execution) and adjusted prices (for total return calculation) via core.v_market_ohlcv_dual.
+
+=== F002b [passing]: Market OHLCV 1-minute intraday crawler (2023 - 2026) ===
+  [PRO] High-Frequency Alpha Modeling: Enables development of microstructure, order book flow, VWAP/TWAP execution algorithms, and intraday mean-reversion strategies.
+  [PRO] Comprehensive 3-Year Depth: Captures full market cycles from 09/2023 through 2026 across 750 trading days.
+  [PRO] Blazing Fast Ingestion: VCI gap-chart API retrieves 15,000 bars in under 1 second per ticker.
+  [PRO] Isolated Storage Architecture: Preserves primary database integrity and agility by separating high-volume intraday ticks into an attached DuckDB lake (db/vesta_intraday_1m.duckdb).
+  [CON] Historical Truncation Boundary: Intraday 1-minute data prior to 09/2023 is unavailable across free and commercial retail broker endpoints (VCI/KBS/DNSE).
+  [CON] Data Sparsity in Illiquid Stocks: Low liquidity tickers have up to 70% missing minutes during trading hours, requiring continuous forward-fill imputation.
+  [CON] Network Quota Sensitivity: Ingesting the full 1,028 ticker universe requires fetching ~190M bars, demanding strict batching and rate-limit throttling.
+  [REC] [x] Isolate Storage into db/vesta_intraday_1m.duckdb with seamless DuckDB cross-database ATTACH support.
+  [REC] [x] Implement high-throughput backward pagination crawler src/crawlers/intraday_ohlcv.py with meta.crawl_progress_1m tracking.
+  [REC] [ ] Fulfill complete 3-year historical backfill for VN30 constituents and top liquid tickers.
+
+=== F003 [passing]: vnstock News crawler ===
+  [PRO] Native Entity-Linked News: Direct integration with vnstock provides pre-tagged symbol mappings for 73,563 articles with publication timestamps.
+  [PRO] High Pipeline Throughput: Uses atomic batching with promote.py to ingest thousands of news records per second into staging.
+  [CON] Short Historical Coverage: vnstock news data begins primarily around 2016-2018, lacking depth for market crash events in 2008 and 2011-2012.
+  [CON] Body Truncation: Several upstream news feeds provide only headline and teaser lead rather than full investigative articles.
+  [REC] Use CafeF (F004) as the historical long-term news spine (2007-present) while utilizing vnstock for fast intraday real-time news alerts.
+
+=== F004 [passing]: cafef.vn news crawler (secondary source) ===
+  [PRO] Massive Historical News Archive: Ingested 596,001 articles spanning 2007 through 2026, delivering the most comprehensive sentiment dataset for the Vietnamese stock market.
+  [PRO] Full Article Body Ingestion: Dedicated extractors retrieve complete article text, subheadings, and journalistic metadata essential for NLP.
+  [CON] Missing Direct Symbol Tags: Over 60% of CafeF macroeconomic articles do not tag stock symbols directly in metadata, requiring NLP text extraction.
+  [CON] High Scraping Load: Scanning 20 years of HTML requires robust anti-blocking headers and proxy rotation.
+  [REC] Architectural Resolution: Routed to Data Preprocessing Pipeline (F104 / NLP Enrichment). PhoBERT NER and ticker extraction run centrally as an offline batch job across ALL news sources (CafeF, Vietstock, VnEconomy) to prevent crawler CPU/GPU bottlenecks and guarantee cross-source tag consistency.
+
+=== F004b [passing]: cafef article body enrichment ===
+  [PRO] Full Article Body Ingestion: Ingests complete multi-paragraph Vietnamese journalistic text, author metadata, and tags essential for PhoBERT NLP fine-tuning.
+  [PRO] Structural Content Preservation: Preserves clean text formatting, section headers, and company disclosures without HTML noise.
+  [CON] High network traffic and potential IP rate-limiting when crawling hundreds of thousands of historical article bodies sequentially.
+  [REC] Architectural Resolution: Centralized Ingestion Gateway. Connection pooling, randomized UA rotation, and backoff are unified in db_writer / HTTP client for all multi-source crawlers.
+
+=== F004c [passing]: cafef.vn editorial category-page crawler and orchestrator ===
+  [PRO] Comprehensive Category-Level Coverage: Systematically crawls all specialized financial sub-sectors (Banking, Real Estate, Macro, Commodities, International).
+  [PRO] Eliminates Category Blindspots: Ensures complete thematic news ingestion across 20+ years of editorial archives.
+  [CON] Requires ongoing maintenance as editorial portal taxonomy and pagination URL patterns evolve over time.
+  [REC] Architectural Resolution: Integrated into Data Quality Gate & Pipeline asserting category taxonomy changes before batch ingest.
+
+=== F004d [passing]: Sector-level news-to-symbol matcher & taxonomy engine ===
+  [PRO] Market Data Cross-Verification: Ingests proprietary flow, foreign room, and corporate actions directly from CafeF Du-lieu endpoints.
+  [PRO] High-Speed Tabular Ingestion: Directly fetches structured market summary tables bypassing unstructured HTML scraping.
+  [CON] Occasional schema variations between desktop and mobile client API payloads.
+  [REC] Architectural Resolution: Integrated into ETL Promotion Gate (src/etl/promote.py / Pydantic validation) ensuring strict schema enforcement before staging promotes to core tables across all crawlers.
+
+=== F005 [passing]: Fundamental crawler suite (balance sheet, income statement, cash flow, ratio, financial health score) ===
+  [PRO] Comprehensive 5-Dimension Financial Statement Coverage: Ingests Balance Sheet, Income Statement, Cash Flow, Financial Ratios, and Financial Health across 439,700 records spanning 2006-2026.
+  [PRO] Cross-Statement Consistency: Validates fundamental accounting equations (Total Assets = Liabilities + Equity; Operating Cash Flow reconciliation).
+  [CON] Post-Audit Restatements: Enterprises frequently restate prior-year figures after independent audit, causing look-ahead bias if available_at timestamps are not strictly lagged.
+  [CON] Different Reporting Standards: Banking (CAMELS), Securities (CAMEL), and Insurance industries use distinct chart of accounts from general industrial firms.
+  [REC] Architectural Resolution: Routed to Data Preprocessing Pipeline (F102 Point-in-Time Join). Strict Point-in-Time (PIT) audit release date tagging (e.g. Q4 reports lagged to audited disclosure date after March 31st of the following year) is enforced centrally in src/pipeline/pit_join.py by cross-referencing core.corporate_events and official regulatory disclosures, keeping the F005 crawler layer as a clean, immutable, low-overhead as-reported ingestion engine.
+
+=== F006 [passing]: Corporate events crawler (dividends, issuance, meetings, payout delay quantification) ===
+  [PRO] Critical Corporate Action Tracking: Ingests structured cash dividends, stock dividends, bonus issues, and AGMs with 100% structured JSON fields, bypassing unstructured OCR.
+  [PRO] Liquidity Risk Quantification: Measures payout_delay_days to detect capital stress when enterprises repeatedly delay or postpone cash dividend disbursements.
+  [PRO] Forward-Looking Horizon: Captures scheduled future corporate events extending into upcoming quarters for event-driven trading.
+  [CON] Ex-Date vs Record Date Ambiguity: Upstream data sources occasionally mix up ex-rights date (ngày GDKHQ) with the final shareholder record date (ngày chốt DS).
+  [CON] Event Cancellation Tracking: Difficult to track corporate actions that are approved at AGM but later canceled or postponed by BOD resolution.
+  [REC] Architectural Resolution: Routed to Data Preprocessing Pipeline (F102 / F103 Adjustments). Payout delay metrics and corporate action ex-dates are cross-validated against price adjustment events and official disclosures to mathematically adjust OHLCV backtests without look-ahead bias.
+
+=== F007 [passing]: Insights/Analytics snapshot crawler + retention policy decision ===
+  [PRO] Real-Time Valuation Snapshots: Captures historical P/E, P/B, EV/EBITDA, and real-time bid-ask quote depth.
+  [PRO] Fast Feature Feeding: Directly provisions intraday trading signals and real-time screener filters.
+  [CON] Snapshot Ephemerality: High-frequency real-time quote tables grow exponentially (gigabytes per month) if indefinite retention is applied without compression.
+  [CON] Market Hours Dependency: Crawler can only execute during active market trading sessions (09:00 - 15:00 GMT+7).
+  [REC] Architectural Resolution: Routed to Data Pipeline Maintenance (ETL Maintenance / Archival Job). Tiered retention policy maintains full raw tick/1m microstructure snapshots in hot storage (0-90 days), after which a scheduled maintenance task downsamples historical records to daily closing summaries (OHLCV, VWAP, average order book imbalance) for cold long-term storage in DuckDB.
+
+=== F007b [passing]: Market Insights, Screener, Valuation & Macroeconomic Direct REST API Module (Replaced vnstock_data) ===
+  [PRO] Direct Broker Connectivity: 100% independent of external python libraries (vnstock/vnstock_data), eliminating license validation overhead and token expiration.
+  [PRO] Zero API Key: Operates entirely over public institutional research and screener endpoints with high throughput (<1s full market scan).
+  [PRO] Multi-Dimensional Alpha Signals: Integrates multi-factor fundamentals (P/E, P/B, ROE), market microstructure rankings, breadth indicators, and macroeconomic regime series into a single unified module.
+  [CON] Broker API Rate Limits: Unthrottled parallel crawling could trigger HTTP 429/403 IP bans from securities brokers if backoff jitter is omitted.
+  [CON] Payload Schema Changes: Endpoints may adjust response fields over long periods, requiring unit test assertions to monitor schema drift.
+  [REC] Maintain standard exponential backoff and User-Agent rotation in production batch jobs.
+  [REC] Keep unit test suite tests/test_market_insights.py in the CI/CD verification loop to detect upstream schema modifications early.
+
+=== F050 [passing]: cafef.vn market index daily crawler (market_index_daily) ===
+  [PRO] Broad Index History: Supplies daily OHLCV series for VN-Index, VN30, HNX-Index, and UPCOM-Index from 2000 to present.
+  [PRO] Market Regime Classification: Provides the baseline 200-day moving average and trend indicators for quantitative macro filters.
+  [CON] UPCOM-Index in its early inception years (2009-2012) had exceptionally low liquidity, creating extreme volatility not indicative of institutional flow.
+  [REC] Use VN-Index and VN30 as the primary benchmark for institutional market regime classification, excluding early UPCOM series from macro gating.
+
+=== F051 [passing]: cafef.vn foreign investor flow crawler (market_foreign_flow_daily) ===
+  [PRO] Foreign Flow Transparency: Captures 63k+ daily foreign buy/sell volume and ownership room records dating back to 2007.
+  [PRO] Zero Value Hallucination: Retains strictly verified trading volumes in compliance with financial integrity Rule B3/B4.
+  [CON] Does not segregate regular order matching transactions from massive off-market put-through block trades executed by foreign funds.
+  [REC] Isolate put-through block trades from continuous order matching to avoid artificial signal spikes during quarterly ETF rebalancing sessions.
+
+=== F052 [passing]: cafef.vn BCTC financial-statement enhancer -- balance_sheet gap fix ===
+  [PRO] Alternative Fundamental Source: Resolves vnstock balance sheet coverage gaps by crawling directly from CafeF's audited corporate finance endpoints.
+  [PRO] Priority Ticker Ingestion: Accelerates ingestion for highly liquid VN30 and Midcap constituents.
+  [CON] Requires careful standardization between CafeF's Vietnamese financial statement line labels and vnstock numerical account codes.
+  [REC] [x] Construct a unified fundamental mapping schema between CafeF line descriptions and standard VAS financial statement line items (Completed in src/etl/vas_dictionary.py).
+
+=== F053 [not_started]: Batch equity enhancer -- fundamentals/corporate_events gap-fill orchestrator ===
+  [PRO] Multi-Tier Audit Orchestrator: Comprehensive reconciliation framework detecting missing quarters or corporate events across 1,000+ tickers.
+  [PRO] Automated Fallback Trigger: Automatically directs crawler to secondary data sources upon encountering missing quarterly data.
+  [CON] Full market sweeps consume significant network bandwidth and compute time when executed sequentially.
+  [REC] Schedule weekly automated EOD batch sweeps on Saturday mornings to audit and backfill data gaps without interfering with daily trading runs.
+
+=== F054 [not_started]: Vietstock Finance equity research report crawler (core.stock_research_reports) ===
+  [PRO] Institutional Consensus Extraction: Ingests valuation models, target prices, and analyst buy/sell/hold ratings from leading brokers (SSI, HSC, VCSC, VNDirect).
+  [PRO] Forward Expectation Modeling: Provides quantitative consensus target revisions to forecast institutional earnings momentum.
+  [CON] Broker reports are frequently formatted as unstructured PDFs, requiring OCR and heuristic PDF parsing engines.
+  [REC] Deploy an automated PDF extraction pipeline utilizing pdfplumber and regex to reliably parse ticker, target price, and analyst ratings.
+
+=== F055 [not_started]: Vietstock general macro/market news crawler (core.macro_policy) ===
+  [PRO] Macroeconomic Driver Ingestion: Tracks interest rates, inflation (CPI), exchange rates (USD/VND), and GDP growth from the State Bank of Vietnam (SBV) and GSO.
+  [PRO] Fundamental Factor Input: Fuels macro factor risk models and systemic liquidity indicators.
+  [CON] Macroeconomic data releases occur on monthly or quarterly schedules, requiring forward-fill handling to align with daily equity bars without look-ahead bias.
+  [REC] Tag macroeconomic series with exact announcement timestamps (release_time) and forward-fill values strictly up to trade dates.
+
+=== F056 [passing]: World Bank Open Data macro indicator crawler ===
+  [PRO] Official International Macro Ground Truth: Directly consumes audited macroeconomic time series from World Bank Open Data API spanning 1976-2025 (up to 50 years of history).
+  [PRO] Zero Rate-Limit or Key Leakage: High-speed open REST endpoints operate without API keys or proprietary authentication barriers.
+  [CON] Annual reporting frequency requires Point-in-Time disclosure alignment (available_at = Dec 31) to prevent look-ahead bias in intra-year quantitative models.
+  [REC] [x] Expanded indicators from 6 to 20 core macroeconomic indicators and ingested 671 historical records directly into core.macro_policy (Completed 2026-09-28).
+
+=== F057 [passing]: SBV monetary policy crawler (Decommissioned & Superseded) ===
+  [PRO] Banking Sector In-Depth Coverage: Ingests banking industry news, policy directives, and credit quota announcements from Vietnam Banking Association (VBA).
+  [PRO] Weighty Factor Influence: The banking sector accounts for 30-40% of VN-Index weighting, making targeted banking intelligence essential.
+  [CON] Articles are largely qualitative and narrative, requiring sentiment classification to convert into actionable quantitative features.
+  [REC] Feed raw VBA regulatory articles into the PhoBERT sentiment pipeline to generate domain-specific banking sentiment scores.
+
+=== F058 [not_started]: Báo Chính phủ regulatory/macro crawler ===
+  [PRO] Real Estate Sector Sentiment: Crawls housing market dynamics, regulatory bottlenecks, and project approvals from Ho Chi Minh City Real Estate Association (HoREA).
+  [PRO] High Beta Sector Insight: Captures lead signals for the second-largest sector weighting in the Vietnamese market.
+  [CON] Policy proposal articles often express industry lobbying advocacy rather than finalized governmental enactments.
+  [REC] Distinguish between 'Proposed/Draft Policy' vs 'Enacted Law' using rule-based keyword tagging in the ingestion pipeline.
+
+=== F059 [not_started]: SSC (State Securities Commission) enforcement/regulation crawler ===
+  [PRO] Global Macro Cross-Market Context: Ingests S&P 500, Nasdaq, DXY (US Dollar Index), crude oil, and gold prices.
+  [PRO] Cross-Asset Spillover Detection: Enables multi-factor models to detect overnight Wall Street shocks impacting next-day Asian market open.
+  [CON] Timezone Mismatches: US market sessions close during Vietnamese night hours (04:00 GMT+7), requiring strict lag alignment.
+  [REC] Align previous-day US closing prices with current-day Vietnamese opening trading sessions (T-1 US close joins T VN open).
+
+=== F060 [not_started]: VnEconomy macro/industry policy crawler ===
+  [PRO] Multi-Source Sentiment Aggregation: Ingests high-frequency financial news from Vietnam's leading specialized investment portal (Vietstock).
+  [PRO] Expands Entity Linking: Provides rich ticker-level news cross-references to validate CafeF sentiment.
+  [CON] Syndicated News Overlap: High overlap with CafeF on press releases and corporate announcements requires robust deduplication.
+  [REC] Implement fuzzy title matching and publication time clustering to deduplicate syndicated articles across feeds.
+
+=== F061 [not_started]: Tin Nhanh Chung Khoan crawler ===
+  [PRO] Institutional Macroeconomic Intelligence: High-caliber investigative journalism and macroeconomic policy analysis from VnEconomy.
+  [PRO] In-depth Sector Reviews: Detailed coverage of monetary policy, export-import trends, and fiscal deficit developments.
+  [CON] Article layout variations across historical portal redesigns require flexible HTML CSS selector fallbacks.
+  [REC] Implement schema fallbacks in newspaper3k / BeautifulSoup to gracefully parse different HTML layouts across time.
+
+=== F062 [not_started]: Bao Dau Tu crawler ===
+  [PRO] Real-Time Market Rumor & Action Tracking: Timely coverage of intraday market rumors, capital raising plans, and M&A speculation from Tin Nhanh Chung Khoan.
+  [PRO] Captures Retail Sentiment Dynamics: Essential for gauging speculative momentum in midcap and penny stocks.
+  [CON] Higher ratio of unverified rumors and speculative noise compared to official corporate filings.
+  [REC] Apply a confidence-weighting discount to sentiment extracted from rumor columns compared to audited regulatory filings.
+
+=== F063 [not_started]: Thoi Bao Ngan Hang crawler ===
+  [PRO] Specialized Financial & Banking Journal: Deep insight into commercial banking liquidity, interbank interest rates, and foreign exchange interventions.
+  [PRO] Direct SBV Policy Coverage: Authoritative interpretations of State Bank circulars and decrees.
+  [CON] Lower daily publication volume compared to mainstream financial portals.
+  [REC] Cluster Thoi Bao Ngan Hang articles specifically into monetary policy feature vectors for bank valuation models.
+
+=== F064 [not_started]: VINAPRINT (printing association) sector policy crawler ===
+  [PRO] Government Regulatory Ingestion: Direct access to Prime Minister directives, Cabinet resolutions, and official gazettes from Bao Chinh Phu.
+  [PRO] Highest Legal Authority: Captures national public investment disbursements and macro development policies.
+  [CON] Broad political and administrative content requires strict domain filtering to extract only economically relevant announcements.
+  [REC] Apply strict economic keyword filtering (interest rates, public investment, tax exemptions, real estate decrees) at the crawler boundary.
+
+=== F065 [not_started]: VBA (beverage association) sector policy crawler ===
+  [PRO] Corporate Investment & FDI Tracking: In-depth coverage of foreign direct investment, infrastructure projects, and industrial zone developments.
+  [PRO] M&A and Privatization Tracking: Early reporting on state-owned enterprise (SOE) divestments.
+  [CON] Scattered ticker-level mentions require NER parsing to link articles to specific listed equities.
+  [REC] Route Bao Dau Tu articles through the corporate entity matcher to associate industrial zone news with listed developers (BCM, KBC, IDC).
+
+=== F066 [not_started]: NDA (national data association) tech-policy crawler ===
+  [PRO] Agricultural & Commodity Intelligence: Tracks fertilizer prices, rice exports, coffee, and agricultural supply chain disruptions.
+  [PRO] Niche Sector Signal: High alpha potential for agricultural, sugar, and livestock stocks (DCM, DPM, LTG, HAG).
+  [CON] Highly localized content with seasonal cyclicality requiring commodity price normalization.
+  [REC] Pair Hoi Nong Dan articles with global commodity price indices (Urea, Rice, Pork) to create compound agribusiness features.
+
+=== F067 [not_started]: Hoi Nong Dan (farmers association) agri-policy crawler ===
+  [PRO] Fisheries & Seafood Export Dynamics: Direct export tracking for pangasius and shrimp to US, EU, and China markets from VASEP.
+  [PRO] Critical Alpha Driver: Direct correlation with revenue performance of seafood export tickers (VHC, ANV, FMC).
+  [CON] Export tariff and anti-dumping review announcements are sporadic and high-impact, causing discontinuous signal jumps.
+  [REC] Model VASEP tariff and monthly export value releases as discrete event shocks rather than continuous trend signals.
+
+=== F068 [not_started]: MOIT (Ministry of Industry & Trade) energy/trade policy crawler ===
+  [PRO] Textile & Garment Order Pipeline: Tracks apparel export orders, cotton/fiber input costs, and global retail demand.
+  [PRO] High Labor-Intensive Sector Insight: Direct leading indicator for listed textile manufacturers (MSH, TCM, TNG).
+  [CON] Industry association data releases often lag actual quarterly business performance by several weeks.
+  [REC] Cross-reference VITAS quarterly export reports with customs department export data to identify early revisions.
+
+=== F069 [not_started]: VITA (tourism association) sector policy crawler ===
+  [PRO] Trade Policy & Energy Regulation: Authoritative monitoring of electricity tariffs (EVN), retail fuel prices, and trade remedy investigations from MOIT.
+  [PRO] Utility & Energy Sector Alpha: Core determinant for power generation and petroleum distribution stocks (POW, GAS, PLX).
+  [CON] Complex tariff adjustment formulas and regulatory filings require specialized domain rule extraction.
+  [REC] Build explicit feature flags for retail fuel price cycles and power purchase agreement (PPA) policy changes.
+
+=== F070 [not_started]: VASEP (seafood export association) crawler ===
+  [PRO] International Macro Benchmark: Ingests World Bank GDP forecasts, sovereign credit assessments, and institutional reform reports on Vietnam.
+  [PRO] Long-Term Structural Indicators: Provides robust multi-year macroeconomic anchor indicators.
+  [CON] Infrequent semi-annual release cadence makes World Bank reports unsuitable for short-term swing trading.
+  [REC] Utilize World Bank indicators exclusively in long-term strategic asset allocation and structural macro regime gates.
+
+=== F071 [not_started]: HoREA (HCMC real-estate association) regulatory crawler ===
+  [PRO] Forestry, Timber & Furniture Intelligence: Ingests timber import/export quotas, wood product demand, and anti-circumvention investigations.
+  [PRO] Niche Alpha for Wood Exporters: Directly affects valuations of listed furniture and wood manufacturers (PTB, SAV).
+  [CON] Very narrow market capitalization weighting in the overall VN-Index.
+  [REC] Assign lower model weights to forestry news in market-wide models, restricting signal usage to dedicated export equity baskets.
+
+=== F072 [not_started]: TIER CHECKPOINT: F05x auxiliary-data audit gate ===
+  [PRO] Comprehensive Sector Data Audit: Validates cross-sector data completeness, schema conformance, and referential integrity across all sector crawlers.
+  [PRO] Quality Assurance Milestone: Guarantees zero corrupted records entering downstream point-in-time pipelines.
+  [CON] Execution bottleneck: All auxiliary sector crawlers must pass their respective tests before this milestone can pass.
+  [REC] Run incremental verification per sector domain rather than blocking on the entire market-wide suite.
+
+=== F008 [passing]: Retry/reconciliation module ===
+  [PRO] Automated Self-Healing Pipeline: Reads meta.crawl_progress to automatically retry failed jobs with exponential backoff and jitter.
+  [PRO] Zero Deadlock Design: Bounded retry count (max_retries=3) prevents infinite retry loops on delisted or invalid tickers.
+  [CON] Can mask persistent vendor API deprecations if error classification does not distinguish between transient 503s and permanent 404/410 errors.
+  [REC] [x] Implement Dead Letter Queue (DLQ) categorization: classify errors into TRANSIENT (retry with exponential backoff) vs PERMANENT (halt ticker and route directly to dead_letter queue without wasting retry budget) in src/etl/retry_failed_jobs.py.
+  [REC] [ ] Integrate real-time webhook alerts (Telegram/Discord Bot) when a job transitions into the Dead-Letter Queue.
+
+=== F009 [passing]: TIER CHECKPOINT: F0xx final audit, remediation & re-verification gate ===
+  [PRO] Historical News Depth to 2000: Extends market sentiment history back to the inception of the Vietnamese stock exchange in 2000.
+  [PRO] Fills Sentiment Blindspots: Unlocks news coverage for the 2007-2008 global financial crisis and the 2011-2012 banking restructuring.
+  [CON] Archive Formatting Inconsistencies: News published prior to 2008 frequently uses legacy font encodings (TCVN3, VNI) requiring normalization to Unicode UTF-8.
+  [REC] [TRANSFERRED -> Tier F1xx / Data Preprocessing] Apply an automated encoding converter (ftfy / unicodedata) during the Data Preprocessing stage (F101 / F102 / src/pipeline/build_full_preprocessed_database.py) before embedding or feature generation.
+  [REC] [ ] Automate F009 final audit checkpoint as a recurring weekly CI/CD runner to detect schema and cross-table data drift.
+
+=== F095 [passing]: Market index & group room OHLCV coverage expansion (VNINDEX, VN30, HNX, UPCOM, ETF baskets) ===
+  [PRO] Complete Exchange & Basket Breadth: Eliminates missing index OHLCV gaps across HOSE, HNX, UPCOM, and VN30.
+  [PRO] Foreign Room Proxy Integration: Bridges the gap for foreign-ownership capped baskets (VNDIAMOND, VNFINLEAD) via exchange-traded ETF tracking series.
+  [CON] Index series do not feature individual corporate action adjustments; pricing reflects index methodology float rules.
+  [REC] Maintain core.market_index_daily as benchmark series for regime classification and market beta computation.
+
+=== F096 [not_started]: OHLCV 1D zero-volume normalization & suspended-day forward-fill engine ===
+  [PRO] Robust Downstream Return Calculation: Eliminates division-by-zero and artificial -100% price drops during trading halts.
+  [PRO] Preserves Data Provenance: Operates via non-destructive SQL views without dropping or corrupting raw exchange records.
+  [CON] Forward-filled prices over long suspension horizons (>6 months) may mask fundamental distress.
+  [REC] Combine is_trading_day flag with liquidity filters in strategy backtests.
+
+=== F097 [not_started]: Intraday 1M timezone harmonization & session alignment engine ===
+  [PRO] Timezone Consistency: Corrects historical 7-hour timestamp offsets across 12M+ intraday bars.
+  [PRO] Microstructure Granularity: Enables precise isolation of opening/closing auctions from continuous trading.
+  [CON] Large intraday dataset (22.7M rows) requires indexed view materialized partitions for low-latency queries.
+  [REC] Deploy partition pruning by symbol and date in core.v_market_ohlcv_1m_harmonized.
+
+=== F098 [not_started]: Dual-mode price adjustment engine (Raw Microstructure vs Corporate Action CAF Adjustment) ===
+  [PRO] Dual-Perspective Analytical Freedom: Serves both high-frequency microstructure algorithms (raw) and trend/value strategies (adjusted).
+  [PRO] Eliminates Split Discontinuities: Smoothes historical dividend and bonus share gaps.
+  [CON] Requires ongoing synchronization with corporate action ex-dates.
+  [REC] Trigger automatic CAF factor re-calculation whenever new corporate events are ingested.
+
+=== F099 [passing]: OHLCV exploratory data analysis & empirical anomaly profiling suite ===
+  [PRO] Empirical Ground Truth: Exposes real market microstructure nuances, timezone gaps, and volume patterns directly from production data.
+  [PRO] Interactive Visual Validation: Equips quant researchers with reusable visual analytics for both single stocks and macro index baskets.
+  [PRO] Quantitative Alpha Sourcing: Confirms foreign room premium (VNDIAMOND) as a viable factor for multi-asset strategy design.
+  [CON] Static notebooks can become stale if underlying schemas undergo breaking changes.
+  [REC] Maintain parameterization to allow arbitrary symbol profiling via CLI or GUI.
+
+=== F099b [passing]: Financial news lakehouse exploratory data analysis & relevance profiling suite ===
+  [PRO] Complete NLP Transparency: Visualizes text distributions, vocabulary richness, and token boundaries before model training.
+  [PRO] Noise Isolation Proof: Empirically demonstrates the effectiveness of the Financial Relevance Gate in filtering out non-financial lifestyle articles.
+  [CON] Large embedded base64 graphics increase notebook file size.
+  [REC] Utilize vectorized SQL aggregations in DuckDB to maintain instantaneous query response times across 1.15M text records.
+
+=== F100 [passing]: Fundamental snapshot database exploratory data analysis & corporate governance profiling suite ===
+  [PRO] Holistic Multi-Asset Fundamental Profiling: Integrates financial statements, corporate governance, capital flows, and disclosures into a single unified analytical view.
+  [PRO] Quantitative Health Scoring: Visualizes credit distress and accounting quality across 20 years of Vietnamese corporate history.
+  [CON] Extensive table scanning across 7.36M rows requires columnar query optimization to avoid memory peaks.
+  [REC] Use DuckDB PRAGMA threads and memory_limit to ensure fast parallel execution without system degradation.
+
+=== F101 [passing]: Cross-dataset validation gate & Tiered Data Quality Scoring ===
+  [PRO] Rigorous Data Cross-Referencing: Validates symbol consistency, exchange calendar alignment, and timestamp sanity across disparate data sources.
+  [PRO] Eliminates Synthetic Artifacts: Detects and rejects orphan records, zero-volume anomalies, and non-trading holiday timestamps.
+  [CON] Strict validation can drop partially corrupted records that could otherwise provide usable directional signals.
+  [REC] Implement a tiered validation penalty: flag suspect records with a quality score rather than dropping them outright.
+  [REC] Persist precomputed Data Quality Scores (DQS) into a dedicated audit column in core.pit_events to serve as sample weights for F201/F301 loss functions.
+  [REC] Automate cross-lakehouse drift detection as a recurring scheduled runner to catch upstream data provider anomalies.
+
+=== F102 [passing]: Point-in-time news+price+fundamental join ===
+  [PRO] Strict Point-in-Time Join Architecture: Joins financial statements, corporate actions, and news articles to market price bars strictly using available_at <= trade_date.
+  [PRO] Total Look-Ahead Bias Immunity: Completely eliminates the most pervasive flaw in quantitative backtesting (using data before it was publicly accessible).
+  [CON] Complex SQL temporal join logic requires optimized indexing on (symbol, available_at, time) to prevent memory exhaustion.
+  [REC] Pre-materialize PIT event features into a dedicated preprocessed table with composite indices for lightning-fast ML dataset creation.
+  [REC] Calibrate forward horizons dynamically based on volatility regimes and market liquidity profiles.
+
+=== F103 [passing]: Enterprise 11-Technique Data Validation & Quality Pipeline ===
+  [PRO] Standardized Feature Engineering: Computes momentum, volatility, liquidity, sentiment, and fundamental valuation features across normalized distributions.
+  [PRO] Production-Grade Feature Store: Ensures consistent feature transformations across historical backtesting and live real-time inference.
+  [CON] Feature computation across 5+ million historical bars requires vectorized operations; naive Python loops will stall the pipeline.
+  [REC] Leverage DuckDB vectorized SQL window functions and Polars expressions to compute technical and rolling features at native C++ speeds.
+
+=== F104 [passing]: ML Feature Pipeline & Dataset Preparation ===
+  [PRO] Non-Overlapping Purged Dataset Split: Implements strict train, validation, and out-of-sample test splits separated by embargo periods.
+  [PRO] Prevents Information Leakage: Purging and embargoing ensure serial correlation between successive price bars does not contaminate validation sets.
+  [CON] Embargo periods reduce the effective number of training samples around major market transition boundaries.
+  [REC] Calibrate embargo windows to match the maximum forecast horizon of the strategy (e.g. 5-day embargo for 5-day holding period).
+
+=== F105 [passing]: News-to-Fundamental Entity Resolution & Financial Relevance Gate ===
+  [PRO] Massive Unstructured News Recovery: Over 100,000 high-value articles previously marked symbol IS NULL are now linked to tickers.
+  [PRO] Noise Isolation Gate: Protects NLP models (PhoBERT FinDPO) and quantitative backtests from non-financial lifestyle/showbiz/crime noise without deleting raw data.
+  [PRO] 3NF Relational Structure: Enables 1-N multi-entity mapping without duplicating news text rows.
+  [PRO] Co-occurrence Disambiguation Guard: Eliminates false-positive ticker collisions when common executive names appear across non-affiliated entities.
+  [CON] Polysemous executive names with common syllables require boundary safeguards and corporate co-occurrence confirmation to prevent false-positive ticker collisions.
+  [REC] Enforce length threshold (>=2 words, >=5 characters), blacklist generic corporate stopwords, and verify corporate co-occurrence before linking non-canonical executives.
+
+=== F106 [passing]: Cross-lakehouse relational entity mapping & comprehensive data linkage EDA suite ===
+  [PRO] Eliminates Data Silos: Explicitly connects financial statements, market microstructure, ownership hierarchies, and textual news into a cohesive relational knowledge graph.
+  [PRO] Guarantees Clean Join Semantics: Prevents catastrophic silent data loss or cross-join row explosion before launching the automated PIT Join Engine (F102).
+  [CON] Cross-database multi-table JOINs require attaching 3 DuckDB files simultaneously, necessitating memory-conscious projection queries.
+  [REC] Use explicit column projections (avoid SELECT *) and utilize DuckDB ATTACH (READ_ONLY) to maximize cross-database I/O throughput.
+
+=== F201 [passing]: PROOF: sentiment mean-reversion backtest on VN30 (gate for the model layer) ===
+  [PRO] Rigorous Signal Robustness Audit: Evaluates statistical edge across multiple random seeds, parameter perturbations, and transaction cost tiers.
+  [PRO] Kills Fragile Overfitted Strategies: Enforces rule-based rejection of any signal whose Sharpe ratio collapses under minor parameter variations.
+  [CON] Computationally intensive: Requires hundreds of simulated backtest runs per strategy candidate.
+  [REC] Parallelize Monte Carlo parameter sweeps using multiprocessing across CPU cores to minimize verification turnaround.
+
+=== F202 [passing]: TIER GATE: Cluster-robust standard errors & regime heterogeneity audit ===
+  [PRO] Deflated Sharpe Ratio (DSR) & PBO Framework: Computes Lopez de Prado's Deflated Sharpe Ratio to correct for data-mining bias across multiple trials.
+  [PRO] Scientific Edge Validation: Measures the exact Probability of Backtest Overfitting (PBO), ensuring reported performance is statistically authentic.
+  [CON] DSR requires tracking the full history of all tested strategy variations, including failed trial attempts.
+  [REC] Maintain an immutable ledger of every backtested trial configuration in meta.strategy_trial_log to guarantee valid DSR computation.
+
+=== F202b [passing]: Formal Deflated Sharpe Ratio / Probability of Backtest Overfitting calculation ===
+  [PRO] Combinatorially Symmetric Cross-Validation (CSCV): Implements advanced CSCV matrix partitioning to compute precise PBO and Stochastic Dominance.
+  [PRO] Guards Against Fluke Performance: Validates whether high strategy returns persist across all generated market permutations.
+  [CON] Combinatorial explosion: 16 partitions yield 12,870 combinations, requiring substantial memory if not batched efficiently.
+  [REC] Limit CSCV partitions to N=16 with vectorized rank correlation metrics to maintain sub-minute audit execution times.
+  [REC] Maintain an immutable ledger of every backtested trial configuration in meta.strategy_trial_log to guarantee valid DSR computation.
+
+=== F203 [passing]: Regime-conditional validity audit -- is mean-reversion a general effect or a bull-liquidity artifact? ===
+  [PRO] Multi-Regime Stress Testing: Tests alpha resilience across distinct historical regimes: Bull Market (2020-2021), Bear Market (2022), Sideways (2023), and Recovery (2024-2026).
+  [PRO] Maximum Drawdown Verification: Verifies that capital protection rails effectively halt trading during structural market crashes.
+  [CON] Market regime boundaries are inherently fuzzy and can introduce sensitivity to chosen regime classification thresholds.
+  [REC] Enforce Dynamic Market Health Index (MHI) Fail-Closed Circuit Breakers when market breadth drops below 30% to halt dip-buying execution.
+  [REC] Condition PhoBERT FinDPO (F301) and Multimodal Fusion (F302) on market trend gating embeddings.
+

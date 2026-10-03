@@ -180,13 +180,102 @@ class FinancialParaphraseChecker:
 
 
 # =============================================================================
+# DOMAIN FINANCIAL SYNONYM & CONSEQUENCE DICTIONARIES (VIETNAMESE)
+# =============================================================================
+
+FINANCIAL_SYNONYM_PAIRS: List[Tuple[str, str]] = [
+    (r"\blợi nhuận sau thuế\b", "lãi ròng"),
+    (r"\blãi ròng\b", "lợi nhuận sau thuế"),
+    (r"\bdoanh thu thuần\b", "doanh số"),
+    (r"\bdoanh số\b", "doanh thu thuần"),
+    (r"\bbị xử phạt\b", "nhận quyết định xử phạt vi phạm"),
+    (r"\bnhận quyết định xử phạt vi phạm\b", "bị xử phạt"),
+    (r"\bhủy niêm yết\b", "rời sàn giao dịch"),
+    (r"\brời sàn giao dịch\b", "hủy niêm yết"),
+    (r"\bkhối ngoại bán ròng\b", "nhà đầu tư nước ngoài xả hàng"),
+    (r"\bnhà đầu tư nước ngoài xả hàng\b", "khối ngoại bán ròng"),
+    (r"\bkhối ngoại mua ròng\b", "nhà đầu tư nước ngoài gom hàng"),
+    (r"\bnhà đầu tư nước ngoài gom hàng\b", "khối ngoại mua ròng"),
+    (r"\bnợ xấu gia tăng\b", "tỷ lệ nợ khó đòi đi lên"),
+    (r"\btỷ lệ nợ khó đòi đi lên\b", "nợ xấu gia tăng"),
+    (r"\bphá sản\b", "mất khả năng thanh toán"),
+    (r"\bmất khả năng thanh toán\b", "phá sản"),
+    (r"\btăng trưởng bứt phá\b", "tăng trưởng ấn tượng"),
+    (r"\btăng trưởng ấn tượng\b", "tăng trưởng bứt phá"),
+    (r"\bgiảm sâu\b", "lao dốc mạnh"),
+    (r"\blao dốc mạnh\b", "giảm sâu"),
+    (r"\btăng mạnh\b", "tăng vọt"),
+    (r"\btăng vọt\b", "tăng mạnh"),
+    (r"\bvỡ nợ trái phiếu\b", "chậm thanh toán nghĩa vụ nợ trái phiếu"),
+    (r"\bchậm thanh toán nghĩa vụ nợ trái phiếu\b", "vỡ nợ trái phiếu"),
+]
+
+FINANCIAL_CONSEQUENCE_MAP: List[Tuple[str, str]] = [
+    ("bị đình chỉ giao dịch", "cổ phiếu đối mặt nguy cơ bán tháo"),
+    ("phá sản", "doanh nghiệp rơi vào khủng hoảng nghiêm trọng"),
+    ("vỡ nợ trái phiếu", "rủi ro thanh khoản leo thang"),
+    ("lỗ kỷ lục", "kết quả kinh doanh sa sút"),
+    ("lãi kỷ lục", "kết quả kinh doanh khởi sắc"),
+    ("được cấp phép niêm yết", "mở rộng cơ hội tiếp cận vốn"),
+    ("bán tháo", "thị trường chịu áp lực điều chỉnh"),
+]
+
+
+# =============================================================================
+# MULTI-RELATIONAL ADVERSARIAL TUPLE GENERATOR
+# =============================================================================
+
+class FinancialMultiTupleGenerator:
+    """Generates synthetic and semantic multi-tuples for 10-checker Kolmogorov audit."""
+
+    def __init__(self, negator: Optional[Any] = None) -> None:
+        from pipeline.f3xx_modeling.hybridacd_gate import VietnameseFinancialFastAdversarialNegator
+        self.negator = negator or VietnameseFinancialFastAdversarialNegator()
+        self.compiled_synonyms = [
+            (re.compile(pat, re.IGNORECASE), repl) for pat, repl in FINANCIAL_SYNONYM_PAIRS
+        ]
+
+    def generate_negation(self, headline: str) -> str:
+        """Generates logical negation ~T via V-FAN."""
+        return self.negator.negate(headline)
+
+    def generate_paraphrase(self, headline: str) -> str:
+        """Generates semantic paraphrase preserving financial meaning."""
+        clean = headline.strip()
+        for regex, replacement in self.compiled_synonyms:
+            if regex.search(clean):
+                return regex.sub(replacement, clean, count=1)
+        # Fallback syntactic paraphrase
+        if "ghi nhận" in clean:
+            return clean.replace("ghi nhận", "đạt mức")
+        if "trong quý" in clean:
+            return clean.replace("trong quý", "vào quý")
+        return f"Thông tin ghi nhận: {clean}"
+
+    def generate_concessive_but(self, headline_a: str, headline_b: Optional[str] = None) -> str:
+        """Generates 'A nhưng B' concessive headline."""
+        b = headline_b or "nợ xấu và chi phí tài chính gia tăng đột biến"
+        return f"{headline_a.rstrip('.')} nhưng {b}"
+
+    def generate_consequence(self, headline: str) -> Tuple[str, str]:
+        """Returns cause A and implied consequence B such that A => B."""
+        clean = headline.lower()
+        for cause_kw, effect_phrase in FINANCIAL_CONSEQUENCE_MAP:
+            if cause_kw in clean:
+                return headline, f"Thị trường lo ngại {effect_phrase}"
+        return headline, "Cổ phiếu chịu tác động từ diễn biến thông tin trên"
+
+
+# =============================================================================
 # UNIFIED 10-CHECKER EVALUATOR ENGINE
 # =============================================================================
+
 class FullKolmogorovFinancialEngine:
     """Master evaluator running all 10 consistency checks for financial forecasting."""
 
     def __init__(self, tolerance: float = 0.15) -> None:
         self.tolerance = tolerance
+        self.tuple_gen = FinancialMultiTupleGenerator()
 
     def audit_model_predictions(
         self,
@@ -206,3 +295,101 @@ class FullKolmogorovFinancialEngine:
             checker_violations={k: round(v, 5) for k, v in checks_dict.items()},
             is_fully_consistent=(failed == 0),
         )
+
+    def evaluate_headline_coherence(
+        self,
+        headline: str,
+        predict_probs_fn: Callable[[List[str]], np.ndarray],
+    ) -> Tuple[MultiCheckerReport, float]:
+        """Executes full 10-checker suite on a given headline using a model predict function.
+
+        Args:
+            headline: Base Vietnamese financial headline.
+            predict_probs_fn: Function mapping List[str] -> np.ndarray [B, 3] (neg, neu, pos).
+
+        Returns:
+            Tuple of (MultiCheckerReport, kolmogorov_coherence_index in [0, 1]).
+        """
+        # 1. Generate multi-relational variations
+        h_neg = self.tuple_gen.generate_negation(headline)
+        h_para = self.tuple_gen.generate_paraphrase(headline)
+        h_but = self.tuple_gen.generate_concessive_but(headline)
+        h_cause, h_effect = self.tuple_gen.generate_consequence(headline)
+
+        # Partner headline for boolean conjunction / disjunction
+        h_partner = "Khối ngoại đẩy mạnh mua ròng trên toàn thị trường"
+        h_and = f"{headline.rstrip('.')} đồng thời {h_partner.lower()}"
+        h_or = f"{headline.rstrip('.')} hoặc {h_partner.lower()}"
+
+        batch_texts = [
+            headline,    # 0: A
+            h_neg,       # 1: ~A
+            h_para,      # 2: Paraphrase(A)
+            h_partner,   # 3: B
+            h_and,       # 4: A and B
+            h_or,        # 5: A or B
+            h_but,       # 6: A but B
+            h_effect,    # 7: Effect B
+        ]
+
+        probs = predict_probs_fn(batch_texts)
+        p_a = probs[0]
+        q_neg = probs[1]
+        p_para = probs[2]
+        p_b = probs[3]
+        p_and = probs[4]
+        p_or = probs[5]
+        p_but = probs[6]
+        p_effect = probs[7]
+
+        # Evaluate all 10 checkers
+        v_neg = FinancialNegChecker.evaluate(p_a, q_neg)
+        v_and = FinancialAndChecker.evaluate(float(p_a[2]), float(p_b[2]), float(p_and[2]))
+        v_or = FinancialOrChecker.evaluate(float(p_a[2]), float(p_b[2]), float(p_or[2]))
+        v_and_or = FinancialAndOrChecker.evaluate(float(p_a[2]), float(p_b[2]), float(p_and[2]), float(p_or[2]))
+        v_but = FinancialButChecker.evaluate(float(p_a[0]), float(p_but[0]))
+
+        # Conditional checks
+        # P(A | B) * P(B) == P(A and B) -> approx using joint
+        p_a_given_b = float(np.clip(p_and[2] / max(float(p_b[2]), 1e-4), 0.0, 1.0))
+        v_cond = FinancialCondChecker.evaluate(p_a_given_b, float(p_b[2]), float(p_and[2]))
+
+        # CondCond: Macro regime split proxy
+        v_condcond = FinancialCondCondChecker.evaluate(
+            p_a_given_c=float(p_a[2]),
+            p_a_given_b_c=float(p_and[2]),
+            p_b_given_c=float(p_b[2]),
+            p_a_given_not_b_c=float(p_a[2] * 0.95),
+        )
+
+        v_consequence = FinancialConsequenceChecker.evaluate(float(p_a[0]), float(p_effect[0]))
+
+        # Expected evidence: prior vs posterior with evidence
+        v_evidence = FinancialExpectedEvidenceChecker.evaluate(
+            p_prior=float(p_a[2]),
+            p_given_bull_evidence=float(np.clip(p_a[2] * 1.2, 0.0, 1.0)),
+            prob_bull=0.5,
+            p_given_bear_evidence=float(np.clip(p_a[2] * 0.8, 0.0, 1.0)),
+            prob_bear=0.5,
+        )
+
+        v_para = FinancialParaphraseChecker.evaluate(p_a, p_para)
+
+        checks_dict = {
+            FinancialNegChecker.name: v_neg,
+            FinancialAndChecker.name: v_and,
+            FinancialOrChecker.name: v_or,
+            FinancialAndOrChecker.name: v_and_or,
+            FinancialButChecker.name: v_but,
+            FinancialCondChecker.name: v_cond,
+            FinancialCondCondChecker.name: v_condcond,
+            FinancialConsequenceChecker.name: v_consequence,
+            FinancialExpectedEvidenceChecker.name: v_evidence,
+            FinancialParaphraseChecker.name: v_para,
+        }
+
+        report = self.audit_model_predictions(checks_dict)
+        # Kolmogorov Coherence Index (KCI) in [0, 1]
+        kci = float(np.clip(1.0 - (report.mean_violation_score / (self.tolerance * 2.0)), 0.0, 1.0))
+
+        return report, round(kci, 4)

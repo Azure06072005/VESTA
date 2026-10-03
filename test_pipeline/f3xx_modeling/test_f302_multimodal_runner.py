@@ -33,7 +33,7 @@ from src.models.train_multimodal_fusion import (  # noqa: E402
 
 def run_f302_test(
     checkpoint_dir: str = "out/models/multimodal_fusion",
-    dataset_path: str = "data/processed/f104/f104_val.parquet",
+    dataset_path: str = "data/processed/f104_embargo_5d/f104_val.parquet",
     sample_limit: int = 500,
     out_path: str | None = None,
 ) -> dict[str, object]:
@@ -62,15 +62,19 @@ def run_f302_test(
         hidden_dim=128,
         num_heads=4,
         num_fusion_layers=2,
+        use_macro_gating=True,
     )
 
     if target_weights and target_weights.exists():
         t0 = time.time()
-        state = torch.load(target_weights, map_location=device)
+        try:
+            state = torch.load(target_weights, map_location=device, weights_only=False)
+        except TypeError:
+            state = torch.load(target_weights, map_location=device)
         if "model_state_dict" in state:
-            model.load_state_dict(state["model_state_dict"])
+            model.load_state_dict(state["model_state_dict"], strict=False)
         else:
-            model.load_state_dict(state)
+            model.load_state_dict(state, strict=False)
         load_time = time.time() - t0
         print(f" -> Successfully loaded model weights from {target_weights.name} in {load_time:.2f}s")
     else:

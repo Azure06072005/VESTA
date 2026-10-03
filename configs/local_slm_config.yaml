@@ -1,0 +1,84 @@
+# configs/local_slm_config.yaml
+# Configuration for F305: Local Deep Reasoning SLM Integration (Vietnamese Financial Chain-of-Thought)
+
+model:
+  name: "qwen2.5-3b-instruct"
+  alt_name: "deepseek-r1-distill-qwen-1.5b"
+  quantization: "Q4_K_M"
+  backend: "auto"  # options: auto, ollama, openai_compatible, mock
+  ollama_endpoint: "http://localhost:11434"
+  openai_endpoint: "http://localhost:8000/v1"
+  context_length: 2048
+  temperature: 0.2
+  top_p: 0.9
+  max_output_tokens: 512
+  vram_budget_mb: 2500
+
+cascade_gating:
+  enabled: true
+  trigger_alpha_lower: 35.0
+  trigger_alpha_upper: 65.0
+  trigger_violation_threshold: 0.25
+  force_deep_for_sources:
+    - "ssc"
+    - "ubcknn"
+    - "hose"
+    - "hnx"
+    - "sbv"
+
+hybridacd_tuples:
+  enabled: true
+  include_counterfactual_negation: true
+  include_economic_consequence: true
+  include_semantic_paraphrase: true
+  include_concession_clause: true
+
+database_enrichment:
+  enabled: true
+  snapshot_db_path: "db/vesta_snapshot.duckdb"
+  news_db_path: "db/vesta_news.duckdb"
+  ohlcv_db_path: "db/vesta_ohlcv.duckdb"
+  enrich_shareholders: true
+  enrich_fundamentals_24_ratios: true
+  enrich_corporate_events: true
+  enrich_foreign_flow: true
+  enrich_macro_rates: true
+
+prompt_templates:
+  system_prompt: >
+    Bạn là VESTA-CoT, chuyên gia phân tích định lượng và chuỗi tư duy tài chính chứng khoán Việt Nam (HOSE, HNX, UPCOM).
+    Nhiệm vụ của bạn là đọc thông tin sự kiện doanh nghiệp, phân tích bộ câu hỏi đối chứng HybridACD (tin gốc vs phản đề vs hệ quả kinh tế),
+    đối soát với dữ liệu kế toán thực tế (24 chỉ số BCTC), dòng tiền khối ngoại, sự kiện doanh nghiệp và cơ cấu cổ đông nội bộ,
+    sau đó tổng hợp chuỗi tư duy (Chain-of-Thought) sâu sắc, loại bỏ bẫy tâm lý và xuất kết luận cảm tính định lượng dạng JSON chuẩn xác 100%.
+
+  user_prompt_template: >
+    [THÔNG TIN SỰ KIỆN DOANH NGHIỆP]
+    - Mã cổ phiếu: {symbol}
+    - Tiêu đề tin tức: {headline}
+    - Nội dung trích yếu: {body}
+    - Nguồn tin & Độ khả tín: {source} (Trọng số tín nhiệm W_source = {source_weight})
+    - Cổ đông lớn / Lãnh đạo nội bộ: {matched_shareholder}
+    
+    [BỘ CÂU HỎI & TUPLES ĐỐI CHỨNG HYBRIDACD (COUNTERFACTUAL / CONSEQUENCE)]
+    {hybridacd_tuples_context}
+    
+    [DỮ LIỆU ĐỊNH LƯỢNG LÀM GIÀU TỪ HỆ THỐNG CƠ SỞ DỮ LIỆU VESTA]
+    - Phân ngành ICB: {icb_sector}
+    - Chỉ số tài chính BCTC (P/E, P/B, ROE, Nợ/Vốn chủ, Biên LN ròng): {financial_context}
+    - Sự kiện doanh nghiệp gần nhất (Cổ tức, ĐHĐCĐ, Phát hành): {corporate_events_context}
+    - Xu hướng dòng tiền khối ngoại (Foreign Net Flow): {foreign_flow_context}
+    - Chế độ thị trường vĩ mô (F203 Regime & MHI): {regime_context}
+    - Ràng buộc nhất quán Kolmogorov (F304 Simplex Gate): Consistent Alpha = {fast_path_alpha} | Vi phạm V_score = {violation_score}
+    
+    [YÊU CẦU PHÂN TÍCH CHUỖI TƯ DUY (CHAIN-OF-THOUGHT)]
+    1. So sánh đối chứng giữa tin gốc và kịch bản phản đề (Counterfactual).
+    2. Đánh giá tính chân thực của thông tin dựa trên cơ cấu cổ đông, dòng tiền khối ngoại và sức khỏe tài chính thực chất.
+    3. Đưa ra lập luận logic, nêu rõ các cờ rủi ro tiềm ẩn (nếu có).
+    4. Xuất kết quả theo đúng cấu trúc JSON sau (không kèm bất kỳ văn bản nào ngoài JSON):
+    {{
+      "reasoning_chain": "<Chuỗi lập luận chi tiết, logic bằng tiếng Việt>",
+      "sentiment_classification": "<POSITIVE | NEUTRAL | NEGATIVE>",
+      "confidence_score": <Điểm tin cậy từ 0.0 đến 1.0>,
+      "risk_flags": ["<Cờ rủi ro 1>", "<Cờ rủi ro 2>"],
+      "suggested_action": "<BUY_DIP | HOLD | AVOID | IGNORE_NOISE>"
+    }}

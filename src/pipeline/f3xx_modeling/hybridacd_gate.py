@@ -152,6 +152,8 @@ class GateResult:
     consistent_alpha_score: float  # S in [0, 100]
     negated_headline: str
     latency_ms: float
+    kolmogorov_coherence_index: Optional[float] = None
+    multi_checker_report: Optional[Any] = None
 
 
 class HybridACDConsistencyGate:
@@ -172,16 +174,23 @@ class HybridACDConsistencyGate:
         noise_threshold: float = 0.40,
         discard_inconsistent: bool = True,
         negator: Optional[VietnameseFinancialFastAdversarialNegator] = None,
+        multi_checker_mode: bool = False,
+        multi_checker_tolerance: float = 0.15,
     ) -> None:
         """
         Args:
             noise_threshold: Maximum allowable Delta violation before penalizing/discarding.
             discard_inconsistent: If True, sets confidence_weight = 0.0 for inconsistent events.
             negator: V-FAN instance.
+            multi_checker_mode: If True, enables evaluation via the Full 10-Checker Kolmogorov Suite.
+            multi_checker_tolerance: Tolerance threshold for the 10-checker engine.
         """
         self.noise_threshold = noise_threshold
         self.discard_inconsistent = discard_inconsistent
         self.negator = negator or VietnameseFinancialFastAdversarialNegator()
+        self.multi_checker_mode = multi_checker_mode
+        from pipeline.f3xx_modeling.hybridacd_multi_checkers import FullKolmogorovFinancialEngine
+        self.full_engine = FullKolmogorovFinancialEngine(tolerance=multi_checker_tolerance)
 
     def generate_negated_headline(self, headline: str) -> str:
         """Exposes V-FAN transformation directly."""
@@ -290,3 +299,51 @@ class HybridACDConsistencyGate:
         for h, p, q in zip(headlines, probs_orig, probs_neg):
             results.append(self.evaluate_event(h, p, q))
         return results
+
+    def evaluate_event_multi(
+        self,
+        headline: str,
+        predict_probs_fn: Callable[[List[str]], np.ndarray],
+    ) -> GateResult:
+        """Evaluates an event using the Full 10-Checker Kolmogorov Suite.
+
+        Args:
+            headline: Original financial headline.
+            predict_probs_fn: Model inference function mapping text batch -> probabilities [B, 3].
+        """
+        t0 = time.perf_counter()
+        multi_report, kci = self.full_engine.evaluate_headline_coherence(headline, predict_probs_fn)
+
+        # Base negation evaluation
+        h_neg = self.negator.negate(headline)
+        probs_pair = predict_probs_fn([headline, h_neg])
+        p_orig = probs_pair[0]
+        q_neg = probs_pair[1]
+
+        p_star, _, base_violation = self.project_simplex_pair(p_orig, q_neg)
+
+        # Composite violation incorporates 10-checker mean violation
+        composite_violation = 0.5 * base_violation + 0.5 * multi_report.mean_violation_score
+        is_consistent = (composite_violation <= self.noise_threshold) and multi_report.is_fully_consistent
+
+        if is_consistent:
+            confidence_weight = kci
+        else:
+            confidence_weight = 0.0 if self.discard_inconsistent else max(0.0, kci)
+
+        alpha_score = 50.0 + 50.0 * float(p_star[2] - p_star[0])
+        latency_ms = (time.perf_counter() - t0) * 1000.0
+
+        return GateResult(
+            is_consistent=is_consistent,
+            violation_score=round(composite_violation, 6),
+            original_probs=np.round(p_orig, 6),
+            negated_probs=np.round(q_neg, 6),
+            projected_probs=np.round(p_star, 6),
+            confidence_weight=round(confidence_weight, 4),
+            consistent_alpha_score=round(alpha_score, 4),
+            negated_headline=h_neg,
+            latency_ms=round(latency_ms, 3),
+            kolmogorov_coherence_index=kci,
+            multi_checker_report=multi_report,
+        )
