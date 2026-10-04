@@ -1,0 +1,347 @@
+/* ═══════════════════════════════════════════════════════════
+   VESTA QUANT LABS — Master Design System
+   Heritage from kietfolio.vercel.app (Anhkiet.dev V3)
+   Dark-first Cyberpunk & Luxury Financial Terminal
+   ═══════════════════════════════════════════════════════════ */
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+:root {
+  /* Surface colors */
+  --bg: #07070f;
+  --bg2: #0d0d1c;
+  --bg3: #12121f;
+  --bg4: #1a1a2e;
+  
+  /* Text colors */
+  --cream: #f0ede6;
+  --cream2: #c8c4bc;
+  --cream3: #8a8780;
+  
+  /* Brand accents */
+  --teal: #00e5c3;
+  --teal2: #00b89e;
+  --tealA: rgba(0, 229, 195, 0.12);
+  --tealB: rgba(0, 229, 195, 0.04);
+  
+  --gold: #f0b429;
+  --goldA: rgba(240, 180, 41, 0.12);
+  
+  --violet: #a78bfa;
+  --violetA: rgba(167, 139, 250, 0.12);
+  
+  --red: #ff4757;
+  --redA: rgba(255, 71, 87, 0.12);
+  
+  --green: #4ade80;
+  --greenA: rgba(74, 222, 128, 0.12);
+  
+  /* Vietnam Price Board 5 Colors */
+  --vn-ceiling: #A15FC4;
+  --vn-ceiling-bg: rgba(161, 95, 196, 0.15);
+  --vn-floor: #3E8FBF;
+  --vn-floor-bg: rgba(62, 143, 191, 0.15);
+  --vn-up: #22A366;
+  --vn-up-bg: rgba(34, 163, 102, 0.15);
+  --vn-down: #D6483F;
+  --vn-down-bg: rgba(214, 72, 63, 0.15);
+  --vn-ref: #D9AA3E;
+  --vn-ref-bg: rgba(217, 170, 62, 0.15);
+  
+  /* Hairline Borders */
+  --border: rgba(255, 255, 255, 0.06);
+  --border2: rgba(255, 255, 255, 0.12);
+  --border3: rgba(255, 255, 255, 0.22);
+  
+  /* Typography */
+  --sans: 'Syne', sans-serif;
+  --mono: 'Syne Mono', monospace;
+  --serif: 'Playfair Display', serif;
+  --vn: 'Be Vietnam Pro', sans-serif;
+  
+  --rad: 2px;
+  --transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+html, body {
+  background-color: var(--bg);
+  color: var(--cream);
+  font-family: var(--vn);
+  font-size: 13px;
+  line-height: 1.6;
+  min-height: 100vh;
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+#root {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── SCROLLBAR ── */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+::-webkit-scrollbar-track {
+  background: var(--bg);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--bg4);
+  border-radius: var(--rad);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--teal2);
+}
+
+/* ── SELECTION ── */
+::selection {
+  background: var(--teal);
+  color: var(--bg);
+}
+
+/* ── UTILITIES ── */
+.mono { font-family: var(--mono); }
+.sans { font-family: var(--sans); }
+.serif { font-family: var(--serif); }
+.vn { font-family: var(--vn); }
+.tabular { font-feature-settings: 'tnum' 1, 'lnum' 1; }
+
+/* ── ANIMATIONS ── */
+@keyframes pulse {
+  0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(0, 229, 195, 0.7); }
+  70% { transform: scale(1); box-shadow: 0 0 0 6px rgba(0, 229, 195, 0); }
+  100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(0, 229, 195, 0); }
+}
+
+.pulse-dot {
+  width: 7px;
+  height: 7px;
+  background: var(--teal);
+  border-radius: 50%;
+  display: inline-block;
+  animation: pulse 2s infinite;
+}
+
+.pulse-dot.red {
+  background: var(--red);
+  animation-name: pulse-red;
+}
+@keyframes pulse-red {
+  0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(255, 71, 87, 0.7); }
+  70% { transform: scale(1); box-shadow: 0 0 0 6px rgba(255, 71, 87, 0); }
+  100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(255, 71, 87, 0); }
+}
+
+/* ── CARDS & PANELS ── */
+.panel {
+  background: var(--bg2);
+  border: 0.5px solid var(--border);
+  border-radius: var(--rad);
+  overflow: hidden;
+  position: relative;
+  transition: var(--transition);
+}
+
+.panel:hover {
+  border-color: var(--border2);
+}
+
+.panel-header {
+  padding: 12px 16px;
+  border-bottom: 0.5px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: rgba(255, 255, 255, 0.015);
+}
+
+.panel-title {
+  font-family: var(--sans);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--cream);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.panel-body {
+  padding: 16px;
+}
+
+/* ── BUTTONS ── */
+button {
+  font-family: var(--sans);
+  cursor: pointer;
+  border: none;
+  outline: none;
+  transition: var(--transition);
+}
+
+.btn-main {
+  background: var(--teal);
+  color: var(--bg);
+  padding: 8px 18px;
+  border-radius: var(--rad);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.btn-main:hover {
+  background: #26ffe2;
+  box-shadow: 0 0 15px rgba(0, 229, 195, 0.35);
+  transform: translateY(-1px);
+}
+
+.btn-ghost {
+  background: transparent;
+  color: var(--cream);
+  border: 0.5px solid var(--border2);
+  padding: 7px 16px;
+  border-radius: var(--rad);
+  font-size: 12px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.btn-ghost:hover {
+  border-color: var(--teal);
+  color: var(--teal);
+  background: var(--tealB);
+}
+
+.btn-danger {
+  background: var(--redA);
+  color: var(--red);
+  border: 0.5px solid rgba(255, 71, 87, 0.3);
+  padding: 7px 16px;
+  border-radius: var(--rad);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.btn-danger:hover {
+  background: var(--red);
+  color: #fff;
+  box-shadow: 0 0 12px rgba(255, 71, 87, 0.4);
+}
+
+.btn-sm {
+  padding: 5px 10px;
+  font-size: 11px;
+}
+
+/* ── INPUTS & SELECTS ── */
+input, select, textarea {
+  background: var(--bg3);
+  border: 0.5px solid var(--border2);
+  color: var(--cream);
+  font-family: var(--vn);
+  font-size: 12px;
+  padding: 8px 12px;
+  border-radius: var(--rad);
+  outline: none;
+  transition: var(--transition);
+}
+
+input:focus, select:focus, textarea:focus {
+  border-color: var(--teal);
+  box-shadow: 0 0 8px var(--tealA);
+}
+
+/* ── BADGES ── */
+.badge {
+  font-family: var(--mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  padding: 2px 7px;
+  border-radius: var(--rad);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.badge-teal { background: var(--tealA); color: var(--teal); border: 0.5px solid rgba(0, 229, 195, 0.3); }
+.badge-gold { background: var(--goldA); color: var(--gold); border: 0.5px solid rgba(240, 180, 41, 0.3); }
+.badge-violet { background: var(--violetA); color: var(--violet); border: 0.5px solid rgba(167, 139, 250, 0.3); }
+.badge-green { background: var(--greenA); color: var(--green); border: 0.5px solid rgba(74, 222, 128, 0.3); }
+.badge-red { background: var(--redA); color: var(--red); border: 0.5px solid rgba(255, 71, 87, 0.3); }
+
+/* Vietnam Stock Colors */
+.badge-ceiling { background: var(--vn-ceiling-bg); color: var(--vn-ceiling); border: 0.5px solid var(--vn-ceiling); }
+.badge-floor { background: var(--vn-floor-bg); color: var(--vn-floor); border: 0.5px solid var(--vn-floor); }
+.badge-up { background: var(--vn-up-bg); color: var(--vn-up); border: 0.5px solid var(--vn-up); }
+.badge-down { background: var(--vn-down-bg); color: var(--vn-down); border: 0.5px solid var(--vn-down); }
+.badge-ref { background: var(--vn-ref-bg); color: var(--vn-ref); border: 0.5px solid var(--vn-ref); }
+
+/* ── TABLES ── */
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.data-table th {
+  background: var(--bg3);
+  color: var(--cream3);
+  font-family: var(--mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  padding: 10px 14px;
+  text-align: left;
+  border-bottom: 0.5px solid var(--border2);
+  white-space: nowrap;
+}
+
+.data-table td {
+  padding: 10px 14px;
+  border-bottom: 0.5px solid var(--border);
+  color: var(--cream);
+}
+
+.data-table tr:hover td {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+/* ── TERMINAL LOG WINDOW ── */
+.terminal-window {
+  background: #040409;
+  border: 0.5px solid var(--border);
+  border-radius: var(--rad);
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.8;
+  padding: 14px 16px;
+  color: #a0aec0;
+  height: 480px;
+  overflow-y: auto;
+  box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.6);
+}
+
+.log-line {
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+.log-line.info { color: var(--cream2); }
+.log-line.success { color: var(--teal); }
+.log-line.warning { color: var(--gold); }
+.log-line.error { color: var(--red); }

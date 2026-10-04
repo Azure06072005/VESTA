@@ -1933,6 +1933,124 @@
       "test_command": "pytest tests/test_bot_registry.py tests/test_arena_microstructure.py tests/test_arena_stats.py -v"
     },
     {
+      "id": "F073",
+      "name": "Market & Reference Crawler for Derivatives (core.market_derivatives_daily)",
+      "behavior": "Incremental EOD crawler for index futures (VN30F1M, VN30F2M, VN30F1Q, VN30F2Q) and government bond futures (GB05F). Ingests settlement price, open interest (OI), trading volume, and basis vs underlying index into core.market_derivatives_daily.",
+      "dependencies": [
+        "F001"
+      ],
+      "verification": "python -m src.crawlers.derivatives_crawler --symbols VN30F1M --verify",
+      "state": "not_started",
+      "evidence": "Scheduled for next update per user multi-asset demand. Microstructure engine supports T+0 and margin calculations.",
+      "pros": [
+        "Enables T+0 intraday hedging and directional positioning for VN30 index futures.",
+        "Crucial for basis arbitrage and risk overlay bots."
+      ],
+      "cons": [
+        "Futures contracts expire monthly and quarterly, requiring rolling contract logic to build continuous series."
+      ],
+      "recommendation": [
+        "Implement continuous back-adjusted contract stitcher using proportional roll method."
+      ],
+      "run_command": "python src/crawlers/derivatives_crawler.py",
+      "test_command": "pytest tests/test_derivatives_crawler.py -v"
+    },
+    {
+      "id": "F074",
+      "name": "Market & Reference Crawler for Covered Warrants (core.market_covered_warrants_daily)",
+      "behavior": "Crawler for listed covered warrants (CW) on HOSE. Ingests strike price, conversion ratio, expiration date, underlying stock ticker, delta, and daily OHLCV into core.market_covered_warrants_daily.",
+      "dependencies": [
+        "F001"
+      ],
+      "verification": "python -m src.crawlers.warrants_crawler --verify",
+      "state": "not_started",
+      "evidence": "Scheduled for next update. Ideal for retail capital (10M VND) due to low unit price (1k-5k VND) and high leverage.",
+      "pros": [
+        "High leverage trading with limited downside risk (max loss = premium paid).",
+        "Accessible for small-capital portfolios under 10M VND without odd-lot restrictions."
+      ],
+      "cons": [
+        "High time-decay (theta) risk and market-maker spread widening during high volatility."
+      ],
+      "recommendation": [
+        "Filter for warrants with at least 45 days to expiration and positive market-maker quotes."
+      ],
+      "run_command": "python src/crawlers/warrants_crawler.py",
+      "test_command": "pytest tests/test_warrants_crawler.py -v"
+    },
+    {
+      "id": "F075",
+      "name": "Market & Portfolio Crawler for Exchange Traded Funds (core.market_etf_daily)",
+      "behavior": "Crawler for Vietnamese listed ETFs (E1VFVN30, FUEVFVND, FUESSVFL, FUEKIV30...). Ingests daily NAV per share, tracking error, discount/premium, and basket holdings into core.market_etf_daily.",
+      "dependencies": [
+        "F001"
+      ],
+      "verification": "python -m src.crawlers.etf_crawler --verify",
+      "state": "not_started",
+      "evidence": "Scheduled for next update. Allows sector and index-level allocation for retail bots.",
+      "pros": [
+        "Diversified exposure to Vietnam leading indices without individual stock concentration risk.",
+        "Exempt from foreign ownership limits (FOL), heavily traded by institutional investors."
+      ],
+      "cons": [
+        "Slight tracking error and daily tracking fees."
+      ],
+      "recommendation": [
+        "Integrate ETF basket component weights with corporate fundamentals for macro sector rotation."
+      ],
+      "run_command": "python src/crawlers/etf_crawler.py",
+      "test_command": "pytest tests/test_etf_crawler.py -v"
+    },
+    {
+      "id": "F076",
+      "name": "Reference & Trading Crawler for Corporate & Government Bonds (core.market_bonds_daily)",
+      "behavior": "Crawler for individual corporate bonds and sovereign bonds listed on HNX Bond trading system. Ingests yield to maturity (YTM), coupon, issuer rating, traded volume, and clean/dirty prices into core.market_bonds_daily.",
+      "dependencies": [
+        "F001"
+      ],
+      "verification": "python -m src.crawlers.bonds_crawler --verify",
+      "state": "not_started",
+      "evidence": "Scheduled for next update. Enables multi-asset asset allocation models and risk-free rate calibration.",
+      "pros": [
+        "Provides true Vietnamese risk-free term structure and credit spread metrics for F203 regime gating.",
+        "Allows conservative fixed-income allocation bots."
+      ],
+      "cons": [
+        "Secondary bond trading in Vietnam has fragmented liquidity."
+      ],
+      "recommendation": [
+        "Focus on high-liquidity Tier-1 banking and sovereign bonds."
+      ],
+      "run_command": "python src/crawlers/bonds_crawler.py",
+      "test_command": "pytest tests/test_bonds_crawler.py -v"
+    },
+    {
+      "id": "F502",
+      "name": "AI Strategy Generator & Real-time Web Console Integration",
+      "behavior": "Full-stack integration bridging DuckDB Lakehouse, PhoBERT + Kolmogorov Simplex-TCD + Local SLM Qwen-2.5-3B, and 308-bot arena into a unified Cyberpunk/Fintech Web Console (React TypeScript + FastAPI Gateway at :8899). Enables real-time SSE crawler terminal, market heatmap with 5 VN stock colors, interactive lightweight candlestick charts, real-time news inference, and conversational bot generator with RAG context.",
+      "dependencies": [
+        "F501",
+        "F401",
+        "F402"
+      ],
+      "verification": "python -m src.service.console_api --port 8899 & curl -s http://localhost:8899/health | grep HEALTHY",
+      "state": "passing",
+      "evidence": "PASSED. Implemented src/service/console_api.py (FastAPI gateway with 15+ endpoints + SSE streaming + static mount) and web/ (React 18 + TypeScript + Vite + Lightweight Charts + Syne typography). Tested all endpoints via TestClient with HTTP 200 OK. Integrated Qwen-2.5-3B CoT reasoning thesis for interactive strategy generation and 10M VND Odd-lot multi-asset allocations.",
+      "pros": [
+        "Replaces legacy Tkinter GUI with modern, high-performance web console accessible across any browser or device.",
+        "Zero-lock resilient DuckDB access with real-time SSE streaming logs.",
+        "Empowers quantitative traders to generate, test, and audit AI trading bots in seconds."
+      ],
+      "cons": [
+        "Requires local GPU/CPU resources to run Local SLM Qwen-2.5-3B."
+      ],
+      "recommendation": [
+        "Add WebSockets for sub-millisecond order book updates when tick feed is connected."
+      ],
+      "run_command": "python run_console.py",
+      "test_command": "npm run build --prefix web && python -c 'from src.service.console_api import app; print(\"App OK\")'"
+    },
+    {
       "id": "F901",
       "name": "[BLOCKED] Broker compliance confirmation for autonomous execution",
       "behavior": "Written confirmation (broker documentation or direct correspondence) of whether autonomous/algorithmic order placement is currently permitted under the account/registration to be used. Documentation artifact, not code -- can be pursued in parallel with F001-F402, does not block the data/model work.",
