@@ -2,6 +2,31 @@
 
 Newest at the top. Don't reverse any of these without a new, stated reason.
 
+## 2026-10-04: F501 Retail 10M VND Budget, Multi-Asset Expansion & End-to-End Pipeline Orchestration
+- Context: Chuẩn bị kiểm thử thực tế toàn bộ chuỗi pipeline (F000 -> F501) cho phép 308 bot tự chọn chiến lược dựa trên dữ liệu và mô hình AI huấn luyện. Đòi hỏi mở rộng danh mục không chỉ cổ phiếu đơn lẻ mà cả HĐTL phái sinh (VN30F1M, GB05F), Chứng quyền CW, Quỹ ETF, và Trái phiếu doanh nghiệp HNX.
+- Decisions:
+  1. **Thiết lập vốn khởi điểm 10,000,000 VNĐ / bot**: Khắc phục ràng buộc trần 25% NAV (2.5M VNĐ) trên thị trường chứng khoán Việt Nam bằng cách hỗ trợ cơ chế khớp lệnh lô lẻ odd-lot (`min_order_lot = 1`, định cỡ `shares_to_buy = max(1, int(target_val // curr_price))`), dỡ bỏ hoàn toàn việc ép cứng `max(100, ...)` cho tài khoản bán lẻ.
+  2. **Quy tắc giao dịch Đa tài sản (Multi-Asset Engine)**:
+     - HĐTL Chỉ số VN30 (`VN30F1M`): T+0 intraday closing, ký quỹ 17%, hệ số 100,000 đ/điểm, phí 5,000 đ/HĐ.
+     - HĐTL Trái phiếu Chính phủ (`GB05F`): T+0 intraday.
+     - Trái phiếu Doanh nghiệp & Chính phủ: T+1 settlement.
+     - Cổ phiếu niêm yết, Chứng quyền có bảo đảm (CW), Quỹ hoán đổi danh mục (ETF): T+2.5 settlement.
+  3. **Bổ sung 4 tính năng mới vào `Harness/feature_list.json`**:
+     - `F073`: Reference & Daily OHLCV Crawler for Derivatives (`core.market_derivatives_daily`).
+     - `F074`: Reference & Daily Market Crawler for Covered Warrants (`core.market_covered_warrants_daily`).
+     - `F075`: Reference & Daily NAV Crawler for Exchange Traded Funds (`core.market_etf_daily`).
+     - `F076`: Reference & Market Price Crawler for Corporate & Government Bonds (`core.market_bonds_daily`).
+  4. **Hợp nhất và đồng bộ hóa Chuỗi Pipeline (F000 -> F501)**:
+     - Xây dựng `src/pipeline/vesta_pipeline_orchestrator.py` liên kết 5 tầng: Crawl -> Preprocess PIT -> AI Model Checkpoint -> Serving -> F501 Bot Arena.
+     - Tích hợp subcommand `pipeline` vào `src/crawlers/vesta_crawler_cli.py`.
+     - Tích hợp Tab "🚀 Điều Phối Toàn Bộ Pipeline (F000 ➔ F501)" vào desktop GUI `vesta_crawler_gui.py` với điều khiển 1-click và bảng xếp hạng Top Bots trực quan.
+- Constraints: 100% tuân thủ quy tắc B1: Mọi giao dịch phái sinh, chứng quyền, cổ phiếu trong Bot Arena hoàn toàn là mô phỏng vi cấu trúc trên giấy (Paper Trading Simulation), không kết nối đặt lệnh thực tế ra cổng broker.
+
+## 2026-10-03: F501 Multi-Bot Strategy Arena Architecture & Monte Carlo Microstructure Simulator
+- Reason: 308 composite bots constructed from modular strategy components (Signals S01-S21, Filters S14-S23, Overlays S09-S24, Baselines S25-S26, and AI Twins) with stationary block bootstrap resampling across 5 Vietnam market situations.
+- Rejected: N=5 DSR deflation (arena has 308 bots; multiple testing requires both raw N=308 and effective N=45 cluster deflation); parametric-only normal scenarios (real market requires Politis-Romano block bootstrap preserving autocorrelation and joint return/sentiment pairs).
+- Constraint: Costs, settlement (T+2.5 / Day 3 sell lock), +-7% HOSE limits, and floor zero-liquidity rejection enforced in configs/arena.yaml and tested; strictly read-only simulation with zero broker execution or external network code (Rule B1).
+
 ## 2026-10-03: F305 Local Deep Reasoning SLM Integration (Vietnamese Financial Chain-of-Thought)
 - Context & Motivation:
   1. VESTA previously relied on fast discriminant embeddings (PhoBERT-base 135M, F301) and Multimodal Cross-Attention Fusion (F302) for real-time scoring. While sub-15ms fast, these neural heads output opaque numerical probabilities without human-interpretable economic causality.

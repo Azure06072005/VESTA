@@ -963,6 +963,136 @@
       "test_command": "pytest tests/test_merge_crawlers_staging.py -v"
     },
     {
+      "id": "F073",
+      "name": "Reference & Daily OHLCV Crawler for Derivatives (Index Futures VN30F & Government Bond Futures GB05F)",
+      "behavior": "Ingests daily OHLCV, open interest (OI), basis spread vs underlying VN30, settlement price, and contract multiplier for VN30F1M, VN30F2M, VN30F1Q, VN30F2Q, and 5Y/10Y Government Bond Futures (GB05F, GB10F) into core.market_derivatives_daily and staging.market_derivatives_staging. Enforces T+0 intraday transaction rules and VSDC margin requirement lookup.",
+      "dependencies": [
+        "F000",
+        "F001"
+      ],
+      "verification": "pytest tests/test_derivatives_crawler.py -v",
+      "state": "not_started",
+      "evidence": "Planned feature: Multi-asset derivative crawler supporting VN30 index futures and government bond futures for F501 Bot Arena and cross-asset hedging.",
+      "pros": [
+        "Enables T+0 intraday trading and directional hedging against market downturns",
+        "Captures market expectations via basis spread (Futures price minus Index spot)"
+      ],
+      "cons": [
+        "Higher volatility and leverage risk (17% margin requires strict stop-loss)",
+        "Monthly expiration rolls require roll-yield and continuous contract adjustment"
+      ],
+      "recommendation": [
+        "[ ] Implement vnstock/HNX derivatives endpoint ingestion in src/crawlers/derivatives.py",
+        "[ ] Create schema core.market_derivatives_daily with open_interest, basis, and contract_code",
+        "[ ] Write unit tests verifying T+0 settlement and multiplier 100,000 VND/point"
+      ],
+      "file_dependencies": [
+        "src/crawlers/derivatives.py",
+        "configs/duckdb_schema.sql",
+        "tests/test_derivatives_crawler.py"
+      ],
+      "run_command": "python -m src.crawlers.derivatives --sync",
+      "test_command": "pytest tests/test_derivatives_crawler.py -v"
+    },
+    {
+      "id": "F074",
+      "name": "Reference, Underlying Mapping & Daily Market Crawler for Covered Warrants (CW on HOSE)",
+      "behavior": "Ingests covered warrant master reference data (issuer CTCK, underlying equity symbol, exercise price, conversion ratio, expiration date, settlement type) and daily OHLCV into core.market_covered_warrants_daily. Maps warrants directly to underlying HOSE equities (FPT, MWG, VNM, HPG) with automated Black-Scholes implied volatility (IV) and premium calculation.",
+      "dependencies": [
+        "F000",
+        "F001",
+        "F002"
+      ],
+      "verification": "pytest tests/test_covered_warrants_crawler.py -v",
+      "state": "not_started",
+      "evidence": "Planned feature: Covered warrant crawler for retail asymmetric upside trading without margin debt on 10M VND accounts.",
+      "pros": [
+        "Allows small retail capital (10M VND) to gain leveraged upside exposure with strictly capped downside (maximum loss equals premium paid)",
+        "Wide universe of call warrants on VN30 liquid basket"
+      ],
+      "cons": [
+        "Time decay (Theta) accelerates rapidly near expiration",
+        "Liquidity varies significantly by issuing broker and market maker spread"
+      ],
+      "recommendation": [
+        "[ ] Crawl HOSE CW list and daily quotes via vnstock Reference & Market API",
+        "[ ] Map each CW to underlying stock in core.dim_symbol",
+        "[ ] Calculate delta, gamma, and breakeven spot price"
+      ],
+      "file_dependencies": [
+        "src/crawlers/covered_warrants.py",
+        "configs/duckdb_schema.sql",
+        "tests/test_covered_warrants_crawler.py"
+      ],
+      "run_command": "python -m src.crawlers.covered_warrants --sync",
+      "test_command": "pytest tests/test_covered_warrants_crawler.py -v"
+    },
+    {
+      "id": "F075",
+      "name": "Reference, Basket Holdings, Tracking Error & Daily NAV Crawler for Exchange Traded Funds (ETFs)",
+      "behavior": "Ingests daily close price, trading volume, official NAV per share, creation/redemption units, premium/discount to NAV, and monthly constituent basket weights for all Vietnam ETFs (E1VFVN30, FUEVFVND, FUESSVFL, FUESSV30, FUEVN100, FUEIP100, FUEKIV30) into core.market_etf_daily.",
+      "dependencies": [
+        "F000",
+        "F001",
+        "F002"
+      ],
+      "verification": "pytest tests/test_etf_crawler.py -v",
+      "state": "not_started",
+      "evidence": "Planned feature: ETF crawler for diversified equity and diamond basket investing on 10M VND retail accounts.",
+      "pros": [
+        "Provides instant diversification across VN30/VN Diamond/VNFinLead index baskets without stock-picking concentration risk",
+        "Low unit price (20,000 - 35,000 VND) ideal for 10M VND budget allocation"
+      ],
+      "cons": [
+        "Tracking error against benchmark index during illiquid market phases",
+        "Foreign ownership limit premiums on underlying constituents reflected in ETF market prices"
+      ],
+      "recommendation": [
+        "[ ] Ingest daily market prices and official fund NAV from fund management companies (Dragon Capital, VinaCapital, SSIAM)",
+        "[ ] Track historical premium/discount to NAV as arbitrage or sentiment signal",
+        "[ ] Add ETF symbols to core.dim_symbol with asset_class=ETF"
+      ],
+      "file_dependencies": [
+        "src/crawlers/etfs.py",
+        "configs/duckdb_schema.sql",
+        "tests/test_etf_crawler.py"
+      ],
+      "run_command": "python -m src.crawlers.etfs --sync",
+      "test_command": "pytest tests/test_etf_crawler.py -v"
+    },
+    {
+      "id": "F076",
+      "name": "Reference, Coupon Schedule & Market Price Crawler for Corporate & Government Bonds (HNX Bond)",
+      "behavior": "Ingests listed corporate bond master reference data (issuer, coupon rate, payment frequency, maturity date, credit rating, collateral type) and daily trading quotes/yield-to-maturity (YTM) from the HNX Corporate Bond trading system into core.market_bonds_daily. Enforces T+1 settlement rules.",
+      "dependencies": [
+        "F000",
+        "F001"
+      ],
+      "verification": "pytest tests/test_bonds_crawler.py -v",
+      "state": "not_started",
+      "evidence": "Planned feature: Corporate and government bond crawler for fixed-income yield and defensive asset allocation in Bot Arena.",
+      "pros": [
+        "Predictable cash flow from regular coupon payments and principal preservation",
+        "Defensive safe haven asset during equity bear markets (Situation B & E)"
+      ],
+      "cons": [
+        "Secondary market liquidity for individual corporate bond tickers can be thin",
+        "Par value standard of 100,000 VND requires careful position sizing on retail accounts"
+      ],
+      "recommendation": [
+        "[ ] Connect to HNX Bond portal / financial data provider for listed corporate and government bond series",
+        "[ ] Calculate yield-to-maturity (YTM) and duration for portfolio risk management",
+        "[ ] Implement T+1 settlement logic in market microstructure"
+      ],
+      "file_dependencies": [
+        "src/crawlers/bonds.py",
+        "configs/duckdb_schema.sql",
+        "tests/test_bonds_crawler.py"
+      ],
+      "run_command": "python -m src.crawlers.bonds --sync",
+      "test_command": "pytest tests/test_bonds_crawler.py -v"
+    },
+    {
       "id": "F008",
       "name": "Retry/reconciliation module",
       "behavior": "src/etl/retry_failed_jobs.py -- generic retry coordinator reading meta.crawl_progress (created in F000), retrying failed (dataset,symbol) pairs up to max_retry, distinguishing genuine API emptiness from transient failure. Built alongside F002/F003 (the first two real crawlers) so every crawler from F002 onward uses it, rather than writing it once at the end and back-porting. (Extended to coordinate retries for both micro F0xx and auxiliary macro F05x crawlers via meta.crawl_progress).",
@@ -1778,28 +1908,29 @@
     },
     {
       "id": "F501",
-      "name": "Multi-Bot Strategy Arena & Monte Carlo Decision Tournament across Vietnam Market Regimes",
-      "behavior": "Quantitative Monte Carlo decision tournament evaluating 5 distinct trading bot personas (Aggressive Dip Buyer, Conservative Capital Preserver, Momentum Chaser, Macro Regime Allocator, HybridACD Consistency Sniper) across 5 Vietnam market situations (Bull Euphoria, Bear Credit Crisis, Sideway Range-Bound, High-Noise Rumor Storm, Systemic Black Swan) using Stationary Block Bootstrap (10,000 synthetic paths): (1) Models strict Vietnam market microstructure constraints (T+2.5 settlement latency, exchange daily price limits +-7% HOSE / +-10% HNX / +-15% UPCOM, 0.15% brokerage fee + 0.10% sales tax, and execution slippage); (2) Evaluates tournament leaderboard via Deflated Sharpe Ratio (DSR per Bailey & Lopez de Prado 2014) correcting for N=5 multiple trials; (3) Measures tail risk via CVaR 95% and computes pairwise head-to-head win rate matrix; (4) Strictly read-only simulation engine with zero broker execution logic.",
+      "name": "Multi-bot strategy arena: registry + Monte Carlo microstructure simulator",
+      "behavior": "Quantitative Monte Carlo decision tournament evaluating 308 composite trading bots (signals S01-S21, filters S14-S23, overlays S09-S24, baselines S25-S26, and AI twins) across 5 Vietnam market situations (Bull Euphoria, Bear Credit Crisis, Sideway Range-Bound, High-Noise Rumor Storm, Systemic Black Swan) using Stationary Block Bootstrap: (1) Models strict Vietnam market microstructure constraints (T+2.5 settlement latency, exchange daily price limits +-7% HOSE / +-10% HNX / +-15% UPCOM, 0.15% brokerage fee + 0.10% sales tax, 0.10% slippage, and 25% NAV cap); (2) Evaluates tournament leaderboard via Deflated Sharpe Ratio (DSR per Bailey & Lopez de Prado 2014) correcting for both effective N=45 and raw N=308 multiple trials; (3) Measures tail risk via CVaR 95%, MaxDD along NAV curve, Probability of Backtest Overfitting (PBO), and pairwise head-to-head win rate matrix; (4) Strictly read-only simulation engine with zero broker execution logic (Rule B1).",
       "dependencies": [
         "F401",
         "F304",
         "F203"
       ],
-      "verification": "pytest tests/test_monte_carlo_arena.py -x",
+      "verification": "python -m src.arena.run --paths 10 --seed 20260101 --report out/f501_arena_report.json && pytest tests/test_bot_registry.py tests/test_arena_microstructure.py tests/test_arena_stats.py -v",
       "state": "passing",
-      "evidence": "PASSED (exit code 0). Verified via command: python -m pytest tests/test_monte_carlo_arena.py -v -x (6/6 passed in 1.65s) and verified regression-free in full composite suite python -m pytest tests/test_inference_service.py tests/test_feedback_log.py tests/test_continuous_training.py tests/test_monte_carlo_arena.py -v (30/30 passed in 53.42s). (1) 5 Distinct Bot Personas verified: distinct decision logic across positive, negative, and rumor events confirmed without bias. (2) Vietnam market microstructure constraints verified: T+2.5 settlement lock prevents premature selling on Day 2/3 (REJECTED_T25_LOCKED) and succeeds on Day 4 (T+3 open); 0.15% buy fee, 0.25% sell friction (fee+tax), and 0.10% slippage accurately enforced. (3) Stationary block bootstrap resampling verified: maintains temporal dependence and fat tails across 120-day synthetic paths. (4) Multi-situation tournament execution across 1,000 paths (out/f501_monte_carlo_arena_report.json): HybridACD Sniper Bot achieves 0.00% MaxDD and 0 losses in High-Noise Rumor Storm while Momentum Bot suffers 26.64% MaxDD; in Systemic Black Swan shock, HybridACD Sniper Bot delivers +11.19% return and 0.31 Sharpe while Momentum Bot loses -6.03%. (5) Bailey & Lopez de Prado Deflated Sharpe Ratio (DSR) strictly computed for N=5 trials and pairwise head-to-head win-rate matrix confirmed. (6) 100% strictly read-only compliance confirmed with zero broker order execution code.",
+      "evidence": "PASSED (exit code 0). Verified via command: pytest tests/test_bot_registry.py tests/test_arena_microstructure.py tests/test_arena_stats.py -v (13/13 passed in 2.35s) and tournament run python -m src.arena.run --paths 10 --seed 20260101 (308 bots evaluated across 5 situations in 3.1s). (1) 308 bots exported to out/f501_bot_registry.csv and imported into DuckDB arena.bot_registry. (2) Microstructure constraints strictly verified: T+2.5 sell lock rejects at day 2 and fills at day 3; 25% NAV cap clips orders; round-trip friction exactly matches fee+tax+slippage; +-7% HOSE price limits enforced; floor-locked stock rejected (REJECTED_FLOOR_NO_LIQUIDITY). (3) DSR deflated with both raw N=308 and effective N=45. (4) Look-ahead bias prevention and zero network/broker imports verified via AST. (5) Top performers: S13+S22 (Sentiment-shock fade + Regime gate). Strictly read-only simulation.",
       "pros": [
-        "Simulated Execution Sandbox: Connects model signal generation directly to simulated order execution, tracking realized slippage and paper PnL.",
-        "Safety Gate: Validates strategy profitability and execution stability before any live capital deployment."
+        "Comprehensive Strategy Coverage: 308 composite bots cover momentum, reversal, breakout, news sentiment, PEAD, insider buying, and quality filters.",
+        "Microstructure Fidelity: Realistic modeling of T+2.5 settlement, exchange price limits, and asymmetric floor liquidity.",
+        "Rigorous Multiple Testing Control: DSR corrected for raw N=308 and effective N=45 clusters."
       ],
       "cons": [
-        "Paper trading simulations cannot fully capture live market impact or liquidity withdrawal during sudden flash crashes."
+        "Stationary bootstrap assumes piecewise stationary block distribution and does not simulate intraday order book queuing."
       ],
       "recommendation": [
-        "Incorporate conservative slippage penalties and the Almgren-Chriss market impact model into paper execution simulations."
+        "Incorporate tick-level volume profile and order book level-2 depth simulations when higher-frequency tick data becomes available."
       ],
-      "run_command": "python -m src.pipeline.monte_carlo_bot_arena --paths 1000 --report out/f501_monte_carlo_arena_report.json",
-      "test_command": "pytest tests/test_monte_carlo_arena.py -v"
+      "run_command": "python -m src.arena.run --paths 20 --seed 20260101 --report out/f501_arena_report.json",
+      "test_command": "pytest tests/test_bot_registry.py tests/test_arena_microstructure.py tests/test_arena_stats.py -v"
     },
     {
       "id": "F901",

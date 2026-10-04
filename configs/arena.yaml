@@ -1,0 +1,60 @@
+# configs/arena.yaml
+# Vietnam Market Microstructure & Multi-Asset Multi-Bot Strategy Arena Assumptions
+
+fees:
+  buy_pct: 0.0015            # ASSUMPTION: 0.15% brokerage commission on buy (SSI/VND/DNSE standard tier)
+  sell_pct: 0.0015           # ASSUMPTION: 0.15% brokerage commission on sell
+  sell_tax_pct: 0.0010       # STATUTORY: 0.10% Personal Income Tax on transfer value (Circular 111/2013/TT-BTC)
+  slippage_pct: 0.0010       # ASSUMPTION: 0.10% execution slippage against mid-price
+  futures_fee_per_contract: 5000.0 # 5,000 VND per VN30F1M contract exchange + broker fee
+
+settlement:
+  min_hold_sessions: 3       # REGULATORY CONVENTION: T+2.5 settlement for Equities/ETFs/CW (session T+3)
+  futures_hold_sessions: 0   # T+0 intraday settlement for VN30 Index Futures (HĐTL chỉ số VN30)
+  bond_hold_sessions: 1      # T+1 settlement for Corporate/Government Bonds
+
+price_limit:
+  HOSE: 0.07                 # STATUTORY: +-7% daily band on reference price
+  HNX: 0.10                  # STATUTORY: +-10% daily band
+  UPCOM: 0.15                # STATUTORY: +-15% daily band
+  VN30F: 0.07                # STATUTORY: +-7% daily band for VN30 Index Futures
+
+risk_rails:
+  nav_cap_per_symbol: 0.25   # MAXIMUM CONCENTRATION: Cap at 25% of NAV per individual ticker/contract
+  allow_margin: false        # Long-only unleveraged compliance for equities
+  initial_cash: 100000000.0   # MANDATORY USER BUDGET: 100,000,000 VND per bot
+  min_order_lot: 1           # ODD-LOT COMPLIANCE: 1 share minimum lot for retail 10M VND accounts
+
+assets:
+  supported_classes:
+    - EQUITY                 # Cổ phiếu niêm yết (HOSE, HNX, UPCOM)
+    - INDEX_FUTURE           # Hợp đồng tương lai chỉ số VN30 (VN30F1M)
+    - BOND_FUTURE            # Hợp đồng tương lai TPCP 5 năm (GB05F)
+    - COVERED_WARRANT        # Chứng quyền có bảo đảm (CW niêm yết HOSE)
+    - ETF                    # Quỹ hoán đổi danh mục (E1VFVN30, FUEVFVND, FUESSVFL)
+    - CORP_BOND              # Trái phiếu doanh nghiệp niêm yết HNX Bond
+  specs:
+    VN30F1M:
+      type: INDEX_FUTURE
+      point_multiplier: 100000.0  # 100,000 VND / index point
+      initial_margin_rate: 0.17   # 17% initial margin requirement (VSDC)
+      settlement_days: 0          # T+0 intraday
+    GB05F:
+      type: BOND_FUTURE
+      contract_value: 1000000000.0 # 1 tỷ VND / contract
+      initial_margin_rate: 0.025  # 2.5% margin
+      settlement_days: 0          # T+0
+    E1VFVN30:
+      type: ETF
+      settlement_days: 3          # T+2.5
+      nav_per_share: 26500.0
+    FUEVFVND:
+      type: ETF
+      settlement_days: 3          # T+2.5
+      nav_per_share: 34200.0
+
+bootstrap:
+  num_paths: 1000            # Configured Monte Carlo stationary block bootstrap paths
+  mean_block_length_days: 10 # Politis-Romano mean block length (L) in trading sessions
+  path_horizon_days: 60      # Simulation horizon per synthetic path
+  seed: 20260101             # Deterministic seed for bit-identical reproducibility

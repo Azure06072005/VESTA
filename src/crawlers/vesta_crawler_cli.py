@@ -291,21 +291,28 @@ def inspect_database_status(target_db: str) -> None:
         date_col = spec["date_col"]
         sym_col = spec["sym_col"]
 
-        # Điều hướng bảng sang news_db hoặc ohlcv_db nếu cần
+        # Điều hướng bảng sang news_db hoặc ohlcv_db nếu cần, có fallback an toàn
         query_tbl = tbl
         if spec.get("type") == "news":
             query_tbl = f"news_db.{tbl}"
         elif "market_ohlcv" in tbl or "market_index" in tbl or "1m" in tbl:
             query_tbl = f"ohlcv_db.{tbl}"
 
+        row = None
         try:
             sym_expr = f"COUNT(DISTINCT {sym_col})" if sym_col else "'-'"
             date_expr = f"CAST(MIN({date_col}) AS VARCHAR), CAST(MAX({date_col}) AS VARCHAR)"
             query = f"SELECT COUNT(*), {sym_expr}, {date_expr} FROM {query_tbl}"
             row = con.execute(query).fetchone()
         except Exception:
-            print(f"{name:<32} | {'CHƯA TẠO':>12} | {'-':>8} | {'-':<11} | {'-':<11} | [!] Bảng chưa được khởi tạo")
-            continue
+            # Fallback đọc trực tiếp bảng từ target_db nếu catalog alias chưa attach được
+            try:
+                query_fallback = f"SELECT COUNT(*), {sym_expr}, {date_expr} FROM {tbl}"
+                row = con.execute(query_fallback).fetchone()
+            except Exception:
+                print(f"{name:<32} | {'CHƯA TẠO':>12} | {'-':>8} | {'-':<11} | {'-':<11} | [!] Bảng chưa được khởi tạo")
+                continue
+
 
         total_rows = row[0]
         total_syms = row[1] if row[1] != "-" else "-"
@@ -990,6 +997,13 @@ def parse_args() -> argparse.Namespace:
     crawl_parser.add_argument("--force", action="store_true", help="Bắt buộc cào đè, không dùng checkpoint bỏ qua")
     crawl_parser.add_argument("--limit", type=int, default=None, help="Giới hạn số lượng mã để test")
 
+    # 3. Lệnh pipeline (Điều phối chuỗi F000 -> F501)
+    pipeline_parser = subparsers.add_parser("pipeline", help="Điều phối toàn bộ chuỗi quy trình lượng hóa (F000 -> F501)")
+    pipeline_parser.add_argument("--all", action="store_true", help="Chạy toàn bộ 5 tầng từ F000 đến F501")
+    pipeline_parser.add_argument("--stage", choices=["crawl", "preprocess", "model", "serving", "arena"], default="all", help="Chạy 1 tầng cụ thể")
+    pipeline_parser.add_argument("--paths", type=int, default=10, help="Số Monte Carlo paths cho F501 Arena")
+    pipeline_parser.add_argument("--seed", type=int, default=20260101, help="Seed ngẫu nhiên")
+
     # Tương thích nếu người dùng gõ trực tiếp --status hoặc --check
     parser.add_argument("--status", action="store_true", help="Kiểm tra trạng thái nhanh")
     parser.add_argument("--db", default=DEFAULT_TARGET_DB, help="Đường dẫn DuckDB")
@@ -1000,8 +1014,29 @@ def parse_args() -> argparse.Namespace:
 def main() -> int:
     args = parse_args()
 
-    # 1. Xử lý lệnh status / check
+    # 1. Xử lý lệnh pipeline (F000 -> F501)
+    if args.command == "pipeline":
+        from src.pipeline.vesta_pipeline_orchestrator import VestaPipelineOrchestrator
+        target_db = getattr(args, "db", DEFAULT_TARGET_DB)
+        orchestrator = VestaPipelineOrchestrator(target_db=target_db)
+        if args.stage and args.stage != "all":
+            if args.stage == "arena":
+                orchestrator.run_stage_arena(paths_per_situation=args.paths, seed=args.seed)
+            elif args.stage == "crawl":
+                orchestrator.run_stage_crawl()
+            elif args.stage == "preprocess":
+                orchestrator.run_stage_preprocess()
+            elif args.stage == "model":
+                orchestrator.run_stage_model()
+            elif args.stage == "serving":
+                orchestrator.run_stage_serving()
+        else:
+            orchestrator.run_full_pipeline(paths_per_situation=args.paths)
+        return 0
+
+    # 2. Xử lý lệnh status / check
     if getattr(args, "status", False) or args.command in ("status", "check"):
+
         target_db = getattr(args, "db", DEFAULT_TARGET_DB)
         inspect_database_status(target_db)
         return 0

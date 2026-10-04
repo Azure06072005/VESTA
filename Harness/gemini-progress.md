@@ -1182,6 +1182,73 @@ p.isfinite trên chuỗi return, triệt tiêu hoàn toàn 1,038 sự kiện có
   4. **Kiểm Thử Đơn Vị & Hồi Quy Toàn Diện**:
      - `tests/test_eod_reconciliation_worker.py`: 4/4 PASSED (initialization, dry-run, reconciliation cycle, Rule B1 compliance).
      - Bộ kiểm thử hồi quy toàn bộ Tier F4**: **28/28 tests PASSED 100%** trong 76.56s.
-- Next Session Should: Tiến hành trạm tiếp theo: Chuẩn bị tài liệu & thủ tục nghiệm thu cho Tier F9xx (Hành lang pháp lý F901 & Môi trường Sandbox F902).
+- Next Session Should: Tiến hành trạm tiếp theo: F501 Multi-Bot Strategy Arena.
+
+---
+
+## Session 38: 2026-10-03 — Triển Khai Toàn Diện F501: Multi-Bot Strategy Arena & Monte Carlo Simulator (308 Bots)
+- Branch: main
+- Status: Triển khai hoàn tất đấu trường đa chiến lược F501 Multi-Bot Arena với 308 bots (155 Non-AI bots + 153 AI twins), mô phỏng vi cấu trúc thị trường Việt Nam (T+2.5, biên độ +-7% HOSE, thuế/phí/trượt giá, trần 25% NAV), tính toán DSR điều chỉnh đa thử nghiệm (raw N=308 và effective N=45), CVaR95, MaxDD, PBO, ma trận đối đầu H2H. 100% unit tests PASSED (13/13).
+- Completed:
+  1. **Khởi Tạo Tài Liệu & Cấu Hình**:
+     - Tạo `docs/F501_INSTRUCTION.md` ghi nhận toàn bộ đặc tả kỹ thuật và 3 quyết định cốt lõi (D1, D2, D3).
+     - Tạo `configs/arena.yaml` chứa toàn bộ giả định vi cấu trúc thị trường (phí mua 0.15%, phí bán 0.15%, thuế TNCN 0.10%, trượt giá 0.10%, T+2.5 lock, trần 25% NAV).
+  2. **Bộ Đăng Ký Chiến Lược (Bot Registry - M1)**:
+     - Tạo `src/arena/bot_registry.py` cấu thành 308 bots từ 17 signals (S01-S21), 5 filters (S14-S23), 2 overlays/sizing (S09, S24) và 2 baselines (S25, S26).
+     - Xuất bản tệp `out/f501_bot_registry.csv` với các cột: `botID, strategyID, strategy_details, AImodel, ai_role`.
+     - Nạp an toàn vào cơ sở dữ liệu DuckDB: `arena.bot_registry` (308 dòng).
+  3. **Động Cơ Vi Cấu Trúc Thị Trường Việt Nam (Microstructure Engine - M2)**:
+     - Tạo `src/arena/microstructure.py`: kiểm soát lệnh mua/bán, khóa T+2.5 (ngày 2 reject, ngày 3 fill), kiểm tra biên độ trần/sàn, từ chối bán khi kịch sàn trắng bên mua (`REJECTED_FLOOR_NO_LIQUIDITY`), kiểm soát trần danh mục 25% NAV.
+  4. **Giao Thức Bot & Đánh Giá Đa Chiến Lược (Bots Protocol - M3)**:
+     - Tạo `src/arena/bots.py`: Lớp `CompositeBot` định tuyến và thực thi kết hợp các component hàm thuần túy (Pure functions) không look-ahead bias.
+  5. **Bộ Sinh Kịch Bản Bootstrap Khối Tĩnh (Scenarios & Bootstrap - M4)**:
+     - Tạo `src/arena/scenarios.py`: Mô phỏng 5 tình huống thị trường (Bull Euphoria, Bear Credit Crisis, Sideway Range-Bound, High-Noise Rumor Storm, Systemic Black Swan) với thuật toán Politis & Romano (1994).
+  6. **Đo Lường Thống Kê & DSR (Stats Engine - M5)**:
+     - Tạo `src/arena/stats.py`: Công thức Bailey & Lopez de Prado (2014) Deflated Sharpe Ratio (với raw N=308 và effective N=45), CVaR 95%, MaxDD trên đường cong NAV, PBO (Probability of Backtest Overfitting).
+  7. **Bộ Điều Phối Giải Đấu (CLI Orchestrator - M6)**:
+     - Tạo `src/arena/run.py`: Chạy tournament, xuất báo cáo `out/f501_arena_report.json` và ma trận đối đầu `out/f501_h2h_matrix.csv`.
+  8. **Kiểm Thử & Nghiệm Thu**:
+     - `tests/test_bot_registry.py`: 4/4 PASSED.
+     - `tests/test_arena_microstructure.py`: 5/5 PASSED.
+     - `tests/test_arena_stats.py`: 4/4 PASSED (kiểm định 0% import mạng/broker, chống look-ahead bias, tính đơn điệu DSR, tính tất định bit-identical).
+     - Toàn bộ **13/13 tests PASSED 100%** trong 2.36s.
+  9. **Đồng Bộ Harness**:
+     - Cập nhật `Harness/DECISIONS.md`.
+     - Cập nhật `Harness/feature_list.json` cho F501 (`passing`).
+- Next Session Should: Tiếp tục chuyển giao tài liệu & thủ tục nghiệm thu cho Tier F9xx (Hành lang pháp lý F901 & Môi trường Sandbox F902).
+
+## Session 34 — 2026-10-04 (F501 Retail 10M VND, Multi-Asset Expansion & End-to-End Pipeline Sync)
+- Branch: main
+- Status: Hoàn thành 100% yêu cầu người dùng:
+  1. **Thiết Lập Vốn Khởi Điểm 10,000,000 VNĐ / Bot**:
+     - Cập nhật `configs/arena.yaml` và `src/arena/microstructure.py`: `initial_cash = 10,000,000.0` VNĐ, trần 25% NAV (2.5M VNĐ), hỗ trợ khớp lệnh lô lẻ odd-lot (`min_order_lot = 1`).
+     - Sửa đổi `src/arena/bots.py`: Định cỡ lệnh linh hoạt `shares_to_buy = max(1, int(target_val // curr_price))` thay vì ép cứng `max(100, ...)`.
+  2. **Mở Rộng Đa Tài Sản (Multi-Asset Trading Universe)**:
+     - Thêm phân loại `AssetClass` (EQUITY, INDEX_FUTURE, BOND_FUTURE, COVERED_WARRANT, ETF, CORP_BOND) và hàm `detect_asset_class()`.
+     - Phái sinh VN30 (`VN30F1M`): T+0 intraday settlement, hệ số 100,000 đ/điểm, ký quỹ 17%, phí 5,000 đ/HĐ.
+     - Trái phiếu Doanh nghiệp & CP: T+1 settlement.
+     - Cổ phiếu, Chứng quyền CW, Quỹ ETF: T+2.5 settlement.
+  3. **Cập Nhật Feature List (Harness)**:
+     - Đã thêm 4 tính năng mới vào `Harness/feature_list.json` cho bản cập nhật tiếp theo:
+       * `F073`: Reference & Daily OHLCV Crawler for Derivatives (VN30F & GB05F).
+       * `F074`: Reference & Daily Market Crawler for Covered Warrants (CW on HOSE).
+       * `F075`: Reference & Daily NAV Crawler for Exchange Traded Funds (ETFs).
+       * `F076`: Reference & Market Price Crawler for Corporate & Government Bonds (HNX Bond).
+  4. **Kiểm Tra Hệ Thống Cào & Đồng Bộ Chuỗi Pipeline (F000 -> F501)**:
+     - Tạo bộ điều phối trung tâm: `src/pipeline/vesta_pipeline_orchestrator.py` liên kết 5 tầng:
+       * Tầng 1: CRAWL (F000-F008/F073-F076)
+       * Tầng 2: PREPROCESS (F101-F106 PIT Join)
+       * Tầng 3: MODEL (F201-F305/F403 Multimodal PhoBERT + Cross-Attention Fusion Checkpoint)
+       * Tầng 4: SERVING (F401-F402 Feedback Loop)
+       * Tầng 5: BOT ARENA (F501 Vốn 10M VNĐ, 308 Bots, 5 Kịch bản)
+     - Đồng bộ vào CLI: Subcommand `python -m src.crawlers.vesta_crawler_cli pipeline --all`.
+     - Đồng bộ vào Desktop GUI (`vesta_crawler_gui.py`): Tích hợp Tab mới "🚀 Điều Phối Toàn Bộ Pipeline (F000 ➔ F501)" với lựa chọn tầng, thanh tiến độ, nút chạy 1-click và bảng xếp hạng Top Bots trực quan.
+  5. **Kiểm Thử Toàn Diện**:
+     - `pytest tests/test_arena_microstructure.py`: 8/8 PASSED.
+     - `pytest tests/test_arena_stats.py`: 4/4 PASSED.
+     - Toàn bộ 12/12 unit tests đạt 100% PASS.
+- Next Session Should: Tiếp tục thực hiện live smoke test pipeline vào ngày mai và theo dõi hành vi tự chọn chiến lược của 308 bot trên dữ liệu mới nhất.
+
+
 
 
