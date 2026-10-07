@@ -13,28 +13,31 @@ import duckdb
 
 # Single source of truth for the DB location. db/ is gitignored (see
 # conventions.md "data/ and out/... are gitignored" pattern extended to db/).
+ADMIN_DIR = pathlib.Path(__file__).resolve().parents[2] / "db" / "admin"
+ADMIN_DIR.mkdir(parents=True, exist_ok=True)
+
 DB_PATH = pathlib.Path(
     os.environ.get(
         "VESTA_DB_PATH",
-        pathlib.Path(__file__).resolve().parents[2] / "db" / "vesta_snapshot.duckdb",
+        ADMIN_DIR / "vesta_snapshot.duckdb",
     )
 )
 INTRADAY_DB_PATH = pathlib.Path(
     os.environ.get(
         "VESTA_INTRADAY_DB_PATH",
-        pathlib.Path(__file__).resolve().parents[2] / "db" / "vesta_ohlcv.duckdb",
+        ADMIN_DIR / "vesta_ohlcv.duckdb",
     )
 )
 OHLCV_DB_PATH = pathlib.Path(
     os.environ.get(
         "VESTA_OHLCV_DB_PATH",
-        pathlib.Path(__file__).resolve().parents[2] / "db" / "vesta_ohlcv.duckdb",
+        ADMIN_DIR / "vesta_ohlcv.duckdb",
     )
 )
 NEWS_DB_PATH = pathlib.Path(
     os.environ.get(
         "VESTA_NEWS_DB_PATH",
-        pathlib.Path(__file__).resolve().parents[2] / "db" / "vesta_news.duckdb",
+        ADMIN_DIR / "vesta_news.duckdb",
     )
 )
 SCHEMA_SQL_PATH = (

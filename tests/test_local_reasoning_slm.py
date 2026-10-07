@@ -180,3 +180,33 @@ def test_cache_liveness_performance():
     # Second call should hit 30s cache
     t0 = engine.generate_thesis(headline="Test headline 2")
     assert t0.latency_ms < 50.0  # Fast sub-50ms execution
+
+
+def test_transformers_backend_configuration():
+    """Verifies TransformersSLMBackend properties and lazy loading."""
+    from models.local_reasoning_slm import TransformersSLMBackend
+
+    backend = TransformersSLMBackend(
+        model_name="Qwen/Qwen2.5-3B-Instruct",
+        device="cuda",
+        load_in_4bit=True,
+        lazy_load=True,
+    )
+    assert backend.model_name == "Qwen/Qwen2.5-3B-Instruct"
+    assert backend.load_in_4bit is True
+    assert backend.is_available() is False  # Lazy load not triggered yet
+
+
+def test_model_diagnostics():
+    """Verifies operational diagnostics for SLM engine."""
+    engine = LocalReasoningSLMEngine()
+    diag = engine.get_model_diagnostics()
+
+    assert "hf_repo_id" in diag
+    assert diag["hf_repo_id"] == "Qwen/Qwen2.5-3B-Instruct"
+    assert "backend" in diag
+    assert "vram_allocated_mb" in diag
+    assert "vram_budget_mb" in diag
+    assert diag["vram_budget_mb"] == 2500.0
+    assert "transformers_loaded" in diag
+

@@ -1,14 +1,6 @@
 ---
 
-<!-- vnai-bootstrap |
-
----
-name: vnstock-bootstrap
-description: Reference for writing code that uses the vnstock ecosystem (vnstock, vnstock_data, vnstock_ta, vnstock_news, vnstock_pipeline) and for installing or updating those packages. Use only when the user's task involves vnstock.
-version: 3.1.0
-last_updated: 27/09/2026
----
-
+<!-- vnai-bootstrap | name: vnstock-bootstrap | version: 3.1.0 | last_updated: 27/09/2026 -->
 # Vnstock — reference for AI assistants
 
 > **Về khối này (dành cho người dùng).** Thư viện `vnstock` ghi khối này vào tệp chỉ dẫn của trợ lý AI. Từ `vnai` 2.6.2, việc ghi chỉ xảy ra khi bạn bật (`vnstock.enable_agent()`), và nội dung nằm sẵn trong gói đã cài, không tải từ mạng. Các bản `vnai` 2.6.1 trở về trước tự ghi khi `import vnstock`: nâng cấp để dừng việc đó. Khối này chỉ là tài liệu tham khảo cách dùng thư viện. Gỡ: xem mục cuối, hoặc <https://vnstocks.com/docs/tai-lieu/vnstock-agent-skills>.

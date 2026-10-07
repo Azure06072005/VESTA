@@ -153,6 +153,10 @@ class HealthResponse(BaseModel):
     simhash_cache_size: int
     shareholder_registry_count: int
     vram_allocated_mb: float
+    slm_model: str = "Qwen/Qwen2.5-3B-Instruct"
+    slm_loaded: bool = False
+    slm_backend: str = "auto"
+    slm_diagnostics: Dict[str, Any] = Field(default_factory=dict)
 
 
 # =============================================================================
@@ -485,6 +489,7 @@ def healthcheck():
     except Exception:
         pass
 
+    slm_diag = engine.slm_engine.get_model_diagnostics()
     return HealthResponse(
         status="HEALTHY",
         device=engine.device,
@@ -493,6 +498,10 @@ def healthcheck():
         simhash_cache_size=engine.dedup_cache.size,
         shareholder_registry_count=len(shareholder_registry.records_by_symbol),
         vram_allocated_mb=round(vram_mb, 2),
+        slm_model=slm_diag.get("hf_repo_id", "Qwen/Qwen2.5-3B-Instruct"),
+        slm_loaded=slm_diag.get("transformers_loaded", False),
+        slm_backend=slm_diag.get("backend", "auto"),
+        slm_diagnostics=slm_diag,
     )
 
 

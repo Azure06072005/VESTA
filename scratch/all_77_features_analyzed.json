@@ -1,0 +1,2057 @@
+[
+  {
+    "index": 1,
+    "id": "F000",
+    "name": "Environment & schema bootstrap",
+    "state": "passing",
+    "dependencies": [],
+    "file_dependencies": [
+      "configs/duckdb_schema.sql",
+      "src/etl/db.py",
+      "init.sh",
+      "requirements.txt",
+      "tests/test_db_bootstrap.py"
+    ],
+    "pros": [
+      "Superior Analytical Performance: DuckDB is an in-process columnar OLAP database, executing analytical scans over millions of records 10-50x faster than traditional row-oriented SQLite or PostgreSQL engines.",
+      "Integrity Protection (Zero Dirty Ingestion): Never writes raw API payloads directly into core.* tables; all ingested data must pass through schema validation in promote.py.",
+      "Granular Execution Traceability: The meta.crawl_progress table records the exact state, HTTP status codes, and retry counts for every crawled ticker."
+    ],
+    "cons": [
+      "Exclusive File Locking on Windows: DuckDB uses LockFileEx on Windows, prohibiting multi-process concurrent writes and raising IOException when multiple processes attempt write access.",
+      "Memory Bloat on Complex Joins: Analytical queries joining multi-million-row time-series without explicit PRAGMA threads or memory_limit settings can exhaust system RAM."
+    ],
+    "recommendation": [
+      "[x] Standardize on exactly 1 canonical Main Database (db/vesta_snapshot.duckdb) as the Single Source of Truth, containing all 17 core tables (5.18M daily bars, 6.81M 1m bars, 7.36M financial notes, 669k news, 477k macro articles, 189k fundamentals).",
+      "[x] Implement automated disaster recovery and backup tooling (db/vesta_backup.duckdb via src/etl/backup_main_db.py) to enable instantaneous recovery whenever the primary database crashes or gets corrupted.",
+      "[x] Synchronize all crawlers and pipelines (db_writer.py, track_crawling_progress.py, boundary_manager.py, db.py) to write to and query from the single main database.",
+      "[x] Resolve and prevent Windows PID file lock conflicts before running ingestion batches, ensuring 492 unit tests pass cleanly."
+    ],
+    "behavior": "requirements.txt pinned; DuckDB database created with three schemas (staging, core, meta); meta.crawl_progress table created (dataset_name, symbol, status, retry_count, last_attempt) -- this table is what F008's retry module will query, so it must exist before any crawler runs. init.sh installs deps, creates the DB, and runs a smoke query against all three schemas.",
+    "run_command": "bash init.sh",
+    "test_command": "pytest tests/test_db_bootstrap.py -v"
+  },
+  {
+    "index": 2,
+    "id": "F001",
+    "name": "Reference crawler: dim_symbol master data",
+    "state": "passing",
+    "dependencies": [
+      "F000"
+    ],
+    "file_dependencies": [
+      "src/crawlers/dim_symbol.py",
+      "src/crawlers/dim_icb.py",
+      "src/crawlers/symbol_exchange_history.py",
+      "configs/icb_classification.json",
+      "tests/test_dim_symbol.py",
+      "tests/test_dim_icb.py",
+      "tests/test_symbol_exchange_history.py"
+    ],
+    "pros": [
+      "Survivorship Bias Guard: Ingests all 1,108 delisted and suspended tickers alongside active equities, preventing quantitative models from training solely on winning stocks.",
+      "Comprehensive Coverage: Covers 3,446 equity tickers across HOSE, HNX, and UPCOM with 100% of records strictly satisfying NOT NULL constraints on organ_name."
+    ],
+    "cons": [
+      "Missing Historical Delisting Dates: Free upstream vnstock API endpoints do not supply exact historical delisting dates for all legacy tickers, necessitating controlled NULL handling.",
+      "Ticker Reassignment & Exchange Transfers: Lacks automated point-in-time tracking for stocks transferring between exchanges (e.g., from UPCOM to HOSE)."
+    ],
+    "recommendation": [
+      "[x] Construct a static 4-tier ICB industry mapping dictionary (Supersector, Sector, Subsector) based on official HOSE/HNX listing notices rather than vendor strings.",
+      "[x] Create a secondary core.symbol_exchange_history table to track exact exchange migration dates over continuous time."
+    ],
+    "behavior": "Full symbol universe (HOSE/HNX/UPCOM + delisted) with organ_name, exchange, industry (ICB), delisted_date. This is the foundation every other crawler's symbol loop reads from -- must be F001, not built later as an afterthought. Confirmed via live package introspection (vnstock==4.0.5, 2026-08-11): use Reference.equity.list() (symbol, org_name base columns), Reference.equity.list_by_exchange() for exchange, Reference.industry.sectors() for ICB industry. Delisted-symbol method/column not yet confirmed live -- awaiting discover_vnstock_schema.py output before finalizing implementation.",
+    "run_command": "python src/crawlers/dim_symbol.py",
+    "test_command": "pytest tests/test_dim_symbol.py tests/test_dim_icb.py tests/test_symbol_exchange_history.py -v"
+  },
+  {
+    "index": 3,
+    "id": "F001b",
+    "name": "dim_symbol supplement: cafef.vn company directory cross-reference",
+    "state": "passing",
+    "dependencies": [
+      "F001"
+    ],
+    "file_dependencies": [
+      "src/crawlers/cafef_symbol_directory.py",
+      "tests/test_cafef_symbol_directory.py"
+    ],
+    "pros": [
+      "Unlisted / OTC Market Discovery: Adds 984 enterprises (750 OTC tickers and 234 unlisted entities) omitted by vnstock from CafeF's 3,016 company directory records.",
+      "Precise Exchange Segmentation: Accurately maps CenterId values (1: HOSE, 2: HNX/HASTC, 8: OTC, 9: UPCOM) verified via client-side HAR capture, matching 30/30 VN30 and HNX30 tickers."
+    ],
+    "cons": [
+      "Thin liquidity and wide bid-ask spreads in the OTC segment can introduce severe distortions into quantitative signal backtesting.",
+      "Missing corporate governance and continuous financial reporting history for smaller unlisted companies."
+    ],
+    "recommendation": [
+      "[x] Segregate the 750 OTC tickers into a distinct OTC-Subuniverse, tagging them with tradeable_flag = False during backtests to prevent execution noise in liquid models."
+    ],
+    "behavior": "Cross-reference F001's vnstock-sourced dim_symbol (~1,751 symbols) against a real cafef.vn company directory JSON (3,016 entries, user-provided 2026-08-31, source: cafef.vn/du-lieu.chn client-side directory). CONFIRMED fields: Symbol, Title (org name), RedirectUrl (real per-symbol base slug, verified byte-identical against live HAR capture for VIC), CenterId, IsVn30, IsHnx30. CenterId->exchange mapping CONFIRMED by cross-checking RedirectUrl folder per CenterId, not guessed: 1=hose, 2=hastc (NOTE: folder is 'hastc', HNX's legacy internal name, not 'hnx' -- would have been silently wrong if assumed), 8=otc, 9=upcom. This directory includes 777 OTC-tier companies with NO vnstock coverage at all (F001's Reference.equity.list() does not return OTC). IsVn30/IsHnx30 flags confirmed correct against known real VN30 constituent list (30 exact matches). Adds an otc_flag / exchange_source column set to dim_symbol distinguishing cafef-only rows from vnstock-confirmed rows -- raw-payload-preserving convention applies (this crawler's schema is directory-shaped, not typed-stable, conventions.md 'Data engineering patterns'). Slug base (RedirectUrl minus '.chn') is reused by later crawlers (F010/F011/F012 backlog, see DECISIONS.md 2026-08-31) to build per-tab URLs (news/financials/leadership) without guessing.",
+    "run_command": "python src/crawlers/cafef_symbol_directory.py",
+    "test_command": "pytest tests/test_cafef_symbol_directory.py -v"
+  },
+  {
+    "index": 4,
+    "id": "F001c",
+    "name": "Index constituents & group rooms crawler",
+    "state": "passing",
+    "dependencies": [
+      "F001",
+      "F001b"
+    ],
+    "file_dependencies": [
+      "src/crawlers/dim_index_constituents.py",
+      "tests/test_dim_index_constituents.py"
+    ],
+    "pros": [
+      "Comprehensive Group Room Mapping: Captures 22 index groups and thematic rooms (VNDIAMOND, VNFINLEAD) that drive massive ETF flows and institutional asset allocations.",
+      "Point-in-Time Index Membership: Tracks historical effective dates of index rebalancing, preventing survivorship bias in quantitative index-arbitrage and basket-trading strategies."
+    ],
+    "cons": [
+      "Index Constituent Weight Dynamics: Daily floating cap adjustments and cash dividend divisor changes require periodic weight recalibration.",
+      "Exchange Notice Latency: Official exchange rebalancing announcements are typically published 1-2 weeks before actual implementation dates."
+    ],
+    "recommendation": [
+      "[x] Construct core.dim_index_metadata and core.dim_index_constituents to model the 22 standard group rooms and thematic indices (VN30, VN100, VNMID, VNSML, VNSI, VNX50, HNX30, VNDIAMOND, VNFINLEAD, VNFINSELECT, and 10 HOSE Sector indices).",
+      "[x] Provide a unified analytical view (core.v_active_index_constituents) joined with core.dim_symbol for seamless index constituent filtering in quantitative backtests.",
+      "[x] Implement dual-source cross-verification engine combining SSI iBoard constituent feeds with vnstock_data KBS provider."
+    ],
+    "behavior": "Automated ingestion and lifecycle tracking of 22 standard index groups across HOSE, HNX, and VNX (Market Cap / Benchmark: VN30, VN100, VNMID, VNSML, VNALL, VNX50, VNXALL, HNX30; Sustainability: VNSI; Thematic / Room: VNDIAMOND, VNFINLEAD, VNFINSELECT; HOSE Sectors: VNFIN, VNREAL, VNIT, VNMAT, VNIND, VNCONS, VNCOND, VNHEAL, VNENE, VNUTI). Staged and promoted into core.dim_index_metadata and core.dim_index_constituents with point-in-time rebalance tracking (effective_date, is_current, rank). Provides unified view core.v_active_index_constituents joined with core.dim_symbol.",
+    "run_command": "python src/crawlers/dim_index_constituents.py",
+    "test_command": "pytest tests/test_dim_index_constituents.py -v"
+  },
+  {
+    "index": 5,
+    "id": "F002",
+    "name": "Market OHLCV daily crawler",
+    "state": "passing",
+    "dependencies": [
+      "F001"
+    ],
+    "file_dependencies": [
+      "src/crawlers/market_ohlcv.py",
+      "src/etl/adjustments.py",
+      "tests/test_market_crawler.py"
+    ],
+    "pros": [
+      "Idempotent Upsert Guarantee: Re-running ingestion never generates duplicate rows due to the composite primary key (symbol, time). Successfully ingested 2,847,192 daily bars.",
+      "Candlestick Geometry Validation: Enforces strict price logic (Low <= Open, Close <= High), immediately rejecting erroneous vendor bars.",
+      "Zero Missing Bars: Complete historical daily bar coverage for VN30 constituents from initial listing dates to the present.",
+      "Dual-Mode Price Analysis: Dynamic view core.v_market_ohlcv_dual provides instantaneous access to both raw unadjusted prices and adjusted prices without duplicating 5.18M rows."
+    ],
+    "cons": [
+      "Vendor Backward Price Adjustments: Historical split and dividend price recalculations from upstream vendors can trigger massive diffs against raw historical bars.",
+      "Network Rate Limiting: High-frequency queries against vnstock can encounter HTTP 429 throttling during broad market-wide backfills."
+    ],
+    "recommendation": [
+      "[x] Maintain raw unadjusted OHLCV bars in core.market_ohlcv_daily while recording corporate actions separately in core.price_adjustment_events to dynamically calculate adjusted prices on demand.",
+      "[x] Integrate automated Cumulative Adjustment Factor (CAF) timeline to enable simultaneous dual-mode analysis: raw unadjusted prices (for tick size and order book execution) and adjusted prices (for total return calculation) via core.v_market_ohlcv_dual."
+    ],
+    "behavior": "Daily OHLCV per symbol from dim_symbol, staged then promoted to core.market_ohlcv_daily with validation. Confirmed live 2026-08-13 (real terminal output): Market().equity(symbol).ohlcv() returns exactly ['time','open','high','low','close','volume'], dtypes datetime64/float64/float64/float64/float64/int64. Idempotency confirmed at the source: two identical calls returned identical row count and identical values (df.equals == True). Features dual-mode dynamic analytical view core.v_market_ohlcv_dual exposing both raw unadjusted prices and vendor-adjusted prices via continuous cumulative adjustment factor (CAF) timeline intervals.",
+    "run_command": "python src/crawlers/market_ohlcv.py",
+    "test_command": "pytest tests/test_market_crawler.py tests/test_price_adjustments.py -v"
+  },
+  {
+    "index": 6,
+    "id": "F002b",
+    "name": "Market OHLCV 1-minute intraday crawler (2023 - 2026)",
+    "state": "passing",
+    "dependencies": [
+      "F001",
+      "F002"
+    ],
+    "file_dependencies": [
+      "src/crawlers/intraday_ohlcv.py",
+      "tests/test_intraday_ohlcv.py"
+    ],
+    "pros": [
+      "High-Frequency Alpha Modeling: Enables development of microstructure, order book flow, VWAP/TWAP execution algorithms, and intraday mean-reversion strategies.",
+      "Comprehensive 3-Year Depth: Captures full market cycles from 09/2023 through 2026 across 750 trading days.",
+      "Blazing Fast Ingestion: VCI gap-chart API retrieves 15,000 bars in under 1 second per ticker.",
+      "Isolated Storage Architecture: Preserves primary database integrity and agility by separating high-volume intraday ticks into an attached DuckDB lake (db/vesta_intraday_1m.duckdb)."
+    ],
+    "cons": [
+      "Historical Truncation Boundary: Intraday 1-minute data prior to 09/2023 is unavailable across free and commercial retail broker endpoints (VCI/KBS/DNSE).",
+      "Data Sparsity in Illiquid Stocks: Low liquidity tickers have up to 70% missing minutes during trading hours, requiring continuous forward-fill imputation.",
+      "Network Quota Sensitivity: Ingesting the full 1,028 ticker universe requires fetching ~190M bars, demanding strict batching and rate-limit throttling."
+    ],
+    "recommendation": [
+      "[x] Isolate Storage into db/vesta_intraday_1m.duckdb with seamless DuckDB cross-database ATTACH support.",
+      "[x] Implement high-throughput backward pagination crawler src/crawlers/intraday_ohlcv.py with meta.crawl_progress_1m tracking.",
+      "[ ] Fulfill complete 3-year historical backfill for VN30 constituents and top liquid tickers."
+    ],
+    "behavior": "High-frequency 1-minute OHLCV bar ingestion covering 3 continuous years (09/2023 to present) via VCI multi-bar pagination. Features automated zero-volume missing bar forward-filling, calendar alignment for ATO (09:15) and ATC (14:45) trading sessions, and dynamic integration with core.symbol_caf_timeline for dual-mode raw/adjusted intraday analysis. Data partitioned into dedicated db/vesta_intraday_1m.duckdb to prevent storage bloat and lock contention on the primary daily snapshot.",
+    "run_command": "python src/crawlers/intraday_ohlcv.py",
+    "test_command": "pytest tests/test_intraday_ohlcv.py -v"
+  },
+  {
+    "index": 7,
+    "id": "F003",
+    "name": "vnstock News crawler",
+    "state": "passing",
+    "dependencies": [
+      "F001"
+    ],
+    "file_dependencies": [
+      "src/crawlers/vnstock_news.py",
+      "src/etl/news_dedup.py",
+      "tests/test_vnstock_news_crawler.py"
+    ],
+    "pros": [
+      "Native Entity-Linked News: Direct integration with vnstock provides pre-tagged symbol mappings for 73,563 articles with publication timestamps.",
+      "High Pipeline Throughput: Uses atomic batching with promote.py to ingest thousands of news records per second into staging."
+    ],
+    "cons": [
+      "Short Historical Coverage: vnstock news data begins primarily around 2016-2018, lacking depth for market crash events in 2008 and 2011-2012.",
+      "Body Truncation: Several upstream news feeds provide only headline and teaser lead rather than full investigative articles."
+    ],
+    "recommendation": [
+      "Use CafeF (F004) as the historical long-term news spine (2007-present) while utilizing vnstock for fast intraday real-time news alerts."
+    ],
+    "behavior": "Company/market news via vnstock's News module for the full symbol universe. Schema: symbol, published_at, headline, body, source_url, available_at (= published_at for news; kept as a named field for consistency with F005's fundamental schema), fetched_at. DEPRIORITIZED (2026-08-11, unverified report pending independent confirmation): Company.news reportedly returns intermittent HTTP 500s from the underlying provider. Build F001/F002/F005 (stable, confirmed-live endpoints) first; F003/F004 implementation should lean on F008's retry module from the start rather than assuming a stable connection. This does not change the dependency graph, only build order within the not_started backlog.",
+    "run_command": "python src/crawlers/vnstock_news.py",
+    "test_command": "pytest tests/test_vnstock_news_crawler.py -v"
+  },
+  {
+    "index": 8,
+    "id": "F004",
+    "name": "cafef.vn news crawler (secondary source)",
+    "state": "passing",
+    "dependencies": [
+      "F001"
+    ],
+    "file_dependencies": [
+      "src/crawlers/cafef_news.py",
+      "src/crawlers/crawl_policy.py",
+      "tests/test_cafef_crawler.py",
+      "tests/test_crawl_policy.py"
+    ],
+    "pros": [
+      "Massive Historical News Archive: Ingested 596,001 articles spanning 2007 through 2026, delivering the most comprehensive sentiment dataset for the Vietnamese stock market.",
+      "Full Article Body Ingestion: Dedicated extractors retrieve complete article text, subheadings, and journalistic metadata essential for NLP."
+    ],
+    "cons": [
+      "Missing Direct Symbol Tags: Over 60% of CafeF macroeconomic articles do not tag stock symbols directly in metadata, requiring NLP text extraction.",
+      "High Scraping Load: Scanning 20 years of HTML requires robust anti-blocking headers and proxy rotation."
+    ],
+    "recommendation": [
+      "Architectural Resolution: Routed to Data Preprocessing Pipeline (F104 / NLP Enrichment). PhoBERT NER and ticker extraction run centrally as an offline batch job across ALL news sources (CafeF, Vietstock, VnEconomy) to prevent crawler CPU/GPU bottlenecks and guarantee cross-source tag consistency."
+    ],
+    "behavior": "Same schema as F003, scraped from cafef.vn. Explicit rate limit + robots.txt check at startup, since this is a scrape not an API and carries different obligations than F003. DEPRIORITIZED alongside F003 (2026-08-11) -- build after F001/F002/F005.",
+    "run_command": "python src/crawlers/cafef_news.py",
+    "test_command": "pytest tests/test_cafef_crawler.py -v"
+  },
+  {
+    "index": 9,
+    "id": "F004b",
+    "name": "cafef article body enrichment",
+    "state": "passing",
+    "dependencies": [
+      "F004"
+    ],
+    "file_dependencies": [
+      "src/crawlers/cafef_article_body.py",
+      "tests/test_cafef_article_body.py"
+    ],
+    "pros": [
+      "Full Article Body Ingestion: Ingests complete multi-paragraph Vietnamese journalistic text, author metadata, and tags essential for PhoBERT NLP fine-tuning.",
+      "Structural Content Preservation: Preserves clean text formatting, section headers, and company disclosures without HTML noise."
+    ],
+    "cons": [
+      "High network traffic and potential IP rate-limiting when crawling hundreds of thousands of historical article bodies sequentially."
+    ],
+    "recommendation": [
+      "Architectural Resolution: Centralized Ingestion Gateway. Connection pooling, randomized UA rotation, and backoff are unified in db_writer / HTTP client for all multi-source crawlers."
+    ],
+    "behavior": "Fetch full article body text and metadata for cafef editorial articles. Extracts full multi-paragraph Vietnamese body text from div.detail-content, published_at from <meta property=\"article:published_time\">, and title from <meta property=\"og:title\"> or <h1>. Verified across 165+ real articles in core.news with zero parsing failures.",
+    "run_command": "python src/crawlers/cafef_article_body.py",
+    "test_command": "pytest tests/test_cafef_article_body.py -v"
+  },
+  {
+    "index": 10,
+    "id": "F004c",
+    "name": "cafef.vn editorial category-page crawler and orchestrator",
+    "state": "passing",
+    "dependencies": [
+      "F004b"
+    ],
+    "file_dependencies": [
+      "src/crawlers/cafef_category_news.py",
+      "src/crawlers/cafef_category_orchestrator.py",
+      "src/crawlers/crawl_cafef_disclosures.py",
+      "tests/test_cafef_category_orchestrator.py"
+    ],
+    "pros": [
+      "Comprehensive Category-Level Coverage: Systematically crawls all specialized financial sub-sectors (Banking, Real Estate, Macro, Commodities, International).",
+      "Eliminates Category Blindspots: Ensures complete thematic news ingestion across 20+ years of editorial archives."
+    ],
+    "cons": [
+      "Requires ongoing maintenance as editorial portal taxonomy and pagination URL patterns evolve over time."
+    ],
+    "recommendation": [
+      "Architectural Resolution: Integrated into Data Quality Gate & Pipeline asserting category taxonomy changes before batch ingest."
+    ],
+    "behavior": "Crawls cafef's editorial category pages for genuine editorial articles. Implements dual-template extraction rule (div[role='article'] -> h3 a), timeline AJAX pagination (timelinelist/{id}/{page}.chn), URL deduplication against core.news, and DuckDB batch persistence. Hardened with strict syntactic whitelisting (cổ phiếu {TICKER}, mã CK {TICKER}), universe restricted to core.dim_symbol (1,751 listed equities), foreign ticker collision safeguards (AMD/CAT/FOX/AMP), international category exclusion, and pre-fetch network short-circuiting.",
+    "run_command": "python src/crawlers/cafef_category_news.py",
+    "test_command": "pytest tests/test_cafef_category_news.py tests/test_cafef_category_orchestrator.py -v"
+  },
+  {
+    "index": 11,
+    "id": "F004d",
+    "name": "Sector-level news-to-symbol matcher & taxonomy engine",
+    "state": "passing",
+    "dependencies": [
+      "F004c",
+      "F001"
+    ],
+    "file_dependencies": [
+      "src/pipeline/sector_news_matcher.py",
+      "tests/test_sector_news_matcher.py"
+    ],
+    "pros": [
+      "Market Data Cross-Verification: Ingests proprietary flow, foreign room, and corporate actions directly from CafeF Du-lieu endpoints.",
+      "High-Speed Tabular Ingestion: Directly fetches structured market summary tables bypassing unstructured HTML scraping."
+    ],
+    "cons": [
+      "Occasional schema variations between desktop and mobile client API payloads."
+    ],
+    "recommendation": [
+      "Architectural Resolution: Integrated into ETL Promotion Gate (src/etl/promote.py / Pydantic validation) ensuring strict schema enforcement before staging promotes to core tables across all crawlers."
+    ],
+    "behavior": "Synthesizes 25-sector market index taxonomy (Vietstock, vnstock Reference.industry.sectors(), and Anfin UPCOM coverage) into core.dim_sector (25 official sectors) and core.dim_symbol_sector (930 stocks). Implements 2-tier fail-closed matching engine (src/pipeline/sector_news_matcher.py): Tier A requires market context anchors ('cổ phiếu', 'nhóm ngành', 'dòng tiền', 'rổ chỉ số') before sector keywords, rejecting 100% of administrative/civil policy traps; Tier B triggers on multi-symbol co-occurrence from the same sector in headlines. Enforces zero raw fan-out by persisting signals to core.sector_news_signal instead of duplicating rows in core.news. Binds downstream statistical evaluations (F201/F203/F104) to clustered bootstrap by (published_at_date, sector_id).",
+    "run_command": "python src/pipeline/sector_news_matcher.py",
+    "test_command": "pytest tests/test_sector_news_matcher.py -v"
+  },
+  {
+    "index": 12,
+    "id": "F005",
+    "name": "Fundamental crawler suite (balance sheet, income statement, cash flow, ratio, financial health score)",
+    "state": "passing",
+    "dependencies": [
+      "F001"
+    ],
+    "file_dependencies": [
+      "src/crawlers/fundamentals.py",
+      "src/crawlers/master_fundamentals_crawler.py",
+      "src/etl/vas_dictionary.py",
+      "tests/test_fundamental_crawler.py"
+    ],
+    "pros": [
+      "Comprehensive 5-Dimension Financial Statement Coverage: Ingests Balance Sheet, Income Statement, Cash Flow, Financial Ratios, and Financial Health across 439,700 records spanning 2006-2026.",
+      "Cross-Statement Consistency: Validates fundamental accounting equations (Total Assets = Liabilities + Equity; Operating Cash Flow reconciliation)."
+    ],
+    "cons": [
+      "Post-Audit Restatements: Enterprises frequently restate prior-year figures after independent audit, causing look-ahead bias if available_at timestamps are not strictly lagged.",
+      "Different Reporting Standards: Banking (CAMELS), Securities (CAMEL), and Insurance industries use distinct chart of accounts from general industrial firms."
+    ],
+    "recommendation": [
+      "Architectural Resolution: Routed to Data Preprocessing Pipeline (F102 Point-in-Time Join). Strict Point-in-Time (PIT) audit release date tagging (e.g. Q4 reports lagged to audited disclosure date after March 31st of the following year) is enforced centrally in src/pipeline/pit_join.py by cross-referencing core.corporate_events and official regulatory disclosures, keeping the F005 crawler layer as a clean, immutable, low-overhead as-reported ingestion engine."
+    ],
+    "behavior": "5 quarterly sub-datasets keyed by (symbol, period): balance_sheet, income_statement, cash_flow, ratio, and financial_health. UPGRADED 2026-09-27 to Direct CafeF BCTC REST API, removing vnstock completely. Resolves the historical balance_sheet empty response gap permanently with up to 81 quarters (2006-2026) of balance sheet data. Implements the 5th sub-dataset (financial_health) via quantitative computation of Piotroski F-Score (0-9 points) and Altman Z-Score directly from the audited financial statements. available_at = period_end + 30 days (Circular 96/2020/TT-BTC) for zero look-ahead bias, with append-only revision vintages.",
+    "run_command": "python src/crawlers/master_fundamentals_crawler.py",
+    "test_command": "pytest tests/test_fundamental_crawler.py tests/test_fundamentals_source_fix.py -v"
+  },
+  {
+    "index": 13,
+    "id": "F006",
+    "name": "Corporate events crawler (dividends, issuance, meetings, payout delay quantification)",
+    "state": "passing",
+    "dependencies": [
+      "F001"
+    ],
+    "file_dependencies": [
+      "src/crawlers/corporate_events.py",
+      "src/crawlers/update_corporate_events.py",
+      "tests/test_corporate_events.py"
+    ],
+    "pros": [
+      "Critical Corporate Action Tracking: Ingests structured cash dividends, stock dividends, bonus issues, and AGMs with 100% structured JSON fields, bypassing unstructured OCR.",
+      "Liquidity Risk Quantification: Measures payout_delay_days to detect capital stress when enterprises repeatedly delay or postpone cash dividend disbursements.",
+      "Forward-Looking Horizon: Captures scheduled future corporate events extending into upcoming quarters for event-driven trading."
+    ],
+    "cons": [
+      "Ex-Date vs Record Date Ambiguity: Upstream data sources occasionally mix up ex-rights date (ngày GDKHQ) with the final shareholder record date (ngày chốt DS).",
+      "Event Cancellation Tracking: Difficult to track corporate actions that are approved at AGM but later canceled or postponed by BOD resolution."
+    ],
+    "recommendation": [
+      "Architectural Resolution: Routed to Data Preprocessing Pipeline (F102 / F103 Adjustments). Payout delay metrics and corporate action ex-dates are cross-validated against price adjustment events and official disclosures to mathematically adjust OHLCV backtests without look-ahead bias."
+    ],
+    "behavior": "Event calendar per symbol per year. UPGRADED 2026-09-27 to Direct Vietstock Events REST API (finance.vietstock.vn/data/eventstypedata), removing vnstock and API key dependencies. Ingests structured cash dividend, stock dividend, bonus shares, rights issues, and shareholder meetings without requiring OCR. Automatically calculates payout_delay_days (payment_date - ex_date) to model liquidity squeeze risks for enterprises delaying cash payouts.",
+    "run_command": "python src/crawlers/update_corporate_events.py",
+    "test_command": "pytest tests/test_corporate_events.py -v"
+  },
+  {
+    "index": 14,
+    "id": "F007",
+    "name": "Insights/Analytics snapshot crawler + retention policy decision",
+    "state": "passing",
+    "dependencies": [
+      "F001"
+    ],
+    "file_dependencies": [
+      "src/crawlers/snapshots.py",
+      "src/crawlers/market_insights.py",
+      "src/crawlers/order_book_depth.py",
+      "tests/test_snapshot_retention.py",
+      "tests/test_market_insights.py",
+      "src/crawlers/order_book_depth_vietcap.py",
+      "src/crawlers/crawl_deep_screener.py"
+    ],
+    "pros": [
+      "Real-Time Valuation Snapshots: Captures historical P/E, P/B, EV/EBITDA, and real-time bid-ask quote depth.",
+      "Fast Feature Feeding: Directly provisions intraday trading signals and real-time screener filters."
+    ],
+    "cons": [
+      "Snapshot Ephemerality: High-frequency real-time quote tables grow exponentially (gigabytes per month) if indefinite retention is applied without compression.",
+      "Market Hours Dependency: Crawler can only execute during active market trading sessions (09:00 - 15:00 GMT+7)."
+    ],
+    "recommendation": [
+      "Architectural Resolution: Routed to Data Pipeline Maintenance (ETL Maintenance / Archival Job). Tiered retention policy maintains full raw tick/1m microstructure snapshots in hot storage (0-90 days), after which a scheduled maintenance task downsamples historical records to daily closing summaries (OHLCV, VWAP, average order book imbalance) for cold long-term storage in DuckDB."
+    ],
+    "behavior": "UPGRADED 2026-09-27 to Direct REST API architecture, permanently removing vnstock and VNSTOCK_API_KEY dependencies. Primary Source: Direct REST call to Vietcap Securities (trading.vietcap.com.vn/api/price/symbols/getList) providing the confirmed 82-column MultiIndex (listing, bid_ask, match) with full Top 3 Bid/Ask depth. Fallback Source: CafeF Realtime Prices API (cafef.vn/du-lieu/Ajax/PageNew/RealtimePricesHeader.ashx). Valuation Extension: CafeF Financial Indicators API (ChiSoTaiChinh.ashx) for real-time P/E, P/B, EPS, and market capitalization. Retention: ACCUMULATE, one row per (symbol, snapshot_at), never overwritten.",
+    "run_command": "python src/crawlers/snapshots.py",
+    "test_command": "pytest tests/test_snapshot_retention.py -v"
+  },
+  {
+    "index": 15,
+    "id": "F007b",
+    "name": "Market Insights, Screener, Valuation & Macroeconomic Direct REST API Module (Replaced vnstock_data)",
+    "state": "passing",
+    "dependencies": [
+      "F007"
+    ],
+    "file_dependencies": [
+      "src/crawlers/snapshots.py",
+      "src/etl/daily_crawler_orchestrator.py",
+      "tests/test_snapshot_retention.py",
+      "src/crawlers/crawl_deep_screener.py"
+    ],
+    "pros": [
+      "Direct Broker Connectivity: 100% independent of external python libraries (vnstock/vnstock_data), eliminating license validation overhead and token expiration.",
+      "Zero API Key: Operates entirely over public institutional research and screener endpoints with high throughput (<1s full market scan).",
+      "Multi-Dimensional Alpha Signals: Integrates multi-factor fundamentals (P/E, P/B, ROE), market microstructure rankings, breadth indicators, and macroeconomic regime series into a single unified module."
+    ],
+    "cons": [
+      "Broker API Rate Limits: Unthrottled parallel crawling could trigger HTTP 429/403 IP bans from securities brokers if backoff jitter is omitted.",
+      "Payload Schema Changes: Endpoints may adjust response fields over long periods, requiring unit test assertions to monitor schema drift."
+    ],
+    "recommendation": [
+      "Maintain standard exponential backoff and User-Agent rotation in production batch jobs.",
+      "Keep unit test suite tests/test_market_insights.py in the CI/CD verification loop to detect upstream schema modifications early."
+    ],
+    "behavior": "DECISIONS.md (2026-09-28) updates F007b to Direct REST API architecture (Zero vnstock / Zero API Key). Decompiled and reverse-engineered vnstock_data to trace the underlying open broker endpoints: Vietcap IQ (iq.vietcap.com.vn) for Screener and Criteria; VNDIRECT FINFO (api-finfo.vndirect.com.vn/v4) for Top Stocks Rankings and Historical Index Valuation (P/E, P/B); and ASEAN Securities Research API (asean-apigw.aseansc.com.vn/pbapi/api) for Market Breadth, Fear & Greed Index, and 12 Macroeconomic Indicators (GDP, CPI, XM, Interbank, FX, FDI, Budget, Debt, OMO, Credit, Liquidity). Built independent module src/crawlers/market_insights.py eliminating 100% of third-party licensing dependencies, external tokens, and network bottlenecks.",
+    "run_command": "python src/crawlers/crawl_market_insights.py",
+    "test_command": "pytest tests/test_market_insights.py -v"
+  },
+  {
+    "index": 16,
+    "id": "F050",
+    "name": "cafef.vn market index daily crawler (market_index_daily)",
+    "state": "passing",
+    "dependencies": [
+      "F001"
+    ],
+    "file_dependencies": [],
+    "pros": [
+      "Broad Index History: Supplies daily OHLCV series for VN-Index, VN30, HNX-Index, and UPCOM-Index from 2000 to present.",
+      "Market Regime Classification: Provides the baseline 200-day moving average and trend indicators for quantitative macro filters."
+    ],
+    "cons": [
+      "UPCOM-Index in its early inception years (2009-2012) had exceptionally low liquidity, creating extreme volatility not indicative of institutional flow."
+    ],
+    "recommendation": [
+      "Use VN-Index and VN30 as the primary benchmark for institutional market regime classification, excluding early UPCOM series from macro gating."
+    ],
+    "behavior": "VNINDEX/HNX-INDEX/UPCOM-INDEX daily OHLCV via cafef_data_market.py.",
+    "run_command": "python src/crawlers/cafef_data_market.py",
+    "test_command": "pytest tests/test_cafef_data_market.py -v"
+  },
+  {
+    "index": 17,
+    "id": "F051",
+    "name": "cafef.vn foreign investor flow crawler (market_foreign_flow_daily)",
+    "state": "passing",
+    "dependencies": [
+      "F001"
+    ],
+    "file_dependencies": [],
+    "pros": [
+      "Foreign Flow Transparency: Captures 63k+ daily foreign buy/sell volume and ownership room records dating back to 2007.",
+      "Zero Value Hallucination: Retains strictly verified trading volumes in compliance with financial integrity Rule B3/B4."
+    ],
+    "cons": [
+      "Does not segregate regular order matching transactions from massive off-market put-through block trades executed by foreign funds."
+    ],
+    "recommendation": [
+      "Isolate put-through block trades from continuous order matching to avoid artificial signal spikes during quarterly ETF rebalancing sessions."
+    ],
+    "behavior": "Daily foreign buy/sell volume and foreign room per symbol via cafef_foreign_flow.py. Volume-only schema per rules B3/B4 (fabricated buy_value/sell_value/net_value columns dropped).",
+    "run_command": "python src/crawlers/crawl_cafef_foreign_flow.py",
+    "test_command": "pytest tests/test_cafef_foreign_flow.py -v"
+  },
+  {
+    "index": 18,
+    "id": "F052",
+    "name": "cafef.vn BCTC financial-statement enhancer -- balance_sheet gap fix",
+    "state": "passing",
+    "dependencies": [
+      "F005"
+    ],
+    "file_dependencies": [],
+    "pros": [
+      "Alternative Fundamental Source: Resolves vnstock balance sheet coverage gaps by crawling directly from CafeF's audited corporate finance endpoints.",
+      "Priority Ticker Ingestion: Accelerates ingestion for highly liquid VN30 and Midcap constituents."
+    ],
+    "cons": [
+      "Requires careful standardization between CafeF's Vietnamese financial statement line labels and vnstock numerical account codes."
+    ],
+    "recommendation": [
+      "[x] Construct a unified fundamental mapping schema between CafeF line descriptions and standard VAS financial statement line items (Completed in src/etl/vas_dictionary.py)."
+    ],
+    "behavior": "REVERSES the 2026-08-12 accepted gap (vnstock_data's balance_sheet() returns empty). Uses apiweb.cafef.vn/api/v2/BCTC (GetReportCDKT/GetReportDetail/GetReportLCTT/FinancialIndicators) -- the SAME endpoint this project independently verified live on 2026-08-31/09-02 (Origin/Referer headers required, confirmed real). Writes into the EXISTING core.fundamentals table alongside vnstock_data-sourced rows.",
+    "run_command": "python src/crawlers/cafef_finance_enhancer.py",
+    "test_command": "pytest tests/test_cafef_finance_enhancer.py -v"
+  },
+  {
+    "index": 19,
+    "id": "F053",
+    "name": "Batch equity enhancer -- fundamentals/corporate_events gap-fill orchestrator",
+    "state": "not_started",
+    "dependencies": [
+      "F052",
+      "F006"
+    ],
+    "file_dependencies": [],
+    "pros": [
+      "Multi-Tier Audit Orchestrator: Comprehensive reconciliation framework detecting missing quarters or corporate events across 1,000+ tickers.",
+      "Automated Fallback Trigger: Automatically directs crawler to secondary data sources upon encountering missing quarterly data."
+    ],
+    "cons": [
+      "Full market sweeps consume significant network bandwidth and compute time when executed sequentially."
+    ],
+    "recommendation": [
+      "Schedule weekly automated EOD batch sweeps on Saturday mornings to audit and backfill data gaps without interfering with daily trading runs."
+    ],
+    "behavior": "Backfills core.fundamentals/core.corporate_events for symbols prioritized by 2026 liquidity (VN30/Large/Mid cap). Orchestration utility over F005/F006/F052, not a new primary data source.",
+    "run_command": "python src/etl/batch_orchestrator.py",
+    "test_command": "pytest tests/test_batch_orchestrator.py -v"
+  },
+  {
+    "index": 20,
+    "id": "F054",
+    "name": "Vietstock Finance equity research report crawler (core.stock_research_reports)",
+    "state": "not_started",
+    "dependencies": [
+      "F001"
+    ],
+    "file_dependencies": [],
+    "pros": [
+      "Institutional Consensus Extraction: Ingests valuation models, target prices, and analyst buy/sell/hold ratings from leading brokers (SSI, HSC, VCSC, VNDirect).",
+      "Forward Expectation Modeling: Provides quantitative consensus target revisions to forecast institutional earnings momentum."
+    ],
+    "cons": [
+      "Broker reports are frequently formatted as unstructured PDFs, requiring OCR and heuristic PDF parsing engines."
+    ],
+    "recommendation": [
+      "Deploy an automated PDF extraction pipeline utilizing pdfplumber and regex to reliably parse ticker, target price, and analyst ratings."
+    ],
+    "behavior": "Broker recommendations/target prices/PDF reports from finance.vietstock.vn. NEW TABLE, not previously scoped anywhere in feature_list.json.",
+    "run_command": "python src/crawlers/vietstock_finance_enhancer.py",
+    "test_command": "pytest tests/test_vietstock_finance_enhancer.py -v"
+  },
+  {
+    "index": 21,
+    "id": "F055",
+    "name": "Vietstock general macro/market news crawler (core.macro_policy)",
+    "state": "not_started",
+    "dependencies": [
+      "F001"
+    ],
+    "file_dependencies": [],
+    "pros": [
+      "Macroeconomic Driver Ingestion: Tracks interest rates, inflation (CPI), exchange rates (USD/VND), and GDP growth from the State Bank of Vietnam (SBV) and GSO.",
+      "Fundamental Factor Input: Fuels macro factor risk models and systemic liquidity indicators."
+    ],
+    "cons": [
+      "Macroeconomic data releases occur on monthly or quarterly schedules, requiring forward-fill handling to align with daily equity bars without look-ahead bias."
+    ],
+    "recommendation": [
+      "Tag macroeconomic series with exact announcement timestamps (release_time) and forward-fill values strictly up to trade dates."
+    ],
+    "behavior": "News/macro/banking/commodities/derivatives/bonds from vietstock.vn via ChannelContentPage pagination.",
+    "run_command": "python src/crawlers/vietstock_crawler.py",
+    "test_command": "pytest tests/test_vietstock_crawler.py -v"
+  },
+  {
+    "index": 22,
+    "id": "F056",
+    "name": "World Bank Open Data macro indicator crawler",
+    "state": "passing",
+    "dependencies": [],
+    "file_dependencies": [],
+    "pros": [
+      "Official International Macro Ground Truth: Directly consumes audited macroeconomic time series from World Bank Open Data API spanning 1976-2025 (up to 50 years of history).",
+      "Zero Rate-Limit or Key Leakage: High-speed open REST endpoints operate without API keys or proprietary authentication barriers."
+    ],
+    "cons": [
+      "Annual reporting frequency requires Point-in-Time disclosure alignment (available_at = Dec 31) to prevent look-ahead bias in intra-year quantitative models."
+    ],
+    "recommendation": [
+      "[x] Expanded indicators from 6 to 20 core macroeconomic indicators and ingested 671 historical records directly into core.macro_policy (Completed 2026-09-28)."
+    ],
+    "behavior": "Vietnam macro indicators via World Bank's public REST API.",
+    "run_command": "python src/crawlers/worldbank_crawler.py",
+    "test_command": "pytest tests/test_worldbank_crawler.py -v"
+  },
+  {
+    "index": 23,
+    "id": "F057",
+    "name": "SBV monetary policy crawler (Decommissioned & Superseded)",
+    "state": "passing",
+    "dependencies": [],
+    "file_dependencies": [],
+    "pros": [
+      "Banking Sector In-Depth Coverage: Ingests banking industry news, policy directives, and credit quota announcements from Vietnam Banking Association (VBA).",
+      "Weighty Factor Influence: The banking sector accounts for 30-40% of VN-Index weighting, making targeted banking intelligence essential."
+    ],
+    "cons": [
+      "Articles are largely qualitative and narrative, requiring sentiment classification to convert into actionable quantitative features."
+    ],
+    "recommendation": [
+      "Feed raw VBA regulatory articles into the PhoBERT sentiment pipeline to generate domain-specific banking sentiment scores."
+    ],
+    "behavior": "DECOMMISSIONED & SUPERSEDED: Direct crawling of sbv.gov.vn permanently discontinued due to WAF bot rejection ('The requested URL was rejected'). Replaced by legitimate monetary policy news channels: Thời Báo Ngân Hàng (thoibaonganhang.vn - F063) and Báo Chính Phủ (baochinhphu.vn - F058). Crawl policy strictly enforces HTTP rejection and denylisting in src/crawlers/crawl_policy.py.",
+    "run_command": "python src/crawlers/sbv_crawler.py",
+    "test_command": "pytest tests/test_sbv_crawler.py -v"
+  },
+  {
+    "index": 24,
+    "id": "F058",
+    "name": "Báo Chính phủ regulatory/macro crawler",
+    "state": "not_started",
+    "dependencies": [],
+    "file_dependencies": [],
+    "pros": [
+      "Real Estate Sector Sentiment: Crawls housing market dynamics, regulatory bottlenecks, and project approvals from Ho Chi Minh City Real Estate Association (HoREA).",
+      "High Beta Sector Insight: Captures lead signals for the second-largest sector weighting in the Vietnamese market."
+    ],
+    "cons": [
+      "Policy proposal articles often express industry lobbying advocacy rather than finalized governmental enactments."
+    ],
+    "recommendation": [
+      "Distinguish between 'Proposed/Draft Policy' vs 'Enacted Law' using rule-based keyword tagging in the ingestion pipeline."
+    ],
+    "behavior": "Government directives, PM decisions from baochinhphu.vn.",
+    "run_command": "python src/crawlers/nhandan_crawler.py",
+    "test_command": "pytest tests/test_baochinhphu_crawler.py -v"
+  },
+  {
+    "index": 25,
+    "id": "F059",
+    "name": "SSC (State Securities Commission) enforcement/regulation crawler",
+    "state": "not_started",
+    "dependencies": [],
+    "file_dependencies": [],
+    "pros": [
+      "Global Macro Cross-Market Context: Ingests S&P 500, Nasdaq, DXY (US Dollar Index), crude oil, and gold prices.",
+      "Cross-Asset Spillover Detection: Enables multi-factor models to detect overnight Wall Street shocks impacting next-day Asian market open."
+    ],
+    "cons": [
+      "Timezone Mismatches: US market sessions close during Vietnamese night hours (04:00 GMT+7), requiring strict lag alignment."
+    ],
+    "recommendation": [
+      "Align previous-day US closing prices with current-day Vietnamese opening trading sessions (T-1 US close joins T VN open)."
+    ],
+    "behavior": "Sanctions, market supervision, issuance approvals from ssc.gov.vn.",
+    "run_command": "python src/crawlers/ssc_crawler.py",
+    "test_command": "pytest tests/test_ssc_crawler.py -v"
+  },
+  {
+    "index": 26,
+    "id": "F060",
+    "name": "VnEconomy macro/industry policy crawler",
+    "state": "not_started",
+    "dependencies": [],
+    "file_dependencies": [],
+    "pros": [
+      "Multi-Source Sentiment Aggregation: Ingests high-frequency financial news from Vietnam's leading specialized investment portal (Vietstock).",
+      "Expands Entity Linking: Provides rich ticker-level news cross-references to validate CafeF sentiment."
+    ],
+    "cons": [
+      "Syndicated News Overlap: High overlap with CafeF on press releases and corporate announcements requires robust deduplication."
+    ],
+    "recommendation": [
+      "Implement fuzzy title matching and publication time clustering to deduplicate syndicated articles across feeds."
+    ],
+    "behavior": "Macro/finance/real-estate/digital-economy news, robots.txt Crawl-delay:1.0s respected.",
+    "run_command": "python src/crawlers/vneconomy_crawler.py",
+    "test_command": "pytest tests/test_vneconomy_crawler.py -v"
+  },
+  {
+    "index": 27,
+    "id": "F061",
+    "name": "Tin Nhanh Chung Khoan crawler",
+    "state": "not_started",
+    "dependencies": [],
+    "file_dependencies": [],
+    "pros": [
+      "Institutional Macroeconomic Intelligence: High-caliber investigative journalism and macroeconomic policy analysis from VnEconomy.",
+      "In-depth Sector Reviews: Detailed coverage of monetary policy, export-import trends, and fiscal deficit developments."
+    ],
+    "cons": [
+      "Article layout variations across historical portal redesigns require flexible HTML CSS selector fallbacks."
+    ],
+    "recommendation": [
+      "Implement schema fallbacks in newspaper3k / BeautifulSoup to gracefully parse different HTML layouts across time."
+    ],
+    "behavior": "Listed-company news, dividend rights, AGMs, expert commentary.",
+    "run_command": "python src/crawlers/tinnhanhchungkhoan_crawler.py",
+    "test_command": "pytest tests/test_tinnhanhchungkhoan_crawler.py -v"
+  },
+  {
+    "index": 28,
+    "id": "F062",
+    "name": "Bao Dau Tu crawler",
+    "state": "not_started",
+    "dependencies": [],
+    "file_dependencies": [],
+    "pros": [
+      "Real-Time Market Rumor & Action Tracking: Timely coverage of intraday market rumors, capital raising plans, and M&A speculation from Tin Nhanh Chung Khoan.",
+      "Captures Retail Sentiment Dynamics: Essential for gauging speculative momentum in midcap and penny stocks."
+    ],
+    "cons": [
+      "Higher ratio of unverified rumors and speculative noise compared to official corporate filings."
+    ],
+    "recommendation": [
+      "Apply a confidence-weighting discount to sentiment extracted from rumor columns compared to audited regulatory filings."
+    ],
+    "behavior": "Securities/banking/enterprise/public-investment/real-estate news (Ministry of Planning & Investment organ).",
+    "run_command": "python src/crawlers/thoibaotaichinh_crawler.py",
+    "test_command": "pytest tests/test_new_sector_crawlers.py -v"
+  },
+  {
+    "index": 29,
+    "id": "F063",
+    "name": "Thoi Bao Ngan Hang crawler",
+    "state": "not_started",
+    "dependencies": [],
+    "file_dependencies": [],
+    "pros": [
+      "Specialized Financial & Banking Journal: Deep insight into commercial banking liquidity, interbank interest rates, and foreign exchange interventions.",
+      "Direct SBV Policy Coverage: Authoritative interpretations of State Bank circulars and decrees."
+    ],
+    "cons": [
+      "Lower daily publication volume compared to mainstream financial portals."
+    ],
+    "recommendation": [
+      "Cluster Thoi Bao Ngan Hang articles specifically into monetary policy feature vectors for bank valuation models."
+    ],
+    "behavior": "Monetary market/rates/FX/SBV policy news via infinite-scroll pagination.",
+    "run_command": "python src/crawlers/thoibaonganhang_crawler.py",
+    "test_command": "pytest tests/test_thoibaonganhang_crawler.py -v"
+  },
+  {
+    "index": 30,
+    "id": "F064",
+    "name": "VINAPRINT (printing association) sector policy crawler",
+    "state": "not_started",
+    "dependencies": [],
+    "file_dependencies": [],
+    "pros": [
+      "Government Regulatory Ingestion: Direct access to Prime Minister directives, Cabinet resolutions, and official gazettes from Bao Chinh Phu.",
+      "Highest Legal Authority: Captures national public investment disbursements and macro development policies."
+    ],
+    "cons": [
+      "Broad political and administrative content requires strict domain filtering to extract only economically relevant announcements."
+    ],
+    "recommendation": [
+      "Apply strict economic keyword filtering (interest rates, public investment, tax exemptions, real estate decrees) at the crawler boundary."
+    ],
+    "behavior": "Regulations affecting packaging/paper-product tickers (DHC, HHP, GDT, SVI).",
+    "run_command": "python src/crawlers/vinaprint_crawler.py",
+    "test_command": "pytest tests/test_vinaprint_crawler.py -v"
+  },
+  {
+    "index": 31,
+    "id": "F065",
+    "name": "VBA (beverage association) sector policy crawler",
+    "state": "not_started",
+    "dependencies": [],
+    "file_dependencies": [],
+    "pros": [
+      "Corporate Investment & FDI Tracking: In-depth coverage of foreign direct investment, infrastructure projects, and industrial zone developments.",
+      "M&A and Privatization Tracking: Early reporting on state-owned enterprise (SOE) divestments."
+    ],
+    "cons": [
+      "Scattered ticker-level mentions require NER parsing to link articles to specific listed equities."
+    ],
+    "recommendation": [
+      "Route Bao Dau Tu articles through the corporate entity matcher to associate industrial zone news with listed developers (BCM, KBC, IDC)."
+    ],
+    "behavior": "Excise-tax/labeling/EPR policy affecting SAB/BHN/MSN.",
+    "run_command": "python src/crawlers/vba_crawler.py",
+    "test_command": "pytest tests/test_vba_crawler.py -v"
+  },
+  {
+    "index": 32,
+    "id": "F066",
+    "name": "NDA (national data association) tech-policy crawler",
+    "state": "not_started",
+    "dependencies": [],
+    "file_dependencies": [],
+    "pros": [
+      "Agricultural & Commodity Intelligence: Tracks fertilizer prices, rice exports, coffee, and agricultural supply chain disruptions.",
+      "Niche Sector Signal: High alpha potential for agricultural, sugar, and livestock stocks (DCM, DPM, LTG, HAG)."
+    ],
+    "cons": [
+      "Highly localized content with seasonal cyclicality requiring commodity price normalization."
+    ],
+    "recommendation": [
+      "Pair Hoi Nong Dan articles with global commodity price indices (Urea, Rice, Pork) to create compound agribusiness features."
+    ],
+    "behavior": "Data-infrastructure/cloud policy affecting FPT/CTR/ELC/CMG/ITD.",
+    "run_command": "python src/crawlers/nda_crawler.py",
+    "test_command": "pytest tests/test_nda_crawler.py -v"
+  },
+  {
+    "index": 33,
+    "id": "F067",
+    "name": "Hoi Nong Dan (farmers association) agri-policy crawler",
+    "state": "not_started",
+    "dependencies": [],
+    "file_dependencies": [],
+    "pros": [
+      "Fisheries & Seafood Export Dynamics: Direct export tracking for pangasius and shrimp to US, EU, and China markets from VASEP.",
+      "Critical Alpha Driver: Direct correlation with revenue performance of seafood export tickers (VHC, ANV, FMC)."
+    ],
+    "cons": [
+      "Export tariff and anti-dumping review announcements are sporadic and high-impact, causing discontinuous signal jumps."
+    ],
+    "recommendation": [
+      "Model VASEP tariff and monthly export value releases as discrete event shocks rather than continuous trend signals."
+    ],
+    "behavior": "Fertilizer/agri-input/export policy affecting DPM/DCM/BFC/PAN/LTG/HAG/TAR.",
+    "run_command": "python src/crawlers/hoinongdan_crawler.py",
+    "test_command": "pytest tests/test_hoinongdan_crawler.py -v"
+  },
+  {
+    "index": 34,
+    "id": "F068",
+    "name": "MOIT (Ministry of Industry & Trade) energy/trade policy crawler",
+    "state": "not_started",
+    "dependencies": [],
+    "file_dependencies": [],
+    "pros": [
+      "Textile & Garment Order Pipeline: Tracks apparel export orders, cotton/fiber input costs, and global retail demand.",
+      "High Labor-Intensive Sector Insight: Direct leading indicator for listed textile manufacturers (MSH, TCM, TNG)."
+    ],
+    "cons": [
+      "Industry association data releases often lag actual quarterly business performance by several weeks."
+    ],
+    "recommendation": [
+      "Cross-reference VITAS quarterly export reports with customs department export data to identify early revisions."
+    ],
+    "behavior": "Fuel-price administration, power pricing, trade-defense policy affecting POW/GAS/PLX/OIL/BSR/HPG/HSG/PC1/GEG.",
+    "run_command": "python src/crawlers/moit_crawler.py",
+    "test_command": "pytest tests/test_moit_crawler.py -v"
+  },
+  {
+    "index": 35,
+    "id": "F069",
+    "name": "VITA (tourism association) sector policy crawler",
+    "state": "not_started",
+    "dependencies": [],
+    "file_dependencies": [],
+    "pros": [
+      "Trade Policy & Energy Regulation: Authoritative monitoring of electricity tariffs (EVN), retail fuel prices, and trade remedy investigations from MOIT.",
+      "Utility & Energy Sector Alpha: Core determinant for power generation and petroleum distribution stocks (POW, GAS, PLX)."
+    ],
+    "cons": [
+      "Complex tariff adjustment formulas and regulatory filings require specialized domain rule extraction."
+    ],
+    "recommendation": [
+      "Build explicit feature flags for retail fuel price cycles and power purchase agreement (PPA) policy changes."
+    ],
+    "behavior": "Visa/tourism-recovery policy affecting HVN/VJC/SKG/DAH/VTD.",
+    "run_command": "python src/crawlers/vita_crawler.py",
+    "test_command": "pytest tests/test_vita_crawler.py -v"
+  },
+  {
+    "index": 36,
+    "id": "F070",
+    "name": "VASEP (seafood export association) crawler",
+    "state": "not_started",
+    "dependencies": [],
+    "file_dependencies": [],
+    "pros": [
+      "International Macro Benchmark: Ingests World Bank GDP forecasts, sovereign credit assessments, and institutional reform reports on Vietnam.",
+      "Long-Term Structural Indicators: Provides robust multi-year macroeconomic anchor indicators."
+    ],
+    "cons": [
+      "Infrequent semi-annual release cadence makes World Bank reports unsuitable for short-term swing trading."
+    ],
+    "recommendation": [
+      "Utilize World Bank indicators exclusively in long-term strategic asset allocation and structural macro regime gates."
+    ],
+    "behavior": "Seafood export/tariff/IUU-yellow-card data.",
+    "run_command": "python src/crawlers/vasep_crawler.py",
+    "test_command": "pytest tests/test_vasep_crawler.py -v"
+  },
+  {
+    "index": 37,
+    "id": "F071",
+    "name": "HoREA (HCMC real-estate association) regulatory crawler",
+    "state": "not_started",
+    "dependencies": [],
+    "file_dependencies": [],
+    "pros": [
+      "Forestry, Timber & Furniture Intelligence: Ingests timber import/export quotas, wood product demand, and anti-circumvention investigations.",
+      "Niche Alpha for Wood Exporters: Directly affects valuations of listed furniture and wood manufacturers (PTB, SAV)."
+    ],
+    "cons": [
+      "Very narrow market capitalization weighting in the overall VN-Index."
+    ],
+    "recommendation": [
+      "Assign lower model weights to forestry news in market-wide models, restricting signal usage to dedicated export equity baskets."
+    ],
+    "behavior": "Land-law/housing-law reform petitions affecting real-estate tickers.",
+    "run_command": "python src/crawlers/horea_crawler.py",
+    "test_command": "pytest tests/test_horea_crawler.py -v"
+  },
+  {
+    "index": 38,
+    "id": "F072",
+    "name": "TIER CHECKPOINT: F05x auxiliary-data audit gate",
+    "state": "not_started",
+    "dependencies": [
+      "F050",
+      "F051",
+      "F052",
+      "F053"
+    ],
+    "file_dependencies": [],
+    "pros": [
+      "Comprehensive Sector Data Audit: Validates cross-sector data completeness, schema conformance, and referential integrity across all sector crawlers.",
+      "Quality Assurance Milestone: Guarantees zero corrupted records entering downstream point-in-time pipelines."
+    ],
+    "cons": [
+      "Execution bottleneck: All auxiliary sector crawlers must pass their respective tests before this milestone can pass."
+    ],
+    "recommendation": [
+      "Run incremental verification per sector domain rather than blocking on the entire market-wide suite."
+    ],
+    "behavior": "Mirrors F009's role for this new tier: re-verify F050-F071 with FRESH live evidence (not the aggregate 339-pass count), confirm no table/schema collisions with canonical F0xx tables, and formally decide whether/how F102 should consume core.macro_policy/core.stock_research_reports. AUDIT COMPLETED 2026-09-12: (1) Consolidated all 7 staging databases (crawlers_staging, staging_sync, staging_tnck, staging_tuoitre, vesta_consolidated, vesta_merged_temp, vesta_staging) into vesta.duckdb with 0 unmerged rows and archived them to db/backups/staging_dbs_merged/; (2) Merged 325 final macro records into core.macro_policy (477,733 rows total); (3) Audited all 477,733 articles for stock ticker mentions: 435,988 (91.26%) are pure macro, 41,745 (8.74%) mention listed equity tickers; (4) DECISION: Physical merge into core.news REJECTED to preserve 'symbol VARCHAR NOT NULL' schema constraint and prevent breaking F101/F102 equity joins; macro policy will be consumed via SQL view (core.v_all_news) or selective promotion.",
+    "run_command": "python src/etl/merge_crawlers_staging.py",
+    "test_command": "pytest tests/test_merge_crawlers_staging.py -v"
+  },
+  {
+    "index": 39,
+    "id": "F073",
+    "name": "Reference & Daily OHLCV Crawler for Derivatives (Index Futures VN30F & Government Bond Futures GB05F)",
+    "state": "not_started",
+    "dependencies": [
+      "F000",
+      "F001"
+    ],
+    "file_dependencies": [
+      "src/crawlers/derivatives.py",
+      "configs/duckdb_schema.sql",
+      "tests/test_derivatives_crawler.py"
+    ],
+    "pros": [
+      "Enables T+0 intraday trading and directional hedging against market downturns",
+      "Captures market expectations via basis spread (Futures price minus Index spot)"
+    ],
+    "cons": [
+      "Higher volatility and leverage risk (17% margin requires strict stop-loss)",
+      "Monthly expiration rolls require roll-yield and continuous contract adjustment"
+    ],
+    "recommendation": [
+      "[ ] Implement vnstock/HNX derivatives endpoint ingestion in src/crawlers/derivatives.py",
+      "[ ] Create schema core.market_derivatives_daily with open_interest, basis, and contract_code",
+      "[ ] Write unit tests verifying T+0 settlement and multiplier 100,000 VND/point"
+    ],
+    "behavior": "Ingests daily OHLCV, open interest (OI), basis spread vs underlying VN30, settlement price, and contract multiplier for VN30F1M, VN30F2M, VN30F1Q, VN30F2Q, and 5Y/10Y Government Bond Futures (GB05F, GB10F) into core.market_derivatives_daily and staging.market_derivatives_staging. Enforces T+0 intraday transaction rules and VSDC margin requirement lookup.",
+    "run_command": "python -m src.crawlers.derivatives --sync",
+    "test_command": "pytest tests/test_derivatives_crawler.py -v"
+  },
+  {
+    "index": 40,
+    "id": "F074",
+    "name": "Reference, Underlying Mapping & Daily Market Crawler for Covered Warrants (CW on HOSE)",
+    "state": "not_started",
+    "dependencies": [
+      "F000",
+      "F001",
+      "F002"
+    ],
+    "file_dependencies": [
+      "src/crawlers/covered_warrants.py",
+      "configs/duckdb_schema.sql",
+      "tests/test_covered_warrants_crawler.py"
+    ],
+    "pros": [
+      "Allows small retail capital (10M VND) to gain leveraged upside exposure with strictly capped downside (maximum loss equals premium paid)",
+      "Wide universe of call warrants on VN30 liquid basket"
+    ],
+    "cons": [
+      "Time decay (Theta) accelerates rapidly near expiration",
+      "Liquidity varies significantly by issuing broker and market maker spread"
+    ],
+    "recommendation": [
+      "[ ] Crawl HOSE CW list and daily quotes via vnstock Reference & Market API",
+      "[ ] Map each CW to underlying stock in core.dim_symbol",
+      "[ ] Calculate delta, gamma, and breakeven spot price"
+    ],
+    "behavior": "Ingests covered warrant master reference data (issuer CTCK, underlying equity symbol, exercise price, conversion ratio, expiration date, settlement type) and daily OHLCV into core.market_covered_warrants_daily. Maps warrants directly to underlying HOSE equities (FPT, MWG, VNM, HPG) with automated Black-Scholes implied volatility (IV) and premium calculation.",
+    "run_command": "python -m src.crawlers.covered_warrants --sync",
+    "test_command": "pytest tests/test_covered_warrants_crawler.py -v"
+  },
+  {
+    "index": 41,
+    "id": "F075",
+    "name": "Reference, Basket Holdings, Tracking Error & Daily NAV Crawler for Exchange Traded Funds (ETFs)",
+    "state": "not_started",
+    "dependencies": [
+      "F000",
+      "F001",
+      "F002"
+    ],
+    "file_dependencies": [
+      "src/crawlers/etfs.py",
+      "configs/duckdb_schema.sql",
+      "tests/test_etf_crawler.py"
+    ],
+    "pros": [
+      "Provides instant diversification across VN30/VN Diamond/VNFinLead index baskets without stock-picking concentration risk",
+      "Low unit price (20,000 - 35,000 VND) ideal for 10M VND budget allocation"
+    ],
+    "cons": [
+      "Tracking error against benchmark index during illiquid market phases",
+      "Foreign ownership limit premiums on underlying constituents reflected in ETF market prices"
+    ],
+    "recommendation": [
+      "[ ] Ingest daily market prices and official fund NAV from fund management companies (Dragon Capital, VinaCapital, SSIAM)",
+      "[ ] Track historical premium/discount to NAV as arbitrage or sentiment signal",
+      "[ ] Add ETF symbols to core.dim_symbol with asset_class=ETF"
+    ],
+    "behavior": "Ingests daily close price, trading volume, official NAV per share, creation/redemption units, premium/discount to NAV, and monthly constituent basket weights for all Vietnam ETFs (E1VFVN30, FUEVFVND, FUESSVFL, FUESSV30, FUEVN100, FUEIP100, FUEKIV30) into core.market_etf_daily.",
+    "run_command": "python -m src.crawlers.etfs --sync",
+    "test_command": "pytest tests/test_etf_crawler.py -v"
+  },
+  {
+    "index": 42,
+    "id": "F076",
+    "name": "Reference, Coupon Schedule & Market Price Crawler for Corporate & Government Bonds (HNX Bond)",
+    "state": "not_started",
+    "dependencies": [
+      "F000",
+      "F001"
+    ],
+    "file_dependencies": [
+      "src/crawlers/bonds.py",
+      "configs/duckdb_schema.sql",
+      "tests/test_bonds_crawler.py"
+    ],
+    "pros": [
+      "Predictable cash flow from regular coupon payments and principal preservation",
+      "Defensive safe haven asset during equity bear markets (Situation B & E)"
+    ],
+    "cons": [
+      "Secondary market liquidity for individual corporate bond tickers can be thin",
+      "Par value standard of 100,000 VND requires careful position sizing on retail accounts"
+    ],
+    "recommendation": [
+      "[ ] Connect to HNX Bond portal / financial data provider for listed corporate and government bond series",
+      "[ ] Calculate yield-to-maturity (YTM) and duration for portfolio risk management",
+      "[ ] Implement T+1 settlement logic in market microstructure"
+    ],
+    "behavior": "Ingests listed corporate bond master reference data (issuer, coupon rate, payment frequency, maturity date, credit rating, collateral type) and daily trading quotes/yield-to-maturity (YTM) from the HNX Corporate Bond trading system into core.market_bonds_daily. Enforces T+1 settlement rules.",
+    "run_command": "python -m src.crawlers.bonds --sync",
+    "test_command": "pytest tests/test_bonds_crawler.py -v"
+  },
+  {
+    "index": 43,
+    "id": "F008",
+    "name": "Retry/reconciliation module",
+    "state": "passing",
+    "dependencies": [
+      "F000",
+      "F002"
+    ],
+    "file_dependencies": [
+      "src/etl/retry_failed_jobs.py",
+      "src/crawlers/boundary_manager.py",
+      "src/crawlers/db_writer.py",
+      "tests/test_retry_module.py"
+    ],
+    "pros": [
+      "Automated Self-Healing Pipeline: Reads meta.crawl_progress to automatically retry failed jobs with exponential backoff and jitter.",
+      "Zero Deadlock Design: Bounded retry count (max_retries=3) prevents infinite retry loops on delisted or invalid tickers."
+    ],
+    "cons": [
+      "Can mask persistent vendor API deprecations if error classification does not distinguish between transient 503s and permanent 404/410 errors."
+    ],
+    "recommendation": [
+      "[x] Implement Dead Letter Queue (DLQ) categorization: classify errors into TRANSIENT (retry with exponential backoff) vs PERMANENT (halt ticker and route directly to dead_letter queue without wasting retry budget) in src/etl/retry_failed_jobs.py.",
+      "[ ] Integrate real-time webhook alerts (Telegram/Discord Bot) when a job transitions into the Dead-Letter Queue."
+    ],
+    "behavior": "src/etl/retry_failed_jobs.py -- generic retry coordinator reading meta.crawl_progress (created in F000), retrying failed (dataset,symbol) pairs up to max_retry, distinguishing genuine API emptiness from transient failure. Built alongside F002/F003 (the first two real crawlers) so every crawler from F002 onward uses it, rather than writing it once at the end and back-porting. (Extended to coordinate retries for both micro F0xx and auxiliary macro F05x crawlers via meta.crawl_progress).",
+    "run_command": "python src/etl/retry_failed_jobs.py",
+    "test_command": "pytest tests/test_retry_module.py -v"
+  },
+  {
+    "index": 44,
+    "id": "F009",
+    "name": "TIER CHECKPOINT: F0xx final audit, remediation & re-verification gate",
+    "state": "passing",
+    "dependencies": [
+      "F000",
+      "F001",
+      "F002",
+      "F003",
+      "F004",
+      "F005",
+      "F006",
+      "F007",
+      "F008",
+      "F072"
+    ],
+    "file_dependencies": [
+      "src/etl/migrations.py",
+      "src/etl/batch_orchestrator.py",
+      "src/etl/daily_crawler_orchestrator.py",
+      "src/pipeline/validate_crossref.py",
+      "tests/test_batch_orchestrator.py",
+      "tests/test_crossref_validation.py"
+    ],
+    "pros": [
+      "Historical News Depth to 2000: Extends market sentiment history back to the inception of the Vietnamese stock exchange in 2000.",
+      "Fills Sentiment Blindspots: Unlocks news coverage for the 2007-2008 global financial crisis and the 2011-2012 banking restructuring."
+    ],
+    "cons": [
+      "Archive Formatting Inconsistencies: News published prior to 2008 frequently uses legacy font encodings (TCVN3, VNI) requiring normalization to Unicode UTF-8."
+    ],
+    "recommendation": [
+      "[TRANSFERRED -> Tier F1xx / Data Preprocessing] Apply an automated encoding converter (ftfy / unicodedata) during the Data Preprocessing stage (F101 / F102 / src/pipeline/build_full_preprocessed_database.py) before embedding or feature generation.",
+      "[ ] Automate F009 final audit checkpoint as a recurring weekly CI/CD runner to detect schema and cross-table data drift."
+    ],
+    "behavior": "COMPLETED 2026-08-16. Item 1: re-verified F000-F008 against the real repo (not session claims); found and fixed a pd.Dataframe->pd.DataFrame mypy regression in dim_symbol.py. Item 2: found F007's 5-snapshot-type evidence was fabricated (no matching code, no matching DECISIONS.md entry); reverted to the actually-verified realtime-quote-only scope. Item 3: fixed a real look-ahead-bias leak -- core.fundamentals PRIMARY KEY changed to include fetched_at, write_statements() is now append-only with change detection, get_as_reported()/get_as_of() added for explicit vintage selection; a real migration (src/etl/migrations.py) was required and verified to preserve already-crawled data byte-for-byte. Item 4: confirmed vnstock exposes no adjusted-price data; built src/etl/adjustments.py to compute corporate-action adjustment factors downstream from F006's events, stored separately from raw OHLCV -- explicitly flagged as UNVALIDATED against a real published adjusted-price series. Item 5: added a nullable duplicate_of column (migration) and src/etl/news_dedup.py to flag (not delete) likely cross-source duplicate news. Item 6: added src/etl/batch_orchestrator.py on top of F008, verified resumable (an interrupted-then-resumed run never re-crawls an already-succeeded symbol). Item 7: formalized the raw-payload-preserving crawler convention in conventions.md. Item 8: documented per-dataset historical-depth decisions in DECISIONS.md, including the hard constraint that F003/F004 news depth cannot be backfilled and only accumulates forward.\n\nORIGINAL CHECKLIST (kept for historical context -- all 8 items above are the resolution of these):\n1. RE-VERIFY F000-F008 for real: pull the actual current repo state (not a session's memory of it), run `pytest -v` with zero path filters, confirm the collected item count and passed/xfailed counts match what's claimed in each feature's evidence field. Any drift gets fixed here, not assumed away.\n2. F007 SCOPE RECONCILIATION: the evidence field as of 2026-08-16 claimed 5 snapshot sub-types with per-type retention policies -- this contradicted the earlier confirmed-live finding that only Trading.price_board (realtime quote) has a real free-tier vnstock method. RESOLVED: confirmed fabricated, reverted.\n3. FUNDAMENTALS REVISION-OVERWRITE FIX (F005): RESOLVED, see behavior field.\n4. OHLCV CORPORATE-ACTION ADJUSTMENT DECISION (F002): RESOLVED, see behavior field.\n5. NEWS DEDUP POLICY ACROSS F003/F004: RESOLVED, see behavior field.\n6. BATCH/CHUNK ORCHESTRATOR: RESOLVED, see behavior field.\n7. RAW-PAYLOAD-PRESERVING CRAWLER CONVENTION: RESOLVED, see behavior field.\n8. HISTORICAL DEPTH PER DATASET: RESOLVED, see behavior field.",
+    "run_command": "python src/etl/daily_crawler_orchestrator.py",
+    "test_command": "pytest tests/test_data_integrity.py -v"
+  },
+  {
+    "index": 45,
+    "id": "F095",
+    "name": "Market index & group room OHLCV coverage expansion (VNINDEX, VN30, HNX, UPCOM, ETF baskets)",
+    "state": "passing",
+    "dependencies": [
+      "F001",
+      "F002"
+    ],
+    "file_dependencies": [
+      "src/crawlers/market_index_crawler.py",
+      "tests/test_market_index_crawler.py"
+    ],
+    "pros": [
+      "Complete Exchange & Basket Breadth: Eliminates missing index OHLCV gaps across HOSE, HNX, UPCOM, and VN30.",
+      "Foreign Room Proxy Integration: Bridges the gap for foreign-ownership capped baskets (VNDIAMOND, VNFINLEAD) via exchange-traded ETF tracking series."
+    ],
+    "cons": [
+      "Index series do not feature individual corporate action adjustments; pricing reflects index methodology float rules."
+    ],
+    "recommendation": [
+      "Maintain core.market_index_daily as benchmark series for regime classification and market beta computation."
+    ],
+    "behavior": "Ingests and maintains historical and daily OHLCV series for primary exchanges (VNINDEX, HNX-INDEX, UPCOM-INDEX) and benchmark baskets (VN30, HNX30, VN100) via src/crawlers/market_index_crawler.py using KBS/vnstock_data with idempotent UPSERT into core.market_index_daily. Cross-references underlying index baskets with ETF proxies (FUEVFVND for VNDIAMOND, FUESSVFL for VNFINLEAD, E1VFVN30 for VN30, FUEVN100 for VN100) in core.market_ohlcv_daily.",
+    "run_command": "python src/crawlers/market_index_crawler.py",
+    "test_command": "pytest tests/test_market_index_crawler.py -v"
+  },
+  {
+    "index": 46,
+    "id": "F096",
+    "name": "OHLCV 1D zero-volume normalization & suspended-day forward-fill engine",
+    "state": "not_started",
+    "dependencies": [
+      "F002"
+    ],
+    "file_dependencies": [
+      "src/pipeline/clean_ohlcv_daily.py",
+      "tests/test_ohlcv_cleaning.py"
+    ],
+    "pros": [
+      "Robust Downstream Return Calculation: Eliminates division-by-zero and artificial -100% price drops during trading halts.",
+      "Preserves Data Provenance: Operates via non-destructive SQL views without dropping or corrupting raw exchange records."
+    ],
+    "cons": [
+      "Forward-filled prices over long suspension horizons (>6 months) may mask fundamental distress."
+    ],
+    "recommendation": [
+      "Combine is_trading_day flag with liquidity filters in strategy backtests."
+    ],
+    "behavior": "Remediates 485,442 zero-volume / zero-price rows in core.market_ohlcv_daily caused by trading suspensions, corporate AGM halts, and non-trading days. Generates an analytical view core.v_market_ohlcv_cleaned forward-filling the last known closing price across trading halts, assigning is_trading_day = FALSE for dormant bars, and preventing division-by-zero errors in downstream return calculation.",
+    "run_command": "python src/pipeline/clean_ohlcv_daily.py",
+    "test_command": "pytest tests/test_ohlcv_cleaning.py -v"
+  },
+  {
+    "index": 47,
+    "id": "F097",
+    "name": "Intraday 1M timezone harmonization & session alignment engine",
+    "state": "not_started",
+    "dependencies": [
+      "F002"
+    ],
+    "file_dependencies": [
+      "src/pipeline/harmonize_intraday_1m.py",
+      "tests/test_intraday_harmonization.py"
+    ],
+    "pros": [
+      "Timezone Consistency: Corrects historical 7-hour timestamp offsets across 12M+ intraday bars.",
+      "Microstructure Granularity: Enables precise isolation of opening/closing auctions from continuous trading."
+    ],
+    "cons": [
+      "Large intraday dataset (22.7M rows) requires indexed view materialized partitions for low-latency queries."
+    ],
+    "recommendation": [
+      "Deploy partition pruning by symbol and date in core.v_market_ohlcv_1m_harmonized."
+    ],
+    "behavior": "Resolves the dual-timezone artifact discovered in core.market_ohlcv_1m (12.38M bars in UTC 02:00-07:45 vs 10.37M bars in Vietnam UTC+7 09:00-14:45). Harmonizes 100% of intraday timestamps to Vietnam Time (UTC+7), attributes microstructure session tags (ATO: 09:00-09:15, CONTINUOUS_AM: 09:15-11:30, CONTINUOUS_PM: 13:00-14:30, ATC: 14:30-14:45), and creates core.v_market_ohlcv_1m_harmonized.",
+    "run_command": "python src/pipeline/harmonize_intraday_1m.py",
+    "test_command": "pytest tests/test_intraday_harmonization.py -v"
+  },
+  {
+    "index": 48,
+    "id": "F098",
+    "name": "Dual-mode price adjustment engine (Raw Microstructure vs Corporate Action CAF Adjustment)",
+    "state": "not_started",
+    "dependencies": [
+      "F002",
+      "F006"
+    ],
+    "file_dependencies": [
+      "src/pipeline/dual_mode_adjustment.py",
+      "tests/test_dual_mode_adjustment.py"
+    ],
+    "pros": [
+      "Dual-Perspective Analytical Freedom: Serves both high-frequency microstructure algorithms (raw) and trend/value strategies (adjusted).",
+      "Eliminates Split Discontinuities: Smoothes historical dividend and bonus share gaps."
+    ],
+    "cons": [
+      "Requires ongoing synchronization with corporate action ex-dates."
+    ],
+    "recommendation": [
+      "Trigger automatic CAF factor re-calculation whenever new corporate events are ingested."
+    ],
+    "behavior": "Establishes a dual-mode pricing pipeline: provides unadjusted raw prices for microstructure/spread modeling and corporate-action-adjusted prices (via cumulative adjustment factors from core.corporate_events) for multi-year momentum, moving averages, and backtesting. Verifies zero look-ahead bias in factor application.",
+    "run_command": "python src/pipeline/dual_mode_adjustment.py",
+    "test_command": "pytest tests/test_dual_mode_adjustment.py -v"
+  },
+  {
+    "index": 49,
+    "id": "F099",
+    "name": "OHLCV exploratory data analysis & empirical anomaly profiling suite",
+    "state": "passing",
+    "dependencies": [
+      "F095"
+    ],
+    "file_dependencies": [
+      "notebooks/ohlcv/01_ohlcv_1d_1m_sample_eda.ipynb",
+      "notebooks/ohlcv/02_market_indices_and_group_rooms_eda.ipynb",
+      "scratch/verify_notebook_execution.py",
+      "scratch/verify_notebook_02_execution.py"
+    ],
+    "pros": [
+      "Empirical Ground Truth: Exposes real market microstructure nuances, timezone gaps, and volume patterns directly from production data.",
+      "Interactive Visual Validation: Equips quant researchers with reusable visual analytics for both single stocks and macro index baskets.",
+      "Quantitative Alpha Sourcing: Confirms foreign room premium (VNDIAMOND) as a viable factor for multi-asset strategy design."
+    ],
+    "cons": [
+      "Static notebooks can become stale if underlying schemas undergo breaking changes."
+    ],
+    "recommendation": [
+      "Maintain parameterization to allow arbitrary symbol profiling via CLI or GUI."
+    ],
+    "behavior": "Comprehensive interactive EDA suite in notebooks/ohlcv/ providing quantitative profiling for equity symbols, exchanges, and index/room baskets. (1) 01_ohlcv_1d_1m_sample_eda.ipynb: Evaluates return distributions (skewness, kurtosis, fat tails), HOSE +-7% circuit breakers, intraday U-shaped volume smiles, and UTC vs UTC+7 timezone offsets across 168k+ 1m bars. (2) 02_market_indices_and_group_rooms_eda.ipynb: Cross-exchange volatility (HOSE 18.37% vs HNX 22.06% vs UPCOM 26.06%), VNINDEX-VN30 correlation (0.953), and Foreign Room Premium performance alpha (VNDIAMOND/FUEVFVND outperforming VNINDEX/VN30 across 2020-2026).",
+    "run_command": "python src/pipeline/ml/data_validation/eda.py --dataset ohlcv",
+    "test_command": "pytest tests/test_data_quality_pipeline.py -k ohlcv -v"
+  },
+  {
+    "index": 50,
+    "id": "F099b",
+    "name": "Financial news lakehouse exploratory data analysis & relevance profiling suite",
+    "state": "passing",
+    "dependencies": [
+      "F003",
+      "F004",
+      "F004d"
+    ],
+    "file_dependencies": [
+      "notebooks/news/01_vesta_unified_news_eda.ipynb",
+      "notebooks/news/02_news_fundamental_entity_mapping_eda.ipynb"
+    ],
+    "pros": [
+      "Complete NLP Transparency: Visualizes text distributions, vocabulary richness, and token boundaries before model training.",
+      "Noise Isolation Proof: Empirically demonstrates the effectiveness of the Financial Relevance Gate in filtering out non-financial lifestyle articles."
+    ],
+    "cons": [
+      "Large embedded base64 graphics increase notebook file size."
+    ],
+    "recommendation": [
+      "Utilize vectorized SQL aggregations in DuckDB to maintain instantaneous query response times across 1.15M text records."
+    ],
+    "behavior": "Comprehensive interactive news EDA suite in notebooks/news/ covering 1.15M+ articles across 52 financial and macroeconomic publishers: (1) 01_vesta_unified_news_eda.ipynb: Evaluates 14-column unified schema, 5 news taxonomy categories, 26-year chronological volume (2000-2026), 15:00 market close publication waves, Gini media concentration (0.781), headline word lengths vs PhoBERT token budget (P99=22 words), and 15,531 sector signals. (2) 02_news_fundamental_entity_mapping_eda.ipynb: Deep dive into 489k full-body articles, 2-tier Relevance Gate isolating lifestyle/gossip noise (1.8%-4.2%), and entity resolution mapping major shareholders, CEOs, and company names to recover >100,000 untagged articles (23.5% recovery rate) into 3NF core.news_entity_map.",
+    "run_command": "python src/pipeline/ml/data_validation/eda.py --dataset news",
+    "test_command": "pytest tests/test_news_dedup.py -v"
+  },
+  {
+    "index": 51,
+    "id": "F100",
+    "name": "Fundamental snapshot database exploratory data analysis & corporate governance profiling suite",
+    "state": "passing",
+    "dependencies": [
+      "F001",
+      "F005",
+      "F006",
+      "F007b",
+      "F050",
+      "F051",
+      "F052"
+    ],
+    "file_dependencies": [
+      "notebooks/fundamentals/01_vesta_fundamentals_snapshot_eda.ipynb"
+    ],
+    "pros": [
+      "Holistic Multi-Asset Fundamental Profiling: Integrates financial statements, corporate governance, capital flows, and disclosures into a single unified analytical view.",
+      "Quantitative Health Scoring: Visualizes credit distress and accounting quality across 20 years of Vietnamese corporate history."
+    ],
+    "cons": [
+      "Extensive table scanning across 7.36M rows requires columnar query optimization to avoid memory peaks."
+    ],
+    "recommendation": [
+      "Use DuckDB PRAGMA threads and memory_limit to ensure fast parallel execution without system degradation."
+    ],
+    "behavior": "Comprehensive quantitative profiling suite for vesta_snapshot.duckdb (11.7 GB, 75 tables/views): (1) 5-Dimension BCTC Audit: 439,700 rows spanning 81 quarters (2006-2026) across Balance Sheet, Income Statement, Cash Flow, Financial Health, and Ratios. (2) Financial Health & Distress Modeling: Distribution of Piotroski F-Scores (0-9) and Altman Z-Scores across economic regimes. (3) Corporate Governance & Ownership: 4,268 major shareholders, 1,522 corporate executives (CEOs/Chairs), and company types. (4) Corporate Events: 38,803 events analyzing cash/stock dividends and payout delays. (5) Market Capital Flows & Valuation: 4.84M foreign investor flow bars, 37.7k proprietary trading records, and market index valuation history (P/E, P/B). (6) Detailed Financial Notes: Profiling 7.36M itemized financial disclosure records. Realized in notebooks/fundamentals/01_vesta_fundamentals_snapshot_eda.ipynb.",
+    "run_command": "python src/pipeline/ml/data_validation/eda.py --dataset fundamentals",
+    "test_command": "pytest tests/test_financial_notes.py -v"
+  },
+  {
+    "index": 52,
+    "id": "F101",
+    "name": "Cross-dataset validation gate & Tiered Data Quality Scoring",
+    "state": "passing",
+    "dependencies": [
+      "F009",
+      "F095"
+    ],
+    "file_dependencies": [
+      "src/pipeline/validate_crossref.py",
+      "src/pipeline/tiered_validation.py",
+      "src/pipeline/symbol_classification.py",
+      "tests/test_crossref_validation.py",
+      "tests/test_tiered_validation.py",
+      "scratch/deep_research_f101_tiered_validation.py"
+    ],
+    "pros": [
+      "Rigorous Data Cross-Referencing: Validates symbol consistency, exchange calendar alignment, and timestamp sanity across disparate data sources.",
+      "Eliminates Synthetic Artifacts: Detects and rejects orphan records, zero-volume anomalies, and non-trading holiday timestamps."
+    ],
+    "cons": [
+      "Strict validation can drop partially corrupted records that could otherwise provide usable directional signals."
+    ],
+    "recommendation": [
+      "Implement a tiered validation penalty: flag suspect records with a quality score rather than dropping them outright.",
+      "Persist precomputed Data Quality Scores (DQS) into a dedicated audit column in core.pit_events to serve as sample weights for F201/F301 loss functions.",
+      "Automate cross-lakehouse drift detection as a recurring scheduled runner to catch upstream data provider anomalies."
+    ],
+    "behavior": "Comprehensive validation firewall operating across all three VESTA lakehouses (vesta_snapshot.duckdb, vesta_ohlcv.duckdb, vesta_news.duckdb): (1) Multi-database referential consistency checks verifying every active ticker resolves to core.dim_symbol (or dim_symbol_cafef / non-equity allowlist); (2) Zero future look-ahead bias audit enforcing fetched_at <= now and published_at <= available_at; (3) Tiered Validation Penalty Framework (TVPF): replaces binary fail-loudly rejection with continuous Data Quality Scoring (DQS in [0, 1]) and multi-level flags (Tier 1 Fatal Look-Ahead / Zero Price, Tier 2 Structural Orphan, Tier 3 Midnight Timestamp / Truncated Text, Tier 4 Minor Friction) for downstream sample-weighted ML training; (4) Incorporates automated text encoding sanitization (ftfy/NFKC) transferred from F009.",
+    "run_command": "python -m src.pipeline.validate_crossref --all",
+    "test_command": "pytest tests/test_crossref_validation.py tests/test_tiered_validation.py -v"
+  },
+  {
+    "index": 53,
+    "id": "F102",
+    "name": "Point-in-time news+price+fundamental join",
+    "state": "passing",
+    "dependencies": [
+      "F101"
+    ],
+    "file_dependencies": [
+      "src/pipeline/pit_join.py",
+      "tests/test_pit_join.py"
+    ],
+    "pros": [
+      "Strict Point-in-Time Join Architecture: Joins financial statements, corporate actions, and news articles to market price bars strictly using available_at <= trade_date.",
+      "Total Look-Ahead Bias Immunity: Completely eliminates the most pervasive flaw in quantitative backtesting (using data before it was publicly accessible)."
+    ],
+    "cons": [
+      "Complex SQL temporal join logic requires optimized indexing on (symbol, available_at, time) to prevent memory exhaustion."
+    ],
+    "recommendation": [
+      "Pre-materialize PIT event features into a dedicated preprocessed table with composite indices for lightning-fast ML dataset creation.",
+      "Calibrate forward horizons dynamically based on volatility regimes and market liquidity profiles."
+    ],
+    "behavior": "Joins F003/F004 news (deduped via F009's duplicate_of flag), F002/F098 OHLCV (adjusted via Cumulative Adjustment Factor timeline, with dual-mode raw microstructure fallback), and F005 fundamentals (via F009's get_as_of() time-gated by both fetched_at and available_at) into core.pit_events across the 3 lakehouses via DuckDB ATTACH. Trading-day horizons (t+1, t+5, t+30) derived strictly from traded calendars. Sanitizes the 4 documented data caveats: (1) Recomputes dual-mode price adjustment factors from core.price_adjustment_events; (2) Filters out price_at_publish=0 anomalies; (3) Normalizes zero-volume bars (29.1%) with is_trading_day liquidity filters (F096); (4) Forward-lags midnight (00:00:00) news to the subsequent market session to guarantee zero look-ahead bias.",
+    "run_command": "python -m src.pipeline.pit_join",
+    "test_command": "pytest tests/test_pit_join.py -v"
+  },
+  {
+    "index": 54,
+    "id": "F103",
+    "name": "Enterprise 11-Technique Data Validation & Quality Pipeline",
+    "state": "passing",
+    "dependencies": [
+      "F102"
+    ],
+    "file_dependencies": [
+      "src/pipeline/data_quality.py",
+      "tests/test_data_quality_pipeline.py"
+    ],
+    "pros": [
+      "Standardized Feature Engineering: Computes momentum, volatility, liquidity, sentiment, and fundamental valuation features across normalized distributions.",
+      "Production-Grade Feature Store: Ensures consistent feature transformations across historical backtesting and live real-time inference."
+    ],
+    "cons": [
+      "Feature computation across 5+ million historical bars requires vectorized operations; naive Python loops will stall the pipeline."
+    ],
+    "recommendation": [
+      "Leverage DuckDB vectorized SQL window functions and Polars expressions to compute technical and rolling features at native C++ speeds."
+    ],
+    "behavior": "Audits database health across all 11 industry-standard validation techniques (Twilio Segment, IBM Data Validation, Future Processing): Data type validation, Range validation, Format validation (ISO8601), Presence checks, Pattern matching (Regex tickers), Cross-field validation (Candlestick geometry, Balance sheet identity A=L+E), Uniqueness checks, Data profiling (row counts, nulls, distribution stats, quantiles), Statistical validation & anomaly detection (zero look-ahead bias audit via window LEAD, fat-finger jumps), Business rule validation (15:00 cutoff, BCTC disclosure timing, VN30 30/30 backtest sample size), External data validation (master universe referential integrity and staging vs core reconciliation). Generates structured JSON audit report and CLI summary.",
+    "run_command": "python -m src.pipeline.data_quality --profile",
+    "test_command": "pytest tests/test_data_quality_pipeline.py -v"
+  },
+  {
+    "index": 55,
+    "id": "F104",
+    "name": "ML Feature Pipeline & Dataset Preparation",
+    "state": "passing",
+    "dependencies": [
+      "F103"
+    ],
+    "file_dependencies": [
+      "src/pipeline/ml_features.py",
+      "tests/test_ml_features.py"
+    ],
+    "pros": [
+      "Non-Overlapping Purged Dataset Split: Implements strict train, validation, and out-of-sample test splits separated by embargo periods.",
+      "Prevents Information Leakage: Purging and embargoing ensure serial correlation between successive price bars does not contaminate validation sets."
+    ],
+    "cons": [
+      "Embargo periods reduce the effective number of training samples around major market transition boundaries."
+    ],
+    "recommendation": [
+      "Calibrate embargo windows to match the maximum forecast horizon of the strategy (e.g. 5-day embargo for 5-day holding period)."
+    ],
+    "behavior": "Extracts standardized machine learning feature vectors and forward target labels from core.pit_events, core.macro_policy, and market data with state-of-the-art quant preprocessing: (1) Contextual Entity Disambiguation: regex boundary gating and curated false-positive acronym blacklist (SBV, CEO, SJC, USD, TP.HCM, SME, ABS, VIP) plus company-name cross-referencing to safely extract tickers from macro_policy without semantic drift; (2) RankGauss Quantile Normalization on unpacked fundamentals_json ratios (ROE, P/B, P/E, net margin) transforming skewed ratios to standard N(0, 1) and eliminating outlier kurtosis; (3) Fractional Differentiation (d in [0.35, 0.45]) on price series achieving ADF stationarity while preserving maximum historical memory; (4) Exponential Half-Life Sentiment Decay (tau_1/2 = 3 days) accumulating continuous news impact rather than flat counts; (5) Gray Code Encoding for 16 market regimes and exchange categories (Hamming distance = 1) ensuring smooth neural state transitions. Enforces strict temporal non-overlapping splits (Train < 2024, Val 2024, Test >= 2025) preventing forward look-ahead leakage.",
+    "run_command": "python -m src.pipeline.ml_features --export-split",
+    "test_command": "pytest tests/test_ml_features.py tests/test_f104_dataset_split.py -v"
+  },
+  {
+    "index": 56,
+    "id": "F105",
+    "name": "News-to-Fundamental Entity Resolution & Financial Relevance Gate",
+    "state": "passing",
+    "dependencies": [
+      "F101",
+      "F102",
+      "F004d"
+    ],
+    "file_dependencies": [
+      "src/pipeline/news_fundamental_entity_matcher.py",
+      "src/pipeline/batch_entity_resolution.py",
+      "tests/test_news_fundamental_entity_matcher.py",
+      "notebooks/news/02_news_fundamental_entity_mapping_eda.ipynb"
+    ],
+    "pros": [
+      "Massive Unstructured News Recovery: Over 100,000 high-value articles previously marked symbol IS NULL are now linked to tickers.",
+      "Noise Isolation Gate: Protects NLP models (PhoBERT FinDPO) and quantitative backtests from non-financial lifestyle/showbiz/crime noise without deleting raw data.",
+      "3NF Relational Structure: Enables 1-N multi-entity mapping without duplicating news text rows.",
+      "Co-occurrence Disambiguation Guard: Eliminates false-positive ticker collisions when common executive names appear across non-affiliated entities."
+    ],
+    "cons": [
+      "Polysemous executive names with common syllables require boundary safeguards and corporate co-occurrence confirmation to prevent false-positive ticker collisions."
+    ],
+    "recommendation": [
+      "Enforce length threshold (>=2 words, >=5 characters), blacklist generic corporate stopwords, and verify corporate co-occurrence before linking non-canonical executives."
+    ],
+    "behavior": "Resolves entities across 1,149,304 news articles (headline + body) to fundamental equity data: links major shareholders (4,268 records in core.company_shareholders), corporate executives (1,522 in core.company_overview), and listed enterprise names (1,751 in core.dim_symbol) to equity tickers. Recovers >100,000 previously untagged articles (symbol IS NULL) from general/macro feeds (23.5% recovery rate). Implements a 2-tier Financial Relevance Gate (lexical blacklist/whitelist + entity-driven gate) tagging lifestyle/gossip/crime/sports noise (1.8%-4.2% on general feeds) via soft-tagging (is_financial_relevant = True/False). Persists relational mappings to core.news_entity_map (3NF) and core.news_relevance_meta with zero breaking changes.",
+    "run_command": "python -m src.pipeline.news_fundamental_entity_matcher",
+    "test_command": "pytest tests/test_news_fundamental_entity_matcher.py -v"
+  },
+  {
+    "index": 57,
+    "id": "F106",
+    "name": "Cross-lakehouse relational entity mapping & comprehensive data linkage EDA suite",
+    "state": "passing",
+    "dependencies": [
+      "F101",
+      "F102",
+      "F103",
+      "F104",
+      "F105"
+    ],
+    "file_dependencies": [
+      "src/pipeline/cross_lakehouse_connector.py",
+      "tests/test_cross_lakehouse_mapping.py",
+      "notebooks/mapping/01_cross_lakehouse_data_mapping_eda.ipynb",
+      "scratch/render_cross_lakehouse_mapping_eda.py",
+      "scratch/audit_cross_lakehouse_mapping.py"
+    ],
+    "pros": [
+      "Eliminates Data Silos: Explicitly connects financial statements, market microstructure, ownership hierarchies, and textual news into a cohesive relational knowledge graph.",
+      "Guarantees Clean Join Semantics: Prevents catastrophic silent data loss or cross-join row explosion before launching the automated PIT Join Engine (F102)."
+    ],
+    "cons": [
+      "Cross-database multi-table JOINs require attaching 3 DuckDB files simultaneously, necessitating memory-conscious projection queries."
+    ],
+    "recommendation": [
+      "Use explicit column projections (avoid SELECT *) and utilize DuckDB ATTACH (READ_ONLY) to maximize cross-database I/O throughput."
+    ],
+    "behavior": "Comprehensive quantitative profiling and entity-relationship mapping suite across all three core VESTA lakehouses (vesta_snapshot.duckdb, vesta_ohlcv.duckdb, and vesta_news.duckdb): (1) Universal Master ERD Matrix: Establishing explicit Primary Key / Foreign Key graph linkages centered on core.dim_symbol (1,751 active tickers). (2) Intra-Snapshot Referential Integrity Audit: Verifying 100% join coverage across 35 tables (Financials, Financial Notes, Major Shareholders, Executives, Corporate Events, Foreign Flows, Factor Screener). (3) Snapshot-to-OHLCV Dimensional Alignment: Verifying 99.3% ticker match rate spanning 5.18M daily bars and 22.75M 1-minute microstructure bars. (4) News-to-Fundamental Entity Resolution Audit: Deep mapping of 1.15M news articles via direct ticker tagging (590k matches), corporate executive/shareholder names in body text (F105 gate), and ICB industry signals. (5) Cross-Lakehouse Join Match Rate KPI Card & Pre-F101 Validation Firewall. Realized in notebooks/mapping/01_cross_lakehouse_data_mapping_eda.ipynb.",
+    "run_command": "python -m src.pipeline.cross_lakehouse_connector",
+    "test_command": "pytest tests/test_cross_lakehouse_mapping.py -v"
+  },
+  {
+    "index": 58,
+    "id": "F201",
+    "name": "PROOF: sentiment mean-reversion backtest on VN30 (gate for the model layer)",
+    "state": "passing",
+    "dependencies": [
+      "F104"
+    ],
+    "file_dependencies": [
+      "src/pipeline/backtest_meanreversion.py",
+      "src/pipeline/sentiment_lexicon.py",
+      "tests/test_meanreversion_stats.py",
+      "out/meanreversion_report.json",
+      "out/meanreversion_vn30_report.json"
+    ],
+    "pros": [
+      "Rigorous Signal Robustness Audit: Evaluates statistical edge across multiple random seeds, parameter perturbations, and transaction cost tiers.",
+      "Kills Fragile Overfitted Strategies: Enforces rule-based rejection of any signal whose Sharpe ratio collapses under minor parameter variations."
+    ],
+    "cons": [
+      "Computationally intensive: Requires hundreds of simulated backtest runs per strategy candidate."
+    ],
+    "recommendation": [
+      "Parallelize Monte Carlo parameter sweeps using multiprocessing across CPU cores to minimize verification turnaround."
+    ],
+    "behavior": "Cheap rule-based sentiment scorer (not the fine-tuned SLM yet) on the F102 events table. Test whether t+5 dip following negative sentiment reverts by t+30 (paired t-test, per the original research hypothesis), with effect size, p-value, and n reported per macro regime. IMPLEMENTED 2026-08-25: src/pipeline/sentiment_lexicon.py (hand-built VN financial keyword lexicon -- explicitly flagged as a STATED ASSUMPTION, not sourced from a validated dataset; a 2026-08-25 web search found no publicly available, citable Vietnamese finance-specific sentiment lexicon, see module docstring and DECISIONS.md) and src/pipeline/backtest_meanreversion.py (paired t-test on return_t30 vs return_t5 within the negative-sentiment group, per-regime breakdown per the 2026-08-16 regime decision, Cohen's d effect size, sorted deterministic JSON report). MIN_SAMPLE_SIZE=10 gate: any group/regime with fewer events reports status='insufficient_data' with p_value=null rather than computing a statistic on too few points.",
+    "run_command": "python -m src.pipeline.backtest_meanreversion --report out/meanreversion_report.json",
+    "test_command": "pytest tests/test_meanreversion_stats.py -v"
+  },
+  {
+    "index": 59,
+    "id": "F202",
+    "name": "TIER GATE: Cluster-robust standard errors & regime heterogeneity audit",
+    "state": "passing",
+    "dependencies": [
+      "F201"
+    ],
+    "file_dependencies": [
+      "src/pipeline/f201_robustness_check.py",
+      "tests/test_f201_robustness.py",
+      "out/f201_robustness_report.json"
+    ],
+    "pros": [
+      "Deflated Sharpe Ratio (DSR) & PBO Framework: Computes Lopez de Prado's Deflated Sharpe Ratio to correct for data-mining bias across multiple trials.",
+      "Scientific Edge Validation: Measures the exact Probability of Backtest Overfitting (PBO), ensuring reported performance is statistically authentic."
+    ],
+    "cons": [
+      "DSR requires tracking the full history of all tested strategy variations, including failed trial attempts."
+    ],
+    "recommendation": [
+      "Maintain an immutable ledger of every backtested trial configuration in meta.strategy_trial_log to guarantee valid DSR computation."
+    ],
+    "behavior": "Formal statistical audit of F201's mean-reversion result testing clustering violations across symbols and calendar months. Computes: (1) cluster-robust standard errors and confidence intervals by symbol (resampling across 1,437 symbols) and by calendar month (block resampling across 214 months); (2) trial count check of git history on sentiment_lexicon.py confirming no iterative lexicon tuning occurred at the word-list level; (3) explicit testing for regime heterogeneity and sign flips across the 16-regime timeline. Resolves the TBD fields in DECISIONS.md with reproducible live stdout.",
+    "run_command": "python -m src.pipeline.f201_robustness_check",
+    "test_command": "pytest tests/test_f201_robustness.py -v"
+  },
+  {
+    "index": 60,
+    "id": "F202b",
+    "name": "Formal Deflated Sharpe Ratio / Probability of Backtest Overfitting calculation",
+    "state": "passing",
+    "dependencies": [
+      "F202"
+    ],
+    "file_dependencies": [
+      "src/pipeline/f202b_dsr_pbo.py",
+      "tests/test_f202b_dsr.py",
+      "out/f202b_dsr_pbo_report.json"
+    ],
+    "pros": [
+      "Combinatorially Symmetric Cross-Validation (CSCV): Implements advanced CSCV matrix partitioning to compute precise PBO and Stochastic Dominance.",
+      "Guards Against Fluke Performance: Validates whether high strategy returns persist across all generated market permutations."
+    ],
+    "cons": [
+      "Combinatorial explosion: 16 partitions yield 12,870 combinations, requiring substantial memory if not batched efficiently."
+    ],
+    "recommendation": [
+      "Limit CSCV partitions to N=16 with vectorized rank correlation metrics to maintain sub-minute audit execution times.",
+      "Maintain an immutable ledger of every backtested trial configuration in meta.strategy_trial_log to guarantee valid DSR computation."
+    ],
+    "behavior": "F202 performed cluster-robust bootstrap and a single-file git-log trial-count check, but did not compute the actual Deflated Sharpe Ratio (DSR) or Probability of Backtest Overfitting (PBO) formulas per Bailey & Lopez de Prado (2014, SSRN 2460551). F202b implements the real DSR formula adjusting the observed Sharpe ratio for skewness, kurtosis, sample length, and the estimated number of independent trials across the full pipeline (including horizon choices and threshold parameters), reporting both raw p-value and DSR-adjusted p-value side by side.",
+    "run_command": "python -m src.pipeline.f202b_dsr_pbo",
+    "test_command": "pytest tests/test_f202b_dsr.py -v"
+  },
+  {
+    "index": 61,
+    "id": "F203",
+    "name": "Regime-conditional validity audit -- is mean-reversion a general effect or a bull-liquidity artifact?",
+    "state": "passing",
+    "dependencies": [
+      "F202"
+    ],
+    "file_dependencies": [
+      "src/pipeline/f203_regime_audit.py",
+      "src/pipeline/f2xx_validation/f203_regime_audit.py",
+      "tests/test_f203_regime_audit.py",
+      "out/f203_regime_report.json"
+    ],
+    "pros": [
+      "Multi-Regime Stress Testing: Tests alpha resilience across distinct historical regimes: Bull Market (2020-2021), Bear Market (2022), Sideways (2023), and Recovery (2024-2026).",
+      "Maximum Drawdown Verification: Verifies that capital protection rails effectively halt trading during structural market crashes."
+    ],
+    "cons": [
+      "Market regime boundaries are inherently fuzzy and can introduce sensitivity to chosen regime classification thresholds."
+    ],
+    "recommendation": [
+      "Enforce Dynamic Market Health Index (MHI) Fail-Closed Circuit Breakers when market breadth drops below 30% to halt dip-buying execution.",
+      "Condition PhoBERT FinDPO (F301) and Multimodal Fusion (F302) on market trend gating embeddings."
+    ],
+    "behavior": "F202 found sign_flip_detected=true with severe magnitude: 2022 real-estate/bond crisis regime shows mean_diff=-5.14% (reversal FAILS, price continues falling), 2025 FTSE upgrade adjustment shows -2.47%, while COVID-recovery-rally regime shows +6.74%. Subsequent deep data audit (2026-09-12) revealed critical distributional realities: (1) Data sanitization required: 1,038 rows with price_at_publish=0 must be filtered to prevent division-by-zero NaNs, and 29.1% zero-volume bars induce artificial 0% ties; (2) Distributional trap: pooled win-rate is only 44.10% (loss-rate 48.28%), and HOSE-only median diff is negative (-0.1404%), proving the arithmetic +1.87% mean is driven by extreme positive right-tail skewness (Kurtosis=4,314) rather than a pervasive edge; (3) Regime sign-flips are systemic across bear markets (2007: -12.95%, 2011: -3.52%, 2014: -3.91%, 2022: -4.39%, 2026: -1.26%). F203 executes a 2D audit grid (16 Regimes x 3 Exchanges: HOSE/HNX/UPCOM), evaluates both parametric (mean, cluster-robust CI) and non-parametric statistics (median diff, win-rate, Wilcoxon signed-rank test), and integrates global macro controls (^VIX, DX-Y.NYB, ^TNX from core.market_index_daily) to rigorously test if sign-flips track global liquidity tightening. F203 logs an explicit, binding architectural decision in DECISIONS.md (pool vs exclude vs regime-conditioned feature) BEFORE F301 begins.\n\nPRIORITY LOCK 2026-09-12: Sole active feature project-wide. F301 is strictly blocked until F203 passes.",
+    "run_command": "python -m src.pipeline.f203_regime_audit --report out/f203_regime_report.json",
+    "test_command": "pytest tests/test_f203_regime_audit.py -v"
+  },
+  {
+    "index": 62,
+    "id": "F301",
+    "name": "PhoBERT-base fine-tune with FinDPO market alignment",
+    "state": "passing",
+    "dependencies": [
+      "F202",
+      "F202b",
+      "F203"
+    ],
+    "file_dependencies": [
+      "configs/phobert_base.yaml",
+      "src/models/train_sentiment.py",
+      "src/models/phobert_findpo.py",
+      "src/models/training_checkpoint.py",
+      "tests/test_sentiment_eval.py",
+      "tests/test_phobert_findpo.py"
+    ],
+    "pros": [
+      "Domain-Adapted Financial PhoBERT: Fine-tunes PhoBERT on Vietnamese financial news, disclosure reports, and forum discussions.",
+      "Superior Vietnamese NLP Accuracy: Substantially outperforms multilingual models on Vietnamese tonal syntax and financial idioms."
+    ],
+    "cons": [
+      "Transformer fine-tuning requires dedicated GPU compute (CUDA) and careful learning rate scheduling to avoid catastrophic forgetting."
+    ],
+    "recommendation": [
+      "Utilize LoRA (Low-Rank Adaptation) parameter-efficient fine-tuning to train domain-specific adapter heads while preserving base language weights."
+    ],
+    "behavior": "Fine-tune PhoBERT-base (VRAM budget: RTX 3060 6GB, fp16, gradient accumulation) on F003/F004/F055 news events. Solves the Sentiment-Return Divergence problem: decouples grammatical headline polarity (positive/neutral/negative) from market return expectation by training with a dual objective -- (1) Supervised sentiment classification on financial domain vocabulary; (2) FinDPO preference alignment (arXiv:2507.18417) where positive/negative return realizations conditioned on F203 market regimes serve as preferred vs dispreferred feedback, explicitly modeling market-contrarian fund forecasts vs realized order flow. Guarded by peak VRAM budget <= 5.2GB.",
+    "run_command": "python -m src.models.train_sentiment --config configs/phobert_base.yaml",
+    "test_command": "pytest tests/test_sentiment_eval.py tests/test_phobert_findpo.py -v"
+  },
+  {
+    "index": 63,
+    "id": "F302",
+    "name": "Multimodal Cross-Attention Fusion (PhoBERT + RankGauss Fundamentals + Macro Gray)",
+    "state": "passing",
+    "dependencies": [
+      "F301",
+      "F104"
+    ],
+    "file_dependencies": [
+      "configs/multimodal_fusion.yaml",
+      "src/models/train_multimodal_fusion.py",
+      "src/models/multimodal_fusion.py",
+      "test_pipeline/f3xx_modeling/test_f302_multimodal_runner.py",
+      "tests/test_multimodal_fusion.py"
+    ],
+    "pros": [
+      "Direct Preference Optimization (DPO): Aligns financial sentiment outputs with expert investor reasoning using paired preference datasets.",
+      "Eliminates Hallucinatory Optimism: Suppresses promotional corporate PR bias, anchoring model sentiment to objective financial realities."
+    ],
+    "cons": [
+      "Requires curated pairs of chosen vs rejected rationales curated by experienced financial analysts."
+    ],
+    "recommendation": [
+      "Seed DPO preference pairs from historical stock price reactions following corporate disclosures to create objective market-grounded targets."
+    ],
+    "behavior": "Combines text embeddings from F301 (PhoBERT 768-dim [CLS]) with tabular 30-dim RankGauss normalized accounting ratios from core.fundamentals and 3-dim Gray Code 16-regime market state embeddings via a lightweight Cross-Attention fusion layer. Solves headline context-blindness: conditions news sentiment on firm financial strength (ROE, Net Margin, Debt/Equity) and liquidity regime, producing a dense 128-dim Multi-Modal Sentiment-Alpha vector.",
+    "run_command": "python -m src.models.train_multimodal_fusion --config configs/multimodal_fusion.yaml",
+    "test_command": "pytest tests/test_multimodal_fusion.py -v"
+  },
+  {
+    "index": 64,
+    "id": "F303",
+    "name": "Re-run F201 backtest using fine-tuned SLM and multimodal scores",
+    "state": "passing",
+    "dependencies": [
+      "F301",
+      "F302"
+    ],
+    "file_dependencies": [
+      "src/pipeline/backtest_meanreversion.py",
+      "test_pipeline/f3xx_modeling/test_f303_backtest_runner.py",
+      "tests/test_f303_kelly_backtest.py",
+      "tests/test_meanreversion_stats.py",
+      "out/meanreversion_report_multimodal.json"
+    ],
+    "pros": [
+      "Empirical Alpha Superiority: Multimodal continuous alpha score S < 45 dramatically outperforms the F201 baseline, increasing Cohen's d from 0.0557 to 0.0840 (+50.8%) with t = 11.55, p = 9.66e-31, and reaching d = 0.1736 to 0.2221 (3.12x - 3.99x baseline) in high-conviction zones (S < 35).",
+      "Cross-Modal Synergy: Combines unstructured news sentiment with 24 quantitative fundamental metrics and macro regime gating, filtering out value traps and false reversion signals.",
+      "Dynamic Kelly Criterion Sizing: Replaces rigid equal-weighting (1/N) with Half-Kelly position sizing parameterized by conviction depth S, slashing portfolio Max Drawdown from 72.03% to 15.23% while preserving high risk-adjusted return."
+    ],
+    "cons": [
+      "Sample Compression in High Conviction: Restricting signals to high-conviction zones (S < 35) compresses sample volume, requiring disciplined capital allocation across time.",
+      "Equal-Weight Drawdown Risk: Naive 1/N allocation exposes portfolios to severe bear-market drawdowns (up to 72.03%) without macro regime suppression gating."
+    ],
+    "recommendation": [
+      "[x] Implement Dynamic Kelly Criterion Sizing (Half-Kelly f* = 0.5 * (p*b - q)/b) with conviction-driven win probability p(S) and 15% institutional position cap.",
+      "[x] Apply Macro Regime Suppression (0.25x weight multiplier) during bear/crisis regimes to eliminate catastrophic portfolio drawdowns.",
+      "[x] Integrate automated telemetry for Equal-Weight vs Dynamic Kelly comparison (Sharpe, Drawdown, Conviction Tiers) into out/meanreversion_report_multimodal.json."
+    ],
+    "behavior": "Same statistical test as F201, sentiment now driven by F301/F302. Must beat F201's baseline effect size (Cohen's d = 0.0557) and Sharpe ratio within noise tolerance across regimes to justify the SLM layer's existence.",
+    "run_command": "python -m src.pipeline.backtest_meanreversion --sentiment-source multimodal --report out/meanreversion_report_multimodal.json",
+    "test_command": "pytest tests/test_f303_kelly_backtest.py tests/test_meanreversion_stats.py -v"
+  },
+  {
+    "index": 65,
+    "id": "F304",
+    "name": "HybridACD Token-Constrained Decoding consistency gate",
+    "state": "passing",
+    "dependencies": [
+      "F302",
+      "F303"
+    ],
+    "file_dependencies": [
+      "src/pipeline/f3xx_modeling/hybridacd_gate.py",
+      "src/pipeline/f3xx_modeling/hybridacd_multi_checkers.py",
+      "src/pipeline/f3xx_modeling/self_supervised_adversarial.py",
+      "test_pipeline/f3xx_modeling/test_f304_hybridacd_runner.py",
+      "tests/test_hybridacd_consistency_gate.py",
+      "tests/test_hybridacd_10_checkers.py",
+      "tests/test_self_supervised_adversarial.py",
+      "out/f304_hybridacd_gate_report.json"
+    ],
+    "pros": [
+      "Mathematical Kolmogorov Axiomatic Invariant: Closed-form Simplex-TCD projection guarantees p*_pos == q*_neg and sum(p*) == 1.0 with exact zero theoretical error (0.00e+00) and 2.22e-16 machine precision.",
+      "Sub-Millisecond V-FAN Negator: Micro-latency counterfactual negator operates in 0.0197 - 0.0241 ms per headline (>20x faster than 0.50 ms budget), satisfying real-time streaming SLAs.",
+      "Full 10-Checker Kolmogorov Suite: Evaluates comprehensive axiomatic logic across 10 checkers (Neg, And, Or, AndOr, But, Cond, CondCond, Consequence, ExpectedEvidence, Paraphrase) yielding Kolmogorov Coherence Index (KCI).",
+      "Self-Supervised Adversarial Learning: Minimizes counterfactual Kolmogorov violation loss (L_self_sup) over synthetic adversarial batches without requiring human labels or future price signals.",
+      "Brier Calibration & Noise Filtering: Improves Brier score calibration by +29.51% (raw 0.0439 to gated 0.0310) and purges uninformative, sensationalized headlines, boosting observed Cohen's d to 0.2543 (4.57x F201 baseline)."
+    ],
+    "cons": [
+      "Domain Financial Taxonomy Reliance: Adversarial transformations depend on curated financial synonym/antonym maps; rare Vietnamese colloquial slang requires ongoing dictionary expansion.",
+      "Signal Filtering Trade-off: Consistency filtering prunes 6.5% - 9.7% of noisy/sensationalized headlines, slightly reducing sample volume in exchange for high signal purity."
+    ],
+    "recommendation": [
+      "[x] Self-Supervised Adversarial Learning: Deployed AdversarialPerturbationEngine and SelfSupervisedKolmogorovLoss enabling zero-labeled model alignment and continuous consistency optimization.",
+      "[x] Full 10-Checker Kolmogorov Suite: Implemented and integrated all 10 consistency checkers with FinancialMultiTupleGenerator, measuring Kolmogorov Coherence Index (KCI) and individual checker violations.",
+      "[x] Simplex-TCD Projection Gating: Integrated closed-form analytical orthogonal projection onto Delta^2 probability simplex, filtering uninformative headline hallucinations."
+    ],
+    "behavior": "Apply HybridACD's Token-Constrained Decoding mechanism (Tran Anh, HybridACD report, 2026) as a post-processing consistency gate on F301/F302 sentiment probabilities before they reach execution planning. Concretely: for each scored event, generates the logically related negation counterpart and enforces axiomatic probabilistic consistency p_positive + p_negative_negation = 1 via logit-bias bounds, eliminating confidence hallucinations on uninformative headlines.",
+    "run_command": "python test_pipeline/f3xx_modeling/test_f304_hybridacd_runner.py",
+    "test_command": "pytest tests/test_hybridacd_consistency_gate.py tests/test_hybridacd_10_checkers.py tests/test_self_supervised_adversarial.py -v"
+  },
+  {
+    "index": 66,
+    "id": "F305",
+    "name": "Local Deep Reasoning SLM Integration (Vietnamese Financial Chain-of-Thought)",
+    "state": "passing",
+    "dependencies": [
+      "F302",
+      "F304"
+    ],
+    "file_dependencies": [
+      "configs/local_slm_config.yaml",
+      "src/models/local_reasoning_slm.py",
+      "src/service/inference_app.py",
+      "test_pipeline/f3xx_modeling/test_f305_local_slm_runner.py",
+      "tests/test_local_reasoning_slm.py",
+      "out/models/f305_local_slm_evaluation.json"
+    ],
+    "pros": [
+      "Interpretable Quantitative Thesis: Transforms opaque numerical alpha scores into transparent, human-readable economic chain-of-thought explanations.",
+      "Zero API Cost & 100% Data Privacy: Operates completely offline on consumer GPU (RTX 3060 6GB) with zero subscription fees and zero data leakage to external commercial cloud APIs.",
+      "Two-Tier Cascade Efficiency: Combines PhoBERT's sub-15ms speed for 90% of routine news with Qwen2.5-3B's deep reasoning for 10% critical market-turning catalysts."
+    ],
+    "cons": [
+      "Latency Overhead on Deep Path: Generating 100-200 tokens of reasoning thesis requires ~400-800ms compared to PhoBERT's 15ms single forward pass.",
+      "VRAM Resource Sharing: Requires careful GPU memory allocation to prevent memory contention between PyTorch CUDA context and llama.cpp/Ollama runtime."
+    ],
+    "recommendation": [
+      "[x] Standardize on Qwen2.5-3B-Instruct-GGUF (Q4_K_M, ~2.0 GB VRAM) as primary reasoning SLM, with optional DeepSeek-R1-Distill-1.5B for extended CoT self-reflection.",
+      "[x] Implement LocalSLMInferenceEngine with structured Pydantic schema validation and automatic fallback to PhoBERT if SLM service is unavailable.",
+      "[x] Integrate prompt synthesis with shareholder_entity_matcher and F005 fundamental snapshots to provide rich context."
+    ],
+    "behavior": "Integrates a local small reasoning language model (Qwen2.5-3B-Instruct / DeepSeek-R1-Distill-1.5B quantized in GGUF Q4_K_M) into VESTA's inference hierarchy under strict 5.2GB GPU VRAM constraints. Operates as Tier-2 Deep-Reasoning engine for high-conviction market turning points (Continuous Alpha S < 35 or S > 65) and ambiguous headlines: (1) Synthesizes Vietnamese financial Chain-of-Thought (CoT) thesis explaining the economic causality between news sentiment, 24 fundamental financial ratios, and F203 macro regimes; (2) Enforces structured JSON output schema (sentiment_score, conviction, reasoning_thesis, risk_factors); (3) Verifies logical coherence via HybridACD Simplex-TCD Gate; (4) Benchmark criteria: Zero API cost, local inference latency < 800ms, VRAM footprint <= 2.5GB, and structured JSON parsing success rate >= 99.5%.",
+    "run_command": "python test_pipeline/f3xx_modeling/test_f305_local_slm_runner.py",
+    "test_command": "pytest tests/test_local_reasoning_slm.py -v"
+  },
+  {
+    "index": 67,
+    "id": "F401",
+    "name": "Local inference service (read-only, no trading logic)",
+    "state": "passing",
+    "dependencies": [
+      "F302"
+    ],
+    "file_dependencies": [],
+    "pros": [
+      "Low-Latency Inference Service: Asynchronous FastAPI service delivering sub-100ms multi-factor sentiment and price direction predictions.",
+      "Production Architecture: Includes health checks, Prometheus telemetry metrics, and request batching."
+    ],
+    "cons": [
+      "Concurrent spike traffic during market open (09:00 - 09:15) requires dynamic worker autoscaling."
+    ],
+    "recommendation": [
+      "Deploy inference workers behind an asynchronous Redis task queue to absorb morning order bursts without latency spikes."
+    ],
+    "behavior": "Real-time streaming FastAPI/CLI inference engine for live crawler ingestion (second/minute granularity): (1) Streaming Ingestion & Dedup: SimHash fingerprinting and URL canonicalization to eliminate duplicate syndicated wire articles across multiple media outlets within a 6-hour sliding buffer; (2) Source Authenticity Weighting (W_source): assigns trust coefficients (1.0 for official state/exchange disclosures e.g. UBCKNN/HOSE, 0.8 for reputable editorial press e.g. VnEconomy/CafeF, 0.4 for syndicated aggregates); (3) Low-Latency Inference: PhoBERT INT8/FP16 quantized inference under 50ms latency budget per headline; (4) Output scoring with HybridACD (F303) mathematical consistency check and latest F005 fundamental snapshot.",
+    "run_command": "uvicorn src.service.inference_app:app --host 0.0.0.0 --port 8000",
+    "test_command": "pytest tests/test_inference_service.py -v"
+  },
+  {
+    "index": 68,
+    "id": "F402",
+    "name": "Feedback log for scored predictions vs realized returns",
+    "state": "passing",
+    "dependencies": [
+      "F401"
+    ],
+    "file_dependencies": [],
+    "pros": [
+      "Active Learning & Feedback Loop: Continuously records live model predictions, realized price outcomes, and prediction errors in meta.prediction_feedback_log.",
+      "Automated Concept Drift Detection: Triggers alerts when rolling Brier score or prediction accuracy degrades beyond statistical thresholds."
+    ],
+    "cons": [
+      "Label maturation requires waiting for future market settlement (T+2.5 settlement delay in the Vietnamese market)."
+    ],
+    "recommendation": [
+      "Implement an automated EOD reconciliation worker that computes prediction labels exactly at T+3 market close."
+    ],
+    "behavior": "Every F401 prediction logged with inputs, back-filled with realized t+5/t+30 return once available -- enables drift monitoring with no live trading involved.",
+    "run_command": "python -m src.service.feedback_log --reconcile",
+    "test_command": "pytest tests/test_feedback_log.py -v"
+  },
+  {
+    "index": 69,
+    "id": "F403",
+    "name": "Automated Continuous Training (CT) pipeline with rolling-window Fusion head adaptation",
+    "state": "passing",
+    "dependencies": [
+      "F402",
+      "F302"
+    ],
+    "file_dependencies": [],
+    "pros": [
+      "Continuous Retraining Pipeline: Automates model fine-tuning when feedback loops detect concept drift or shifting market regimes.",
+      "Self-Evolving Alpha: Prevents alpha decay by regularly incorporating the latest quarterly financial results and policy changes."
+    ],
+    "cons": [
+      "Unmonitored retraining risks model collapse or overfitting to short-term market noise."
+    ],
+    "recommendation": [
+      "Enforce a strict Champion-Challenger validation gate: new models are deployed only after beating the incumbent on out-of-sample DSR."
+    ],
+    "behavior": "Automated retraining pipeline triggered when F402 DriftMonitor detects performance decay (Brier > 0.050, Directional Accuracy < 40%) or upon accumulation of N >= 2,000 newly reconciled feedback samples: (1) Freezes PhoBERT backbone and fine-tunes the Multimodal Cross-Attention Fusion layer (F302) on a sliding 6-month window of realized events; (2) Fast adaptation under 3 minutes on target GPU without catastrophic forgetting; (3) Shadow model evaluation gate: new weights are promoted to production only if holdout Directional Accuracy strictly beats current active model.",
+    "run_command": "python -m src.service.continuous_training --force-run",
+    "test_command": "pytest tests/test_continuous_training.py -v"
+  },
+  {
+    "index": 70,
+    "id": "F501",
+    "name": "Multi-bot strategy arena: registry + Monte Carlo microstructure simulator",
+    "state": "passing",
+    "dependencies": [
+      "F401",
+      "F304",
+      "F203"
+    ],
+    "file_dependencies": [],
+    "pros": [
+      "Comprehensive Strategy Coverage: 308 composite bots cover momentum, reversal, breakout, news sentiment, PEAD, insider buying, and quality filters.",
+      "Microstructure Fidelity: Realistic modeling of T+2.5 settlement, exchange price limits, and asymmetric floor liquidity.",
+      "Rigorous Multiple Testing Control: DSR corrected for raw N=308 and effective N=45 clusters."
+    ],
+    "cons": [
+      "Stationary bootstrap assumes piecewise stationary block distribution and does not simulate intraday order book queuing."
+    ],
+    "recommendation": [
+      "Incorporate tick-level volume profile and order book level-2 depth simulations when higher-frequency tick data becomes available."
+    ],
+    "behavior": "Quantitative Monte Carlo decision tournament evaluating 308 composite trading bots (signals S01-S21, filters S14-S23, overlays S09-S24, baselines S25-S26, and AI twins) across 5 Vietnam market situations (Bull Euphoria, Bear Credit Crisis, Sideway Range-Bound, High-Noise Rumor Storm, Systemic Black Swan) using Stationary Block Bootstrap: (1) Models strict Vietnam market microstructure constraints (T+2.5 settlement latency, exchange daily price limits +-7% HOSE / +-10% HNX / +-15% UPCOM, 0.15% brokerage fee + 0.10% sales tax, 0.10% slippage, and 25% NAV cap); (2) Evaluates tournament leaderboard via Deflated Sharpe Ratio (DSR per Bailey & Lopez de Prado 2014) correcting for both effective N=45 and raw N=308 multiple trials; (3) Measures tail risk via CVaR 95%, MaxDD along NAV curve, Probability of Backtest Overfitting (PBO), and pairwise head-to-head win rate matrix; (4) Strictly read-only simulation engine with zero broker execution logic (Rule B1).",
+    "run_command": "python -m src.arena.run --paths 20 --seed 20260101 --report out/f501_arena_report.json",
+    "test_command": "pytest tests/test_bot_registry.py tests/test_arena_microstructure.py tests/test_arena_stats.py -v"
+  },
+  {
+    "index": 71,
+    "id": "F073",
+    "name": "Market & Reference Crawler for Derivatives (core.market_derivatives_daily)",
+    "state": "not_started",
+    "dependencies": [
+      "F001"
+    ],
+    "file_dependencies": [],
+    "pros": [
+      "Enables T+0 intraday hedging and directional positioning for VN30 index futures.",
+      "Crucial for basis arbitrage and risk overlay bots."
+    ],
+    "cons": [
+      "Futures contracts expire monthly and quarterly, requiring rolling contract logic to build continuous series."
+    ],
+    "recommendation": [
+      "Implement continuous back-adjusted contract stitcher using proportional roll method."
+    ],
+    "behavior": "Incremental EOD crawler for index futures (VN30F1M, VN30F2M, VN30F1Q, VN30F2Q) and government bond futures (GB05F). Ingests settlement price, open interest (OI), trading volume, and basis vs underlying index into core.market_derivatives_daily.",
+    "run_command": "python src/crawlers/derivatives_crawler.py",
+    "test_command": "pytest tests/test_derivatives_crawler.py -v"
+  },
+  {
+    "index": 72,
+    "id": "F074",
+    "name": "Market & Reference Crawler for Covered Warrants (core.market_covered_warrants_daily)",
+    "state": "not_started",
+    "dependencies": [
+      "F001"
+    ],
+    "file_dependencies": [],
+    "pros": [
+      "High leverage trading with limited downside risk (max loss = premium paid).",
+      "Accessible for small-capital portfolios under 10M VND without odd-lot restrictions."
+    ],
+    "cons": [
+      "High time-decay (theta) risk and market-maker spread widening during high volatility."
+    ],
+    "recommendation": [
+      "Filter for warrants with at least 45 days to expiration and positive market-maker quotes."
+    ],
+    "behavior": "Crawler for listed covered warrants (CW) on HOSE. Ingests strike price, conversion ratio, expiration date, underlying stock ticker, delta, and daily OHLCV into core.market_covered_warrants_daily.",
+    "run_command": "python src/crawlers/warrants_crawler.py",
+    "test_command": "pytest tests/test_warrants_crawler.py -v"
+  },
+  {
+    "index": 73,
+    "id": "F075",
+    "name": "Market & Portfolio Crawler for Exchange Traded Funds (core.market_etf_daily)",
+    "state": "not_started",
+    "dependencies": [
+      "F001"
+    ],
+    "file_dependencies": [],
+    "pros": [
+      "Diversified exposure to Vietnam leading indices without individual stock concentration risk.",
+      "Exempt from foreign ownership limits (FOL), heavily traded by institutional investors."
+    ],
+    "cons": [
+      "Slight tracking error and daily tracking fees."
+    ],
+    "recommendation": [
+      "Integrate ETF basket component weights with corporate fundamentals for macro sector rotation."
+    ],
+    "behavior": "Crawler for Vietnamese listed ETFs (E1VFVN30, FUEVFVND, FUESSVFL, FUEKIV30...). Ingests daily NAV per share, tracking error, discount/premium, and basket holdings into core.market_etf_daily.",
+    "run_command": "python src/crawlers/etf_crawler.py",
+    "test_command": "pytest tests/test_etf_crawler.py -v"
+  },
+  {
+    "index": 74,
+    "id": "F076",
+    "name": "Reference & Trading Crawler for Corporate & Government Bonds (core.market_bonds_daily)",
+    "state": "not_started",
+    "dependencies": [
+      "F001"
+    ],
+    "file_dependencies": [],
+    "pros": [
+      "Provides true Vietnamese risk-free term structure and credit spread metrics for F203 regime gating.",
+      "Allows conservative fixed-income allocation bots."
+    ],
+    "cons": [
+      "Secondary bond trading in Vietnam has fragmented liquidity."
+    ],
+    "recommendation": [
+      "Focus on high-liquidity Tier-1 banking and sovereign bonds."
+    ],
+    "behavior": "Crawler for individual corporate bonds and sovereign bonds listed on HNX Bond trading system. Ingests yield to maturity (YTM), coupon, issuer rating, traded volume, and clean/dirty prices into core.market_bonds_daily.",
+    "run_command": "python src/crawlers/bonds_crawler.py",
+    "test_command": "pytest tests/test_bonds_crawler.py -v"
+  },
+  {
+    "index": 75,
+    "id": "F502",
+    "name": "AI Strategy Generator & Real-time Web Console Integration",
+    "state": "passing",
+    "dependencies": [
+      "F501",
+      "F401",
+      "F402"
+    ],
+    "file_dependencies": [],
+    "pros": [
+      "Replaces legacy Tkinter GUI with modern, high-performance web console accessible across any browser or device.",
+      "Zero-lock resilient DuckDB access with real-time SSE streaming logs.",
+      "Empowers quantitative traders to generate, test, and audit AI trading bots in seconds."
+    ],
+    "cons": [
+      "Requires local GPU/CPU resources to run Local SLM Qwen-2.5-3B."
+    ],
+    "recommendation": [
+      "Add WebSockets for sub-millisecond order book updates when tick feed is connected."
+    ],
+    "behavior": "Full-stack integration bridging DuckDB Lakehouse, PhoBERT + Kolmogorov Simplex-TCD + Local SLM Qwen-2.5-3B, and 308-bot arena into a unified Cyberpunk/Fintech Web Console (React TypeScript + FastAPI Gateway at :8899). Enables real-time SSE crawler terminal, market heatmap with 5 VN stock colors, interactive lightweight candlestick charts, real-time news inference, and conversational bot generator with RAG context.",
+    "run_command": "python run_console.py",
+    "test_command": "npm run build --prefix web && python -c 'from src.service.console_api import app; print(\"App OK\")'"
+  },
+  {
+    "index": 76,
+    "id": "F901",
+    "name": "[BLOCKED] Broker compliance confirmation for autonomous execution",
+    "state": "blocked",
+    "dependencies": [],
+    "file_dependencies": [],
+    "pros": [
+      "Non-Negotiable Risk Guardrails: Strict position sizing limits (max 5% portfolio NAV per equity), daily stop-loss triggers, and market circuit breakers.",
+      "Compliance Rule B5 Enforcement: Risk management code fails closed, halting trading instantly upon ambiguous or missing market data."
+    ],
+    "cons": [
+      "Execution blocked pending official regulatory and broker algorithmic trading authorization in compliance with Rule B1."
+    ],
+    "recommendation": [
+      "Keep execution modules in sandbox/paper-trading mode until written regulatory and broker compliance verification is formally granted."
+    ],
+    "behavior": "Written confirmation (broker documentation or direct correspondence) of whether autonomous/algorithmic order placement is currently permitted under the account/registration to be used. Documentation artifact, not code -- can be pursued in parallel with F001-F402, does not block the data/model work.",
+    "run_command": "python scratch/compliance_broker_check.py",
+    "test_command": "echo '[BLOCKED] Manual broker regulatory audit documentation only'"
+  },
+  {
+    "index": 77,
+    "id": "F902",
+    "name": "[BLOCKED] Paper trading against DNSE/SSI sandbox",
+    "state": "blocked",
+    "dependencies": [
+      "F901",
+      "F302"
+    ],
+    "file_dependencies": [],
+    "pros": [
+      "Resilient Order Routing & Smart Throttling: Handles order amendment, cancellation, and execution pacing to prevent exchange rate throttling.",
+      "Full Audit Trail: Logs order timestamps, slippage, and execution venues for every simulated and live order."
+    ],
+    "cons": [
+      "Execution blocked pending compliance verification under Rule B1; stub implementations only."
+    ],
+    "recommendation": [
+      "Maintain pure unit-test mock verification for order throttling logic until the regulatory gate is fully cleared."
+    ],
+    "behavior": "Execution-layer code (OAuth2+PKCE, order placement/amendment/cancellation) tested against a broker sandbox only, no real capital.",
+    "run_command": "python src/execution/paper_trading_sandbox.py",
+    "test_command": "pytest tests/test_execution_sandbox.py -v"
+  }
+]

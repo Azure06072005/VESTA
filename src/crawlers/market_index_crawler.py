@@ -34,7 +34,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger("market_index_crawler")
 
-DEFAULT_DUCKDB_PATH = "d:/VESTA/db/vesta_ohlcv.duckdb"
+DEFAULT_DUCKDB_PATH = "d:/VESTA/db/admin/vesta_ohlcv.duckdb"
 
 # Bản đồ chỉ số nguồn KBS -> Mã chuẩn hóa trong DB
 INDEX_MAPPING = {

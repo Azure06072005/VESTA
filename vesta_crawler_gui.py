@@ -51,6 +51,11 @@ try:
         run_latest_modular,
     )
     from src.etl import db
+    from src.pipeline.vesta_pipeline_orchestrator import (
+        STAGE_DESCRIPTIONS,
+        STAGE_NAMES,
+        VestaPipelineOrchestrator,
+    )
 except ImportError:
     from crawlers.db_writer import DEFAULT_TARGET_DB, ResilientDuckDBWriter
     from crawlers.vesta_crawler_cli import (
@@ -62,6 +67,12 @@ except ImportError:
         run_latest_modular,
     )
     from etl import db
+    from pipeline.vesta_pipeline_orchestrator import (
+        STAGE_DESCRIPTIONS,
+        STAGE_NAMES,
+        VestaPipelineOrchestrator,
+    )
+
 
 
 # =============================================================================
@@ -198,12 +209,21 @@ class VestaCrawlerApp(tk.Tk):
         main_paned = ttk.PanedWindow(self, orient="vertical")
         main_paned.pack(fill="both", expand=True, padx=16, pady=(0, 10))
 
-        # --- NỬA TRÊN: STATUS TABLE + DYNAMIC CONFIG CARD ---
-        top_container = ttk.Frame(main_paned)
-        main_paned.add(top_container, weight=4)
+        # --- NỬA TRÊN: NOTEBOOK ĐIỀU PHỐI (2 TABS) ---
+        self.notebook_top = ttk.Notebook(main_paned)
+        main_paned.add(self.notebook_top, weight=4)
 
+        # TAB 1: PHÂN HỆ CÀO DỮ LIỆU LAKEHOUSE (F000 - F008)
+        self.tab_crawler = ttk.Frame(self.notebook_top)
+        self.notebook_top.add(self.tab_crawler, text="  📥 Phân Hệ Cào Dữ Liệu (F000 - F008)  ")
+
+        # TAB 2: ĐIỀU PHỐI TOÀN BỘ PIPELINE (F000 -> F501)
+        self.tab_pipeline = ttk.Frame(self.notebook_top)
+        self.notebook_top.add(self.tab_pipeline, text="  🚀 Điều Phối Toàn Bộ Pipeline (F000 ➔ F501)  ")
+
+        # --- NỘI DUNG TAB 1: STATUS TABLE + DYNAMIC CONFIG CARD ---
         # Cột trái (60%): Bảng trạng thái
-        status_card = ttk.Frame(top_container, style="Card.TFrame", padding=10)
+        status_card = ttk.Frame(self.tab_crawler, style="Card.TFrame", padding=10)
         status_card.pack(side="left", fill="both", expand=True, padx=(0, 8))
 
         ttk.Label(status_card, text="TÌNH TRẠNG DỮ LIỆU LAKEHOUSE (LỌC BỎ OUTLIER > HÔM NAY)", style="Section.TLabel").pack(anchor="w", pady=(0, 6))
@@ -230,10 +250,11 @@ class VestaCrawlerApp(tk.Tk):
         tree_scroll_y.pack(side="right", fill="y")
 
         # Cột phải (40%): Cấu hình cào ĐỘNG THEO TỪNG PHÂN HỆ
-        self.ctrl_card = ttk.Frame(top_container, style="Card.TFrame", padding=12)
+        self.ctrl_card = ttk.Frame(self.tab_crawler, style="Card.TFrame", padding=12)
         self.ctrl_card.pack(side="right", fill="both", expand=False, ipadx=4)
 
         ttk.Label(self.ctrl_card, text="CẤU HÌNH & ĐIỀU PHỐI CÀO CHI TIẾT", style="Section.TLabel").pack(anchor="w", pady=(0, 6))
+
 
         # Chọn chế độ
         mode_box = ttk.Frame(self.ctrl_card, style="Card.TFrame")
@@ -291,7 +312,11 @@ class VestaCrawlerApp(tk.Tk):
         self.btn_stop = ttk.Button(btn_box, text="DỪNG TIẾN TRÌNH", style="Danger.TButton", command=self.stop_crawl, state="disabled")
         self.btn_stop.pack(fill="x", pady=2)
 
+        # Xây dựng nội dung Tab 2: Điều Phối Toàn Bộ Pipeline (F000 -> F501)
+        self._build_pipeline_tab(self.tab_pipeline)
+
         # --- NỬA DƯỚI: REALTIME LOG VIEWER ---
+
         log_card = ttk.Frame(main_paned, style="Card.TFrame", padding=10)
         main_paned.add(log_card, weight=3)
 
@@ -606,11 +631,16 @@ class VestaCrawlerApp(tk.Tk):
                         CAST(MAX(CASE WHEN {date_col} <= CURRENT_DATE THEN {date_col} ELSE NULL END) AS VARCHAR)
                     """
 
+                row = None
                 try:
                     row = con.execute(f"SELECT COUNT(*), {sym_expr}, {date_expr} FROM {query_tbl}").fetchone()
                 except Exception:
-                    rows_data.append((name, "-", "-", "-", "-", "Chưa khởi tạo"))
-                    continue
+                    try:
+                        row = con.execute(f"SELECT COUNT(*), {sym_expr}, {date_expr} FROM {tbl}").fetchone()
+                    except Exception:
+                        rows_data.append((name, "-", "-", "-", "-", "Chưa khởi tạo"))
+                        continue
+
 
                 total_rows = row[0]
                 total_syms = row[1] if row[1] != "-" else "-"
@@ -998,8 +1028,247 @@ class VestaCrawlerApp(tk.Tk):
         self.btn_refresh.configure(state="normal")
         self.refresh_status_async()
 
+    # =========================================================================
+    # TAB 2: ĐIỀU PHỐI TOÀN BỘ PIPELINE (F000 ➔ F501)
+    # =========================================================================
+
+    def _build_pipeline_tab(self, parent: ttk.Frame) -> None:
+        """Xây dựng giao diện Tab điều phối hợp nhất 5 tầng pipeline từ F000 đến F501."""
+        container = ttk.Frame(parent, padding=10)
+        container.pack(fill="both", expand=True)
+
+        # Cột trái (42%): Bảng điều khiển chọn tầng & tham số
+        ctrl_card = ttk.Frame(container, style="Card.TFrame", padding=12)
+        ctrl_card.pack(side="left", fill="both", expand=False, padx=(0, 8), ipadx=4)
+
+        ttk.Label(ctrl_card, text="ĐIỀU PHỐI 5 TẦNG PIPELINE (F000 ➔ F501)", style="Section.TLabel").pack(anchor="w", pady=(0, 4))
+        ttk.Label(
+            ctrl_card,
+            text="Chuỗi khép kín: Cào dữ liệu -> Tiền xử lý PIT -> AI Multimodal -> Đấu trường Bot F501",
+            font=("Segoe UI", 8),
+            foreground=self.color_text_muted,
+        ).pack(anchor="w", pady=(0, 8))
+
+        # Checkboxes cho 5 tầng
+        self.var_stg_crawl = tk.BooleanVar(value=True)
+        self.var_stg_preprocess = tk.BooleanVar(value=True)
+        self.var_stg_model = tk.BooleanVar(value=True)
+        self.var_stg_serving = tk.BooleanVar(value=True)
+        self.var_stg_arena = tk.BooleanVar(value=True)
+
+        chk_box = ttk.Frame(ctrl_card, style="Card.TFrame")
+        chk_box.pack(fill="x", pady=2)
+
+        ttk.Checkbutton(chk_box, text="Tầng 1: Cào & Nạp Dữ Liệu Lakehouse (F000-F008/F073-F076 Đa tài sản)", variable=self.var_stg_crawl).pack(anchor="w", pady=2)
+        ttk.Checkbutton(chk_box, text="Tầng 2: Tiền Xử Lý & Point-in-Time Join Sạch (F101-F106)", variable=self.var_stg_preprocess).pack(anchor="w", pady=2)
+        ttk.Checkbutton(chk_box, text="Tầng 3: Kiểm Tra Checkpoint & Trích Xuất AI Multimodal (F201-F305/F403)", variable=self.var_stg_model).pack(anchor="w", pady=2)
+        ttk.Checkbutton(chk_box, text="Tầng 4: Kiểm Thử Dịch Vụ Dự Báo & Feedback Loop (F401-F402)", variable=self.var_stg_serving).pack(anchor="w", pady=2)
+        ttk.Checkbutton(chk_box, text="Tầng 5: Đấu Trường Bot F501 (Vốn 10M VNĐ/bot, 308 Bots, 5 Kịch Bản VN)", variable=self.var_stg_arena).pack(anchor="w", pady=2)
+
+        ttk.Separator(ctrl_card, orient="horizontal").pack(fill="x", pady=8)
+
+        # Tham số Đấu Trường Bot Arena
+        ttk.Label(ctrl_card, text="⚙️ Cấu Hình Đấu Trường Bot Arena F501:", font=("Segoe UI", 9, "bold")).pack(anchor="w", pady=(0, 4))
+
+        f_budget = ttk.Frame(ctrl_card, style="Card.TFrame")
+        f_budget.pack(fill="x", pady=2)
+        ttk.Label(f_budget, text="• Vốn ban đầu mỗi bot:").pack(side="left")
+        ttk.Label(f_budget, text=" 10,000,000 VNĐ", font=("Segoe UI", 9, "bold"), foreground=self.color_success).pack(side="left")
+
+        f_paths = ttk.Frame(ctrl_card, style="Card.TFrame")
+        f_paths.pack(fill="x", pady=2)
+        ttk.Label(f_paths, text="• Số Monte Carlo Paths:").pack(side="left")
+        self.var_arena_paths = tk.StringVar(value="10")
+        ttk.Entry(f_paths, textvariable=self.var_arena_paths, width=6).pack(side="left", padx=6)
+
+        f_seed = ttk.Frame(ctrl_card, style="Card.TFrame")
+        f_seed.pack(fill="x", pady=2)
+        ttk.Label(f_seed, text="• Seed tái lập kết quả:").pack(side="left")
+        self.var_arena_seed = tk.StringVar(value="20260101")
+        ttk.Entry(f_seed, textvariable=self.var_arena_seed, width=10).pack(side="left", padx=6)
+
+        ttk.Separator(ctrl_card, orient="horizontal").pack(fill="x", pady=8)
+
+        # Action Buttons
+        self.btn_run_pipeline = ttk.Button(
+            ctrl_card,
+            text="▶ CHẠY TOÀN BỘ PIPELINE (F000 ➔ F501)",
+            style="Success.TButton",
+            command=self.start_full_pipeline_thread,
+        )
+        self.btn_run_pipeline.pack(fill="x", pady=3)
+
+        self.btn_run_arena_only = ttk.Button(
+            ctrl_card,
+            text="🏆 CHẠY RIÊNG ĐẤU TRƯỜNG BOT F501",
+            style="Primary.TButton",
+            command=self.start_arena_only_thread,
+        )
+        self.btn_run_arena_only.pack(fill="x", pady=3)
+
+        self.btn_load_report = ttk.Button(
+            ctrl_card,
+            text="📊 Tải Lại Kết Quả & Top Bots",
+            command=self.load_arena_report,
+        )
+        self.btn_load_report.pack(fill="x", pady=3)
+
+        # Cột phải (58%): Bảng xếp hạng Top Bots Tournament F501
+        res_card = ttk.Frame(container, style="Card.TFrame", padding=10)
+        res_card.pack(side="right", fill="both", expand=True)
+
+        res_header = ttk.Frame(res_card, style="Card.TFrame")
+        res_header.pack(fill="x", pady=(0, 6))
+        ttk.Label(res_header, text="BẢNG XẾP HẠNG TOP BOTS CHIẾN LƯỢC (F501 MULTI-BOT ARENA)", style="Section.TLabel").pack(side="left")
+        self.lbl_arena_summary = ttk.Label(res_card, text="Vốn khởi điểm: 10,000,000 VNĐ | 308 Bots | 5 Kịch bản thị trường VN", font=("Segoe UI", 8), foreground=self.color_text_muted)
+        self.lbl_arena_summary.pack(anchor="w", pady=(0, 4))
+
+        arena_cols = ("rank", "bot_id", "strategy_id", "is_ai", "sharpe", "ret", "maxdd", "win_rate")
+        self.tree_arena = ttk.Treeview(res_card, columns=arena_cols, show="headings", height=11)
+        self.tree_arena.heading("rank", text="Hạng")
+        self.tree_arena.heading("bot_id", text="Mã Bot")
+        self.tree_arena.heading("strategy_id", text="Chiến Lược")
+        self.tree_arena.heading("is_ai", text="AI Model")
+        self.tree_arena.heading("sharpe", text="Sharpe Ratio")
+        self.tree_arena.heading("ret", text="Lợi Nhuận TB")
+        self.tree_arena.heading("maxdd", text="Max DD")
+        self.tree_arena.heading("win_rate", text="Tỷ Lệ Thắng")
+
+        self.tree_arena.column("rank", width=45, anchor="center")
+        self.tree_arena.column("bot_id", width=75, anchor="center")
+        self.tree_arena.column("strategy_id", width=110, anchor="w")
+        self.tree_arena.column("is_ai", width=65, anchor="center")
+        self.tree_arena.column("sharpe", width=80, anchor="e")
+        self.tree_arena.column("ret", width=85, anchor="e")
+        self.tree_arena.column("maxdd", width=75, anchor="e")
+        self.tree_arena.column("win_rate", width=80, anchor="e")
+
+        arena_scroll_y = ttk.Scrollbar(res_card, orient="vertical", command=self.tree_arena.yview)
+        self.tree_arena.configure(yscrollcommand=arena_scroll_y.set)
+        self.tree_arena.pack(side="left", fill="both", expand=True)
+        arena_scroll_y.pack(side="right", fill="y")
+
+        # Tải báo cáo cũ nếu có
+        self.load_arena_report()
+
+    def start_full_pipeline_thread(self):
+        if getattr(self, "is_running", False):
+            messagebox.showwarning("Cảnh báo", "Một tiến trình khác đang thực thi. Vui lòng đợi hoàn tất!")
+            return
+
+        stages = []
+        if self.var_stg_crawl.get():
+            stages.append("F000_CRAWL")
+        if self.var_stg_preprocess.get():
+            stages.append("F100_PREPROCESS")
+        if self.var_stg_model.get():
+            stages.append("F200_F300_MODEL")
+        if self.var_stg_serving.get():
+            stages.append("F400_SERVING")
+        if self.var_stg_arena.get():
+            stages.append("F501_ARENA")
+
+        if not stages:
+            messagebox.showwarning("Cảnh báo", "Vui lòng chọn ít nhất 1 tầng để thực thi!")
+            return
+
+        self.is_running = True
+        self.btn_run_pipeline.configure(state="disabled", text="⏳ Đang Chạy Pipeline...")
+        self.btn_run_arena_only.configure(state="disabled")
+        threading.Thread(target=self._worker_full_pipeline, args=(stages,), daemon=True).start()
+
+    def _worker_full_pipeline(self, stages: List[str]):
+        try:
+            paths = int(self.var_arena_paths.get().strip() or "10")
+            orchestrator = VestaPipelineOrchestrator(target_db=self.target_db)
+            print("\n" + "═" * 80)
+            print(f"[*] KÍCH HOẠT CHUỖI ĐIỀU PHỐI PIPELINE VESTA: {stages}")
+            print(f"[*] Cấu hình Đấu Trường F501: Vốn 10,000,000 VNĐ / bot, {paths} paths")
+            print("═" * 80)
+
+            res = orchestrator.run_full_pipeline(selected_stages=stages, paths_per_situation=paths)
+            print("\n[OK] KẾT THÚC CHUỖI PIPELINE THÀNH CÔNG!")
+        except Exception as e:
+            print(f"\n[!] LỖI ĐIỀU PHỐI PIPELINE: {e}")
+        finally:
+            self.after(0, self._finish_pipeline_run)
+
+    def start_arena_only_thread(self):
+        if getattr(self, "is_running", False):
+            messagebox.showwarning("Cảnh báo", "Một tiến trình khác đang chạy!")
+            return
+
+        self.is_running = True
+        self.btn_run_arena_only.configure(state="disabled", text="⏳ Đang Chạy F501 Arena...")
+        self.btn_run_pipeline.configure(state="disabled")
+        threading.Thread(target=self._worker_arena_only, daemon=True).start()
+
+    def _worker_arena_only(self):
+        try:
+            paths = int(self.var_arena_paths.get().strip() or "10")
+            seed = int(self.var_arena_seed.get().strip() or "20260101")
+            orchestrator = VestaPipelineOrchestrator(target_db=self.target_db)
+            print("\n" + "═" * 80)
+            print(f"[*] KÍCH HOẠT ĐẤU TRƯỜNG BOT F501 (VỐN 10,000,000 VNĐ, {paths} PATHS, SEED={seed})")
+            print("═" * 80)
+
+            orchestrator.run_stage_arena(paths_per_situation=paths, seed=seed)
+            print("\n[OK] GIẢI ĐẤU F501 HOÀN TẤT THÀNH CÔNG!")
+        except Exception as e:
+            print(f"\n[!] LỖI ĐẤU TRƯỜNG BOT: {e}")
+        finally:
+            self.after(0, self._finish_pipeline_run)
+
+    def _finish_pipeline_run(self):
+        self.is_running = False
+        self.btn_run_pipeline.configure(state="normal", text="▶ CHẠY TOÀN BỘ PIPELINE (F000 ➔ F501)")
+        self.btn_run_arena_only.configure(state="normal", text="🏆 CHẠY RIÊNG ĐẤU TRƯỜNG BOT F501")
+        self.load_arena_report()
+        self.refresh_status_async()
+
+    def load_arena_report(self):
+        """Đọc và hiển thị kết quả giải đấu F501 từ out/f501_arena_report.json lên Treeview."""
+        report_file = PROJECT_ROOT / "out" / "f501_arena_report.json"
+        if not report_file.exists():
+            return
+
+        try:
+            import json
+            with open(report_file, "r", encoding="utf-8") as f:
+                data = json.load(f)
+
+            top_bots = data.get("top_10_champion_bots", [])
+            for item in self.tree_arena.get_children():
+                self.tree_arena.delete(item)
+
+            for b in top_bots:
+                self.tree_arena.insert(
+                    "",
+                    "end",
+                    values=(
+                        b.get("rank", "-"),
+                        b.get("bot_id", "-"),
+                        b.get("strategy_id", "-"),
+                        "Có (AI)" if b.get("is_ai") else "Không",
+                        f"{b.get('mean_sharpe', 0.0):.2f}",
+                        f"{b.get('mean_return_pct', 0.0):+.2f}%",
+                        f"{b.get('mean_max_drawdown_pct', 0.0):.2f}%",
+                        f"{b.get('win_rate_pct', 0.0):.1f}%",
+                    ),
+                )
+
+            meta = data.get("tournament_metadata", {})
+            champ = top_bots[0] if top_bots else {}
+            pbo = meta.get("probability_of_backtest_overfitting_pbo", 0.0)
+            self.lbl_arena_summary.configure(
+                text=f"🏆 Quán quân: {champ.get('bot_id', 'N/A')} (Sharpe: {champ.get('mean_sharpe', 0.0):.2f}) | PBO: {pbo:.3f} | Vốn 10,000,000 VNĐ | N={meta.get('total_bots', 308)} Bots"
+            )
+        except Exception:
+            pass
+
 
 def main():
+
     app = VestaCrawlerApp()
     app.mainloop()
 
