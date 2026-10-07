@@ -524,8 +524,8 @@ def run_international(symbols: List[str], writer: ResilientDuckDBWriter, args: a
 # ORCHESTRATION ENGINE & CLI
 # =============================================================================
 
-DEFAULT_NEWS_DB = str(PROJECT_ROOT / "db" / "vesta_news.duckdb")
-DEFAULT_SNAPSHOT_DB = str(PROJECT_ROOT / "db" / "vesta_snapshot.duckdb")
+DEFAULT_NEWS_DB = str(PROJECT_ROOT / "db" / "admin" / "vesta_news.duckdb")
+DEFAULT_SNAPSHOT_DB = str(PROJECT_ROOT / "db" / "admin" / "vesta_snapshot.duckdb")
 
 
 def sanitize_argv() -> None:

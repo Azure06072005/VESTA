@@ -260,7 +260,7 @@ def inspect_database_status(target_db: str) -> None:
         db.attach_news(con, read_only=True)
     except Exception as e:
         print(f"[!] Không thể mở database {target_db} trực tiếp: {e}")
-        buf_db = str(PROJECT_ROOT / "db" / "vesta_crawled_fresh.duckdb")
+        buf_db = str(PROJECT_ROOT / "db" / "admin" / "vesta_crawled_fresh.duckdb")
         if os.path.exists(buf_db):
             print(f"[*] Thử đọc từ cơ sở dữ liệu đệm: {buf_db}")
             try:
@@ -371,7 +371,7 @@ def get_target_symbols(target_db: str, symbol_arg: str = "all") -> List[str]:
           AND length(symbol) = 3
         ORDER BY symbol
     """
-    for db_cand in [target_db, str(PROJECT_ROOT / "db" / "vesta_snapshot.duckdb"), str(PROJECT_ROOT / "db" / "vesta.duckdb")]:
+    for db_cand in [target_db, str(PROJECT_ROOT / "db" / "admin" / "vesta_snapshot.duckdb"), str(PROJECT_ROOT / "db" / "vesta_snapshot.duckdb"), str(PROJECT_ROOT / "db" / "vesta.duckdb")]:
         if os.path.exists(db_cand):
             try:
                 con = duckdb.connect(db_cand, read_only=True)
@@ -409,7 +409,8 @@ def run_category_ohlcv(symbols: List[str], writer: ResilientDuckDBWriter, args: 
 
     # Đảm bảo ghi đúng hồ chuyên biệt db/vesta_ohlcv.duckdb
     ohlcv_db_path = str(db.OHLCV_DB_PATH)
-    ohlcv_writer = writer if hasattr(writer, "target_db") and writer.target_db == ohlcv_db_path else ResilientDuckDBWriter(ohlcv_db_path)
+    buf_first = getattr(writer, "buffer_first", True)
+    ohlcv_writer = writer if hasattr(writer, "target_db") and writer.target_db == ohlcv_db_path else ResilientDuckDBWriter(ohlcv_db_path, buffer_first=buf_first)
 
     logger.info(">>> [CATEGORY: OHLCV] Bắt đầu cào giá nến %s cho %d mã (CSDL đích: %s)...", interval, len(symbols), ohlcv_db_path)
     total_bars = 0
@@ -802,7 +803,7 @@ def run_category_news_comprehensive(
 def run_category_order_book_vn100(symbols: List[str], writer: ResilientDuckDBWriter, args: argparse.Namespace) -> int:
     """Cào sổ lệnh Level 2 & tính toán chỉ số OFI cho rổ VN100 (Vietcap Direct REST API)."""
     from crawlers.order_book_depth_vietcap import crawl_order_book_vn100
-    target_path = str(writer.db_path) if hasattr(writer, "db_path") else "db/vesta_snapshot.duckdb"
+    target_path = str(writer.target_db) if hasattr(writer, "target_db") else str(PROJECT_ROOT / "db" / "admin" / "vesta_snapshot.duckdb")
     res = crawl_order_book_vn100(db_path=target_path)
     return res.get("order_book_records", 0)
 
@@ -810,7 +811,7 @@ def run_category_order_book_vn100(symbols: List[str], writer: ResilientDuckDBWri
 def run_category_deep_screener(symbols: List[str], writer: ResilientDuckDBWriter, args: argparse.Namespace) -> int:
     """Cào bộ lọc đa nhân tố chuyên sâu cho toàn bộ cổ phiếu thị trường (Vietcap IQ Direct Screening API)."""
     from crawlers.crawl_deep_screener import crawl_deep_screener
-    target_path = str(writer.db_path) if hasattr(writer, "db_path") else "db/vesta_snapshot.duckdb"
+    target_path = str(writer.target_db) if hasattr(writer, "target_db") else str(PROJECT_ROOT / "db" / "admin" / "vesta_snapshot.duckdb")
     return crawl_deep_screener(db_path=target_path)
 
 

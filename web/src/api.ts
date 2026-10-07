@@ -28,8 +28,16 @@ export const getDashboardOverview = () => fetchJson<any>('/api/dashboard/overvie
 export const getMarketHeatmap = (limit = 60) => fetchJson<any>(`/api/dashboard/heatmap?limit=${limit}`);
 export const getForeignFlow = (limit = 20) => fetchJson<any>(`/api/dashboard/foreign_flow?limit=${limit}`);
 export const getCorporateEvents = (limit = 30) => fetchJson<any>(`/api/dashboard/events?limit=${limit}`);
-export const getMarketNews = (limit = 25) => fetchJson<any>(`/api/dashboard/news?limit=${limit}`);
-export const getOhlcv = (symbol: string, limit = 300) => fetchJson<any>(`/api/ohlcv/${symbol}?limit=${limit}`);
+export const getMarketNews = (page = 1, limit = 10, symbol?: string, search?: string) => {
+  const params = new URLSearchParams({ page: String(page), limit: String(limit) });
+  if (symbol && symbol !== 'ALL') params.append('symbol', symbol);
+  if (search && search.trim()) params.append('search', search.trim());
+  return fetchJson<any>(`/api/dashboard/news?${params.toString()}`);
+};
+export const getOhlcv = (symbol: string, timeframe = '1d', limit = 300) => 
+  fetchJson<any>(`/api/ohlcv/${symbol}?timeframe=${timeframe}&limit=${limit}`);
+export const getSymbolDetail = (symbol: string, newsPage = 1, newsLimit = 10, ohlcvLimit = 300) =>
+  fetchJson<any>(`/api/symbol/${encodeURIComponent(symbol)}/detail?news_page=${newsPage}&news_limit=${newsLimit}&ohlcv_limit=${ohlcvLimit}`);
 
 // 3. Crawler Pipeline
 export interface CrawlParams {

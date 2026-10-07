@@ -3,9 +3,14 @@
 
 model:
   name: "qwen2.5-3b-instruct"
+  hf_repo_id: "Qwen/Qwen2.5-3B-Instruct"
   alt_name: "deepseek-r1-distill-qwen-1.5b"
   quantization: "Q4_K_M"
-  backend: "auto"  # options: auto, ollama, openai_compatible, mock
+  load_in_4bit: true
+  device: "cuda"  # auto-falls back to cpu if cuda unavailable
+  torch_dtype: "float16"
+  lazy_load: true
+  backend: "auto"  # options: auto, transformers, ollama, openai_compatible, mock
   ollama_endpoint: "http://localhost:11434"
   openai_endpoint: "http://localhost:8000/v1"
   context_length: 2048
@@ -67,8 +72,8 @@ prompt_templates:
     - Chỉ số tài chính BCTC (P/E, P/B, ROE, Nợ/Vốn chủ, Biên LN ròng): {financial_context}
     - Sự kiện doanh nghiệp gần nhất (Cổ tức, ĐHĐCĐ, Phát hành): {corporate_events_context}
     - Xu hướng dòng tiền khối ngoại (Foreign Net Flow): {foreign_flow_context}
-    - Chế độ thị trường vĩ mô (F203 Regime & MHI): {regime_context}
-    - Ràng buộc nhất quán Kolmogorov (F304 Simplex Gate): Consistent Alpha = {fast_path_alpha} | Vi phạm V_score = {violation_score}
+    - Chế độ thị trường vĩ mô (Regime & MHI): {regime_context}
+    - Ràng buộc nhất quán Kolmogorov (Simplex Gate): Consistent Alpha = {fast_path_alpha} | Vi phạm V_score = {violation_score}
     
     [YÊU CẦU PHÂN TÍCH CHUỖI TƯ DUY (CHAIN-OF-THOUGHT)]
     1. So sánh đối chứng giữa tin gốc và kịch bản phản đề (Counterfactual).

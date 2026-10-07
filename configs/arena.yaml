@@ -22,7 +22,7 @@ price_limit:
 risk_rails:
   nav_cap_per_symbol: 0.25   # MAXIMUM CONCENTRATION: Cap at 25% of NAV per individual ticker/contract
   allow_margin: false        # Long-only unleveraged compliance for equities
-  initial_cash: 100000000.0   # MANDATORY USER BUDGET: 100,000,000 VND per bot
+  initial_cash: 10000000.0    # MANDATORY USER BUDGET: 10,000,000 VND per bot
   min_order_lot: 1           # ODD-LOT COMPLIANCE: 1 share minimum lot for retail 10M VND accounts
 
 assets:

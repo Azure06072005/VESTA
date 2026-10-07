@@ -1,7 +1,8 @@
 import React from 'react';
-import { Activity, BarChart2, Cpu, Database, Flame, ShieldAlert, Terminal } from 'lucide-react';
+import { Activity, BarChart2, Database, Flame, Languages, ShieldAlert } from 'lucide-react';
+import { useLang } from '../LangContext';
 
-export type NavTab = 'overview' | 'dashboard' | 'crawler' | 'preprocessing' | 'feedback' | 'arena';
+export type NavTab = 'overview' | 'dashboard' | 'crawler' | 'preprocessing' | 'arena';
 
 interface NavbarProps {
   activeTab: NavTab;
@@ -10,13 +11,14 @@ interface NavbarProps {
 }
 
 export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab, systemHealthy = true }) => {
+  const { lang, t, toggle } = useLang();
+
   const tabs = [
-    { id: 'overview' as NavTab, label: 'Overview', icon: <Activity size={14} /> },
-    { id: 'dashboard' as NavTab, label: 'Market Dashboard', icon: <BarChart2 size={14} /> },
-    { id: 'crawler' as NavTab, label: 'Crawler Controller', icon: <Database size={14} /> },
-    { id: 'preprocessing' as NavTab, label: 'QA Preprocess', icon: <ShieldAlert size={14} /> },
-    { id: 'feedback' as NavTab, label: 'Model Feedback', icon: <Cpu size={14} /> },
-    { id: 'arena' as NavTab, label: 'Bot Arena Studio', icon: <Flame size={14} /> },
+    { id: 'overview' as NavTab, label: t.nav.overview, icon: <Activity size={14} /> },
+    { id: 'dashboard' as NavTab, label: t.nav.dashboard, icon: <BarChart2 size={14} /> },
+    { id: 'crawler' as NavTab, label: t.nav.crawler, icon: <Database size={14} /> },
+    { id: 'preprocessing' as NavTab, label: t.nav.preprocessing, icon: <ShieldAlert size={14} /> },
+    { id: 'arena' as NavTab, label: t.nav.arena, icon: <Flame size={14} /> },
   ];
 
   return (
@@ -80,16 +82,29 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab, systemH
         })}
       </nav>
 
-      {/* Right System Telemetry Badge */}
+      {/* Right Controls: Language Switcher */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '4px 10px', background: 'var(--bg2)', border: '0.5px solid var(--border)', borderRadius: 'var(--rad)' }}>
-          <Terminal size={12} color="var(--teal)" />
-          <span className="mono" style={{ fontSize: '10px', color: 'var(--cream3)' }}>NODE:</span>
-          <span className="mono" style={{ fontSize: '10px', color: 'var(--teal)', fontWeight: 700 }}>PROD :8899</span>
-        </div>
-        <div className="badge badge-gold">
-          10M VND / BOT
-        </div>
+        <button
+          onClick={toggle}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
+            padding: '5px 12px',
+            background: 'var(--bg2)',
+            border: '0.5px solid var(--border)',
+            borderRadius: 'var(--rad)',
+            cursor: 'pointer',
+            color: 'var(--cream)',
+            fontSize: '11px',
+            fontWeight: 700,
+            transition: 'var(--transition)',
+          }}
+          title={lang === 'vi' ? 'Switch to English' : 'Chuyển sang Tiếng Việt'}
+        >
+          <Languages size={14} color="var(--gold)" />
+          <span className="mono" style={{ color: 'var(--gold)', letterSpacing: '0.05em' }}>{lang.toUpperCase()}</span>
+        </button>
       </div>
     </header>
   );

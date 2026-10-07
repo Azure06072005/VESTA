@@ -6,7 +6,6 @@ import { OverviewPage } from './pages/OverviewPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { CrawlerPage } from './pages/CrawlerPage';
 import { PreprocessingPage } from './pages/PreprocessingPage';
-import { FeedbackPage } from './pages/FeedbackPage';
 import { BotArenaPage } from './pages/BotArenaPage';
 
 export const App: React.FC = () => {
@@ -26,7 +25,6 @@ export const App: React.FC = () => {
         {activeTab === 'dashboard' && <DashboardPage />}
         {activeTab === 'crawler' && <CrawlerPage />}
         {activeTab === 'preprocessing' && <PreprocessingPage />}
-        {activeTab === 'feedback' && <FeedbackPage />}
         {activeTab === 'arena' && <BotArenaPage />}
       </main>
 

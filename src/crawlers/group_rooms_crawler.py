@@ -21,7 +21,7 @@ logging.basicConfig(
 logger = logging.getLogger("group_rooms_crawler")
 
 PROJECT_DIR = "d:/VESTA"
-OHLCV_DB = f"{PROJECT_DIR}/db/vesta_ohlcv.duckdb"
+OHLCV_DB = f"{PROJECT_DIR}/db/admin/vesta_ohlcv.duckdb"
 
 # Danh sách đầy đủ 23 chỉ số nhóm / rổ phòng / ngành từ HOSE
 GROUP_ROOMS_MAP = {

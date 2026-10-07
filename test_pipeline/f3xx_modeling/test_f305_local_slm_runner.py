@@ -88,7 +88,7 @@ BENCHMARK_CASES = [
     {
         "id": "CASE_06",
         "symbol": "FPT",
-        "headline": "FPT thông báo thay đổi địa chỉ văn phòng đại diện tại Đà Nẵng",
+        "headline": "FPT thông báo ngày đăng ký cuối cùng tham dự họp ĐHĐCĐ thường niên",
         "source": "CafeF",
         "source_weight": 0.85,
         "matched_shareholder": None,

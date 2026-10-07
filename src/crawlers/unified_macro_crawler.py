@@ -350,7 +350,7 @@ def crawl_chinhphu_vn(max_articles: int = 50) -> list[dict[str, Any]]:
 # DATABASE WRITER WITH ETHICAL POLICY FILTERING
 # =====================================================================
 
-DEFAULT_TARGET_DB_PATH = "d:/VESTA/db/vesta_snapshot.duckdb"
+DEFAULT_TARGET_DB_PATH = "d:/VESTA/db/admin/vesta_snapshot.duckdb"
 
 def write_to_db(records: list[dict[str, Any]], duckdb_path: str = DEFAULT_TARGET_DB_PATH) -> int:
     """Idempotently writes crawled records to staging and core macro_policy with policy validation."""

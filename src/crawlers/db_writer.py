@@ -23,9 +23,11 @@ import pandas as pd
 logger = logging.getLogger("db_writer")
 
 PROJECT_ROOT = pathlib.Path(__file__).resolve().parents[2]
-DEFAULT_TARGET_DB = str(PROJECT_ROOT / "db" / "vesta_snapshot.duckdb")
-DEFAULT_BUFFER_DB = str(PROJECT_ROOT / "db" / "vesta_crawled_fresh.duckdb")
-DEFAULT_BACKUP_DB = str(PROJECT_ROOT / "db" / "vesta_backup.duckdb")
+ADMIN_DB_DIR = PROJECT_ROOT / "db" / "admin"
+ADMIN_DB_DIR.mkdir(parents=True, exist_ok=True)
+DEFAULT_TARGET_DB = str(ADMIN_DB_DIR / "vesta_snapshot.duckdb")
+DEFAULT_BUFFER_DB = str(ADMIN_DB_DIR / "vesta_crawled_fresh.duckdb")
+DEFAULT_BACKUP_DB = str(ADMIN_DB_DIR / "vesta_backup.duckdb")
 
 
 class ResilientDuckDBWriter:

@@ -1,8 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { AlertTriangle, CheckCircle, ShieldCheck } from 'lucide-react';
 import { getF203RegimeMatrix, getPreprocessingDAG } from '../api';
+import { useLang } from '../LangContext';
 
 export const PreprocessingPage: React.FC = () => {
+  const { lang, t } = useLang();
   const [dagData, setDagData] = useState<any>(null);
   const [regimes, setRegimes] = useState<any[]>([]);
 
@@ -18,27 +20,27 @@ export const PreprocessingPage: React.FC = () => {
         <div>
           <h2 className="sans" style={{ fontSize: '20px', fontWeight: 800, color: 'var(--cream)', display: 'flex', alignItems: 'center', gap: '8px' }}>
             <ShieldCheck size={20} color="var(--teal)" />
-            Tiền Xử Lý Dữ Liệu & Kiểm Định Kinh Lượng Học (F101 ➔ F305)
+            {t.preprocessing.title}
           </h2>
           <p style={{ fontSize: '12px', color: 'var(--cream3)' }}>
-            Đảm bảo chuẩn 0% rò rỉ tương lai (Look-ahead Free), kiểm toán chất lượng 11 chiều và ma trận chế độ thị trường
+            {t.preprocessing.subtitle}
           </p>
         </div>
         <div style={{ display: 'flex', gap: '10px' }}>
-          <span className="badge badge-teal">DSR = 0.942 (PASS)</span>
-          <span className="badge badge-green">PBO = 4.8% (AN TOÀN)</span>
+          <span className="badge badge-teal">{t.preprocessing.dsr_badge}</span>
+          <span className="badge badge-green">{t.preprocessing.pbo_badge}</span>
         </div>
       </div>
 
       {/* DAG FLOWCHART TILES */}
       <div style={{ marginBottom: '28px' }}>
         <h3 className="sans" style={{ fontSize: '14px', fontWeight: 700, color: 'var(--cream2)', marginBottom: '12px' }}>
-          Chuỗi Dòng Dữ Liệu Tiền Xử Lý (Point-in-Time Pipeline DAG)
+          {t.preprocessing.dag_title}
         </h3>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: '12px' }}>
-          {(dagData?.nodes || []).map((node: any) => (
+          {(dagData?.nodes || []).map((node: any, idx: number) => (
             <div
-              key={node.id}
+              key={idx}
               className="panel"
               style={{
                 padding: '14px',
@@ -48,7 +50,9 @@ export const PreprocessingPage: React.FC = () => {
               }}
             >
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
-                <span className="mono badge badge-teal">{node.id}</span>
+                <span className="mono badge badge-teal" style={{ fontSize: '9px' }}>
+                  {lang === 'vi' ? `BƯỚC 0${idx + 1}` : `STEP 0${idx + 1}`}
+                </span>
                 <CheckCircle size={14} color="var(--teal)" />
               </div>
               <div className="sans" style={{ fontSize: '12px', fontWeight: 700, color: 'var(--cream)', marginBottom: '4px' }}>
@@ -65,33 +69,31 @@ export const PreprocessingPage: React.FC = () => {
         </div>
       </div>
 
-      {/* MA TRẬN CHẾ ĐỘ THỊ TRƯỜNG F203 (16 REGIMES x 3 EXCHANGES) */}
+      {/* MA TRẬN CHẾ ĐỘ THỊ TRƯỜNG (16 REGIMES x 3 EXCHANGES) */}
       <div className="panel" style={{ marginBottom: '24px' }}>
         <div className="panel-header">
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <AlertTriangle size={15} color="var(--gold)" />
-            <span className="panel-title">Ma Trận 16 Chế Độ Thị Trường × 3 Sàn (F203 Regime Matrix)</span>
+            <span className="panel-title">{t.preprocessing.regime_title}</span>
           </div>
-          <span className="badge badge-gold">CẢNH BÁO ĐẢO DẤU (SIGN-FLIP)</span>
+          <span className="badge badge-gold">{t.preprocessing.sign_flip_badge}</span>
         </div>
 
         <div style={{ padding: '16px' }}>
           <p style={{ fontSize: '12px', color: 'var(--cream2)', marginBottom: '14px', lineHeight: 1.6 }}>
-            Quy tắc kiểm toán vi cấu trúc: Phát hiện các giai đoạn mà tín hiệu đảo chiều (Mean-reversion) bị đảo dấu âm.
-            Trong khủng hoảng thanh khoản trái phiếu doanh nghiệp 2022 (R03), cổ phiếu tiếp tục giảm sàn liên tục;
-            hệ thống kích hoạt <strong>Fail-Closed Gate</strong> để từ chối các lệnh mua bắt dao rơi.
+            {t.preprocessing.audit_desc}
           </p>
 
           <table className="data-table">
             <thead>
               <tr>
-                <th>Mã Chế Độ</th>
-                <th>Tên Kịch Bản Thị Trường</th>
-                <th>HOSE (Alpha)</th>
-                <th>HNX (Alpha)</th>
-                <th>UPCOM (Alpha)</th>
-                <th>Hiện Tượng Đảo Dấu</th>
-                <th>Quy Tắc Quản Trị Rủi Ro</th>
+                <th>{t.preprocessing.th_regime_code}</th>
+                <th>{t.preprocessing.th_scenario}</th>
+                <th>{t.preprocessing.th_hose}</th>
+                <th>{t.preprocessing.th_hnx}</th>
+                <th>{t.preprocessing.th_upcom}</th>
+                <th>{t.preprocessing.th_sign_flip}</th>
+                <th>{t.preprocessing.th_risk_rule}</th>
               </tr>
             </thead>
             <tbody>
@@ -110,13 +112,13 @@ export const PreprocessingPage: React.FC = () => {
                   </td>
                   <td>
                     {r.sign_flip ? (
-                      <span className="badge badge-red">ĐẢO DẤU ÂM (SIGN-FLIP)</span>
+                      <span className="badge badge-red">{t.preprocessing.sign_flip_alert}</span>
                     ) : (
-                      <span className="badge badge-green">CHUẨN TẮC</span>
+                      <span className="badge badge-green">{t.preprocessing.normal_status}</span>
                     )}
                   </td>
                   <td style={{ fontSize: '11px', color: r.sign_flip ? 'var(--red)' : 'var(--cream3)' }}>
-                    {r.warning || 'Giao dịch bình thường theo ngưỡng vi cấu trúc'}
+                    {r.warning || (lang === 'vi' ? 'Giao dịch bình thường theo ngưỡng vi cấu trúc' : 'Canonical execution under microstructure limits')}
                   </td>
                 </tr>
               ))}
