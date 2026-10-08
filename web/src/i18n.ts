@@ -14,6 +14,7 @@ export interface Translations {
     preprocessing: string;
     feedback: string;
     arena: string;
+    admin_test: string;
     lang_btn: string;
   };
   common: {
@@ -205,6 +206,7 @@ export const translations: Record<Language, Translations> = {
       preprocessing: 'Tiền Xử Lý & QA',
       feedback: 'Phản Hồi Mô Hình',
       arena: 'Đấu Trường Bot',
+      admin_test: 'Kiểm Thử Admin',
       lang_btn: 'VI',
     },
     common: {
@@ -425,6 +427,7 @@ export const translations: Record<Language, Translations> = {
       preprocessing: 'QA Preprocessing',
       feedback: 'Model Feedback',
       arena: 'Bot Arena Studio',
+      admin_test: 'Admin Backtest',
       lang_btn: 'EN',
     },
     common: {

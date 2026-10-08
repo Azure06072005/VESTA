@@ -16,6 +16,7 @@ import asyncio
 import datetime as dt
 import json
 import logging
+import math
 import os
 import pathlib
 import sys
@@ -2691,6 +2692,102 @@ def chat_ai_strategy_studio(req: AIChatRequest):
         "target_assets": target_symbols,
         "focus_title": f"Bảng xếp hạng chiến lược tối ưu cho danh mục: {', '.join(target_symbols)} (Vốn: {actual_cash:,.0f} đ)",
         "model_used": model_name,
+    }
+
+# =============================================================================
+# 6B. ADMIN MODEL TEST & BACKTEST API (BOT-N1 vs BOT-A108)
+# =============================================================================
+
+@app.get("/api/admin/model-test/report", tags=["Admin Model Test"])
+def get_admin_model_test_report():
+    """Lấy báo cáo kiểm thử mô hình và backtest độc lập giữa BOT-N1 và BOT-A108."""
+    from pipeline.admin_model_backtest import OUTPUT_REPORT_PATH, run_admin_model_backtest
+
+    if OUTPUT_REPORT_PATH.exists():
+        try:
+            with open(OUTPUT_REPORT_PATH, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception as e:
+            logger.warning(f"Lỗi đọc file báo cáo admin model test: {e}, tiến hành chạy lại.")
+
+    # Nếu chưa có file cache thì tính toán trực tiếp
+    return run_admin_model_backtest(initial_cash=100_000_000.0, save_output=True)
+
+
+class AdminBacktestRunRequest(BaseModel):
+    initial_cash: float = Field(default=100_000_000.0, ge=1_000_000.0)
+    force_refresh: bool = Field(default=True)
+
+
+@app.post("/api/admin/model-test/run", tags=["Admin Model Test"])
+def trigger_admin_model_backtest(req: AdminBacktestRunRequest):
+    """Kích hoạt lại quá trình backtest kiểm thử mô hình với các tham số tùy chỉnh."""
+    from pipeline.admin_model_backtest import run_admin_model_backtest
+    try:
+        report = run_admin_model_backtest(initial_cash=req.initial_cash, save_output=True)
+        return {
+            "status": "SUCCESS",
+            "message": "Quá trình kiểm thử backtest mô hình đã hoàn tất thành công.",
+            "report": report,
+        }
+    except Exception as e:
+        logger.error(f"Lỗi khi thực thi admin backtest: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Lỗi thực thi backtest: {str(e)}")
+
+
+@app.get("/api/admin/model-test/trades", tags=["Admin Model Test"])
+def get_admin_model_test_trades(
+    bot_id: Optional[str] = Query(None, description="Lọc theo mã Bot (BOT-N1 hoặc BOT-A108)"),
+    symbol: Optional[str] = Query(None, description="Lọc theo mã cổ phiếu"),
+    outcome: Optional[str] = Query(None, description="Lọc kết quả: 'win' hoặc 'loss'"),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=500),
+):
+    """Lấy danh sách lệnh giao dịch lịch sử có phân trang và bộ lọc chuyên sâu."""
+    from pipeline.admin_model_backtest import OUTPUT_REPORT_PATH, run_admin_model_backtest
+
+    report_data = None
+    if OUTPUT_REPORT_PATH.exists():
+        try:
+            with open(OUTPUT_REPORT_PATH, "r", encoding="utf-8") as f:
+                report_data = json.load(f)
+        except Exception:
+            pass
+
+    if report_data is None:
+        report_data = run_admin_model_backtest(initial_cash=100_000_000.0, save_output=True)
+
+    all_trades = []
+    if bot_id == "BOT-N1":
+        all_trades = report_data.get("trades_n1", [])
+    elif bot_id == "BOT-A108":
+        all_trades = report_data.get("trades_a108", [])
+    else:
+        all_trades = report_data.get("trades_n1", []) + report_data.get("trades_a108", [])
+        # Sắp xếp theo ngày bán giảm dần
+        all_trades.sort(key=lambda t: t.get("sell_date", ""), reverse=True)
+
+    if symbol:
+        s_upper = symbol.strip().upper()
+        all_trades = [t for t in all_trades if t.get("symbol") == s_upper]
+
+    if outcome == "win":
+        all_trades = [t for t in all_trades if t.get("net_pnl", 0) > 0]
+    elif outcome == "loss":
+        all_trades = [t for t in all_trades if t.get("net_pnl", 0) < 0]
+
+    total_records = len(all_trades)
+    total_pages = max(1, math.ceil(total_records / page_size))
+    start_idx = (page - 1) * page_size
+    end_idx = start_idx + page_size
+    paginated_trades = all_trades[start_idx:end_idx]
+
+    return {
+        "page": page,
+        "page_size": page_size,
+        "total_records": total_records,
+        "total_pages": total_pages,
+        "trades": paginated_trades,
     }
 
 
