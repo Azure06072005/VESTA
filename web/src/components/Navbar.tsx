@@ -1,8 +1,8 @@
 import React from 'react';
-import { Activity, BarChart2, Database, Flame, Languages, ShieldAlert } from 'lucide-react';
+import { Activity, BarChart2, Cpu, Database, Flame, Languages, ShieldAlert } from 'lucide-react';
 import { useLang } from '../LangContext';
 
-export type NavTab = 'overview' | 'dashboard' | 'crawler' | 'preprocessing' | 'arena';
+export type NavTab = 'overview' | 'dashboard' | 'crawler' | 'preprocessing' | 'arena' | 'admin';
 
 interface NavbarProps {
   activeTab: NavTab;
@@ -19,6 +19,7 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab, systemH
     { id: 'crawler' as NavTab, label: t.nav.crawler, icon: <Database size={14} /> },
     { id: 'preprocessing' as NavTab, label: t.nav.preprocessing, icon: <ShieldAlert size={14} /> },
     { id: 'arena' as NavTab, label: t.nav.arena, icon: <Flame size={14} /> },
+    { id: 'admin' as NavTab, label: t.nav.admin_test, icon: <Cpu size={14} /> },
   ];
 
   return (

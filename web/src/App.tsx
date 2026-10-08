@@ -7,6 +7,7 @@ import { DashboardPage } from './pages/DashboardPage';
 import { CrawlerPage } from './pages/CrawlerPage';
 import { PreprocessingPage } from './pages/PreprocessingPage';
 import { BotArenaPage } from './pages/BotArenaPage';
+import { AdminModelTestPage } from './pages/AdminModelTestPage';
 
 export const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<NavTab>('overview');
@@ -26,6 +27,7 @@ export const App: React.FC = () => {
         {activeTab === 'crawler' && <CrawlerPage />}
         {activeTab === 'preprocessing' && <PreprocessingPage />}
         {activeTab === 'arena' && <BotArenaPage />}
+        {activeTab === 'admin' && <AdminModelTestPage />}
       </main>
 
       {/* Footer (Kế thừa từ Anhkiet.dev / kietfolio footer) */}

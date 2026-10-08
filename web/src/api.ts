@@ -93,3 +93,20 @@ export const chatAIStrategy = (message: string, initialCash = 10000000.0, riskTo
   headers: { 'Content-Type': 'application/json' },
   body: JSON.stringify({ message, initial_cash: initialCash, risk_tolerance: riskTolerance }),
 });
+
+// 7. Admin Model Test & Backtest (BOT-N1 vs BOT-A108)
+export const getAdminModelTestReport = () => fetchJson<any>('/api/admin/model-test/report');
+export const runAdminModelTest = (initialCash = 100000000.0) => fetchJson<any>('/api/admin/model-test/run', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ initial_cash: initialCash, force_refresh: true }),
+});
+export const getAdminModelTestTrades = (params?: { bot_id?: string; symbol?: string; outcome?: string; page?: number; page_size?: number }) => {
+  const q = new URLSearchParams();
+  if (params?.bot_id) q.append('bot_id', params.bot_id);
+  if (params?.symbol) q.append('symbol', params.symbol);
+  if (params?.outcome) q.append('outcome', params.outcome);
+  if (params?.page) q.append('page', String(params.page));
+  if (params?.page_size) q.append('page_size', String(params.page_size));
+  return fetchJson<any>(`/api/admin/model-test/trades?${q.toString()}`);
+};
