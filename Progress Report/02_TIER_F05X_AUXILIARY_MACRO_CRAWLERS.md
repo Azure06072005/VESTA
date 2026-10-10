@@ -684,3 +684,37 @@ flowchart TD
 | **F070** | Hiệp Hội Thủy Sản (VASEP) | vasep.com.vn | `not_started` | Xuất khẩu cá tra, tôm, thẻ vàng IUU | Tác động VHC, ANV, IDI, FMC |
 | **F071** | Bất Động Sản TP.HCM (HoREA) | horea.org.vn | `not_started` | Vướng mắc pháp lý dự án địa ốc | Tác động VHM, NVL, PDR, DIG, DXG |
 | **F072** | Tier F05x Audit Gate | vesta.duckdb | `not_started` | 477,733 bài; Hợp nhất 7 staging DBs | Quyết định tách bảng macro vs ticker news |
+
+---
+
+## 🏛️ MỞ RỘNG ĐA PHÂN LỚP TÀI SẢN: FEATURES F073 - F076 (MULTI-ASSET CLASS EXPANSION)
+
+Nhằm đáp ứng yêu cầu đầu tư định lượng đa tài sản và phòng hộ rủi ro danh mục (Hedging), hệ thống VESTA đã mở rộng thu thập 4 phân lớp tài sản chuyên sâu trên thị trường tài chính Việt Nam:
+
+### F073: Phái Sinh Chỉ Số & Hợp Đồng Tương Lai (Derivatives & Index Futures)
+- **Mã tính năng:** `F073` | **Trạng thái:** `passing`
+- **Tập tài sản:** Toàn bộ các hợp đồng tương lai chỉ số VN30 (`VN30F1M`, `VN30F2M`, `VN30F1Q`, `VN30F2Q`) và hợp đồng tương lai Trái phiếu Chính phủ 5 năm (`GB05F`).
+- **Khoảng thời gian (`requirements`):** Từ ngày 10/08/2017 (khai trương TTCK Phái sinh VN) đến ngày hiện tại (`istoday()`, 2026-10-09).
+- **Đặc trưng thu thập:** Giá mở cửa, cao nhất, thấp nhất, giá đóng cửa, giá thanh toán (`settlement_price`), khối lượng giao dịch, khối lượng mở (`open_interest - OI`), và độ lệch basis so với chỉ số VN30 cơ sở.
+- **Bảng lưu trữ:** `core.market_derivatives_daily` (trong `db/vesta_ohlcv.duckdb`).
+
+### F074: Chứng Quyền Có Bảo Đảm (Covered Warrants - CW trên HOSE)
+- **Mã tính năng:** `F074` | **Trạng thái:** `passing`
+- **Tập tài sản:** Toàn bộ các mã chứng quyền mua do các công ty chứng khoán (SSI, HSC, VPS, VNDirect, KIS) phát hành trên sàn HOSE.
+- **Khoảng thời gian (`requirements`):** Từ ngày 28/06/2019 (phiên phát hành CW đầu tiên) đến ngày hiện tại (`istoday()`, 2026-10-09).
+- **Đặc trưng thu thập:** Mã CW, mã chứng khoán cơ sở, giá thực hiện (`strike_price`), tỷ lệ chuyển đổi (`conversion_ratio`), ngày đáo hạn, giá đóng cửa hàng ngày và khối lượng khớp lệnh.
+- **Bảng lưu trữ:** `core.market_covered_warrants_daily` (trong `db/vesta_ohlcv.duckdb`).
+
+### F075: Quỹ Hoán Đổi Danh Mục (Exchange Traded Funds - ETFs)
+- **Mã tính năng:** `F075` | **Trạng thái:** `passing`
+- **Tập tài sản:** Toàn bộ các quỹ ETF niêm yết tại Việt Nam: `E1VFVN30`, `FUEVFVND` (VNDiamond), `FUESSVFL` (VNFinLead), `FUESSV50`, `FUEKIV30`, `FUEIP100`.
+- **Khoảng thời gian (`requirements`):** Từ ngày 06/10/2014 (ngày niêm yết quỹ E1VFVN30 đầu tiên) đến ngày hiện tại (`istoday()`, 2026-10-09).
+- **Đặc trưng thu thập:** Giá đóng cửa thị trường, Giá trị tài sản ròng trên một chứng chỉ quỹ (`NAV/ccq`), danh mục cổ phiếu cấu thành rổ và tỷ lệ sai lệch bám sát chỉ số (`Tracking Error`).
+- **Bảng lưu trữ:** `core.market_etf_daily` (trong `db/vesta_ohlcv.duckdb`).
+
+### F076: Trái Phiếu Doanh Nghiệp & Trái Phiếu Chính Phủ (HNX Bonds)
+- **Mã tính năng:** `F076` | **Trạng thái:** `passing`
+- **Tập tài sản:** Trái phiếu niêm yết và trái phiếu riêng lẻ trên sàn giao dịch Trái phiếu HNX.
+- **Khoảng thời gian (`requirements`):** Từ ngày 24/09/2009 (vận hành sàn TPCP HNX) đến ngày hiện tại (`istoday()`, 2026-10-09).
+- **Đặc trưng thu thập:** Mã trái phiếu, tổ chức phát hành, lãi suất danh nghĩa (coupon rate), kỳ hạn còn lại (tenor), đường cong lợi suất (yield curve), giá giao dịch khớp lệnh và thỏa thuận.
+- **Bảng lưu trữ:** `core.market_bonds_daily` (trong `db/vesta_ohlcv.duckdb`).

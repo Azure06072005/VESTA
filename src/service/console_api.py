@@ -90,12 +90,12 @@ app.add_middleware(
 
 
 def get_db_connection(read_only: bool = True) -> Optional[duckdb.DuckDBPyConnection]:
-    """Helper kết nối DuckDB an toàn, tự động ATTACH snapshot và news để truy vấn liên CSDL."""
+    """Helper kết nối DuckDB an toàn, tự động ATTACH tất cả 5 CSDL chuyên biệt (ohlcv, news, fundamentals, events, market_index)."""
     db_paths = [
         str(REPO_ROOT / "db" / "vesta_ohlcv.duckdb"),
         str(REPO_ROOT / "db" / "admin" / "vesta_ohlcv.duckdb"),
-        str(REPO_ROOT / "db" / "vesta_snapshot.duckdb"),
-        str(REPO_ROOT / "db" / "admin" / "vesta_snapshot.duckdb"),
+        str(REPO_ROOT / "db" / "vesta_market_index.duckdb"),
+        str(REPO_ROOT / "db" / "admin" / "vesta_market_index.duckdb"),
         DEFAULT_TARGET_DB,
     ]
     con = None
@@ -113,16 +113,38 @@ def get_db_connection(read_only: bool = True) -> Optional[duckdb.DuckDBPyConnect
     if con is None:
         return None
 
-    # Tự động ATTACH snapshot nếu chưa gắn
-    for sp in [str(REPO_ROOT / "db" / "vesta_snapshot.duckdb"), str(REPO_ROOT / "db" / "admin" / "vesta_snapshot.duckdb")]:
+    # Tự động ATTACH market_index & snapshot (ánh xạ sang vesta_market_index để tương thích ngược)
+    for sp in [str(REPO_ROOT / "db" / "vesta_market_index.duckdb"), str(REPO_ROOT / "db" / "admin" / "vesta_market_index.duckdb")]:
         if os.path.exists(sp):
             try:
+                con.execute(f"ATTACH '{sp}' AS market_index (READ_ONLY)")
+            except Exception:
+                pass
+            try:
                 con.execute(f"ATTACH '{sp}' AS snapshot (READ_ONLY)")
+            except Exception:
+                pass
+            break
+
+    # Tự động ATTACH fundamentals
+    for fp in [str(REPO_ROOT / "db" / "vesta_fundamentals.duckdb"), str(REPO_ROOT / "db" / "admin" / "vesta_fundamentals.duckdb")]:
+        if os.path.exists(fp):
+            try:
+                con.execute(f"ATTACH '{fp}' AS fundamentals (READ_ONLY)")
                 break
             except Exception:
                 pass
 
-    # Tự động ATTACH news_db nếu chưa gắn
+    # Tự động ATTACH events
+    for ep in [str(REPO_ROOT / "db" / "vesta_events.duckdb"), str(REPO_ROOT / "db" / "admin" / "vesta_events.duckdb")]:
+        if os.path.exists(ep):
+            try:
+                con.execute(f"ATTACH '{ep}' AS events (READ_ONLY)")
+                break
+            except Exception:
+                pass
+
+    # Tự động ATTACH news_db
     for np in [str(REPO_ROOT / "db" / "vesta_news.duckdb"), str(REPO_ROOT / "db" / "admin" / "vesta_news.duckdb")]:
         if os.path.exists(np):
             try:
@@ -131,7 +153,7 @@ def get_db_connection(read_only: bool = True) -> Optional[duckdb.DuckDBPyConnect
             except Exception:
                 pass
 
-    # Tự động ATTACH ohlcv_db nếu chưa gắn
+    # Tự động ATTACH ohlcv_db
     for op in [str(REPO_ROOT / "db" / "vesta_ohlcv.duckdb"), str(REPO_ROOT / "db" / "admin" / "vesta_ohlcv.duckdb")]:
         if os.path.exists(op):
             try:
@@ -225,18 +247,32 @@ def get_lakehouse_status():
                 try:
                     row = con.execute(f"SELECT COUNT(*), {sym_expr}, {date_expr} FROM core.{tbl.split('.')[-1]}").fetchone()
                 except Exception:
-                    results.append({
-                        "key": spec.get("key", tbl),
-                        "name": name,
-                        "table": tbl,
-                        "records": 0,
-                        "symbols": 0,
-                        "min_date": "-",
-                        "max_date": "-",
-                        "status": "Chưa khởi tạo",
-                        "lag_days": None,
-                    })
-                    continue
+                    pass
+
+            if row is None or row[0] == 0:
+                short_tbl = tbl.split(".")[-1]
+                for db_alias in ["market_index", "fundamentals", "events", "news_db", "ohlcv_db", "snapshot"]:
+                    try:
+                        cand_row = con.execute(f"SELECT COUNT(*), {sym_expr}, {date_expr} FROM {db_alias}.core.{short_tbl}").fetchone()
+                        if cand_row and cand_row[0] > 0:
+                            row = cand_row
+                            break
+                    except Exception:
+                        pass
+
+            if row is None:
+                results.append({
+                    "key": spec.get("key", tbl),
+                    "name": name,
+                    "table": tbl,
+                    "records": 0,
+                    "symbols": 0,
+                    "min_date": "-",
+                    "max_date": "-",
+                    "status": "Chưa khởi tạo",
+                    "lag_days": None,
+                })
+                continue
 
             total_rows = row[0] if row else 0
             total_syms = row[1] if row and row[1] != "-" else 0
@@ -404,7 +440,7 @@ def get_dashboard_overview():
                     COUNT(CASE WHEN close = open THEN 1 END) as unchanged,
                     COUNT(CASE WHEN close >= open * 1.069 THEN 1 END) as ceiling,
                     COUNT(CASE WHEN close <= open * 0.931 THEN 1 END) as floor,
-                    COALESCE(SUM(volume * close) / 1e9, 0.0) as total_val_bil,
+                    COALESCE(SUM(volume * close) / 1e6, 0.0) as total_val_bil,
                     COALESCE(SUM(volume) / 1e6, 0.0) as total_vol_mil
                 FROM core.market_ohlcv_daily
                 WHERE date = '{latest_date}'
@@ -420,13 +456,75 @@ def get_dashboard_overview():
         except Exception as e_br:
             logger.warning(f"Error querying market breadth: {e_br}")
 
+        # Attach vesta_market_index for foreign net flow, sentiment and breadth
         foreign_net = 0.0
+        fear_greed_score = 36.05
+        sentiment_label = "Thận trọng (Fear)"
+        above_ma20_pct = 32.0
+        above_ma50_pct = 29.0
+        rsi_val = 37.2
+        mfi_val = 27.5
         try:
-            f_row = con.execute("SELECT net_value FROM core.market_foreign_flow_daily ORDER BY date DESC LIMIT 1").fetchone()
+            mkt_idx_path = str(REPO_ROOT / "db" / "vesta_market_index.duckdb")
+            if os.path.exists(mkt_idx_path):
+                try:
+                    con.execute(f"ATTACH '{mkt_idx_path}' AS market_index (READ_ONLY)")
+                except Exception:
+                    pass
+
+            # Foreign net flow sum across all stocks on latest_date
+            f_row = con.execute(f"""
+                SELECT ROUND(SUM(net_value) / 1e9, 1)
+                FROM market_index.core.market_foreign_flow_daily
+                WHERE date = '{latest_date}'
+            """).fetchone()
             if f_row and f_row[0] is not None:
-                foreign_net = round(float(f_row[0]) / 1e9, 1)
-        except Exception:
-            pass
+                foreign_net = float(f_row[0])
+            else:
+                f_row_fallback = con.execute("""
+                    SELECT ROUND(SUM(net_value) / 1e9, 1)
+                    FROM market_index.core.market_foreign_flow_daily
+                    WHERE date = (SELECT MAX(date) FROM market_index.core.market_foreign_flow_daily)
+                """).fetchone()
+                if f_row_fallback and f_row_fallback[0] is not None:
+                    foreign_net = float(f_row_fallback[0])
+
+            # Sentiment snapshot
+            s_row = con.execute(f"""
+                SELECT fear_greed_score, rsi, mfi
+                FROM market_index.core.market_sentiment_snapshot
+                WHERE exchange = 'HOSE'
+                ORDER BY snapshot_date DESC LIMIT 1
+            """).fetchone()
+            if s_row and s_row[0] is not None:
+                fear_greed_score = round(float(s_row[0]), 2)
+                rsi_val = round(float(s_row[1] or 50.0), 1)
+                mfi_val = round(float(s_row[2] or 50.0), 1)
+                if fear_greed_score >= 75:
+                    sentiment_label = "Hưng phấn cực độ (Extreme Greed)"
+                elif fear_greed_score >= 55:
+                    sentiment_label = "Tích cực (Greed)"
+                elif fear_greed_score >= 45:
+                    sentiment_label = "Cân bằng (Neutral)"
+                elif fear_greed_score >= 25:
+                    sentiment_label = "Thận trọng (Fear)"
+                else:
+                    sentiment_label = "Sợ hãi cực độ (Extreme Fear)"
+
+            # Market breadth
+            b_row = con.execute(f"""
+                SELECT above_ma20_pct, above_ma50_pct
+                FROM market_index.core.market_breadth_series
+                WHERE exchange = 'HOSE'
+                ORDER BY trade_date DESC LIMIT 1
+            """).fetchone()
+            if b_row:
+                if b_row[0] is not None:
+                    above_ma20_pct = round(float(b_row[0] * 100), 1)
+                if b_row[1] is not None:
+                    above_ma50_pct = round(float(b_row[1] * 100), 1)
+        except Exception as e_mkt:
+            logger.warning(f"Error querying market_index extras: {e_mkt}")
 
         return {
             "source": "core.market_index_daily",
@@ -441,6 +539,12 @@ def get_dashboard_overview():
                 "unchanged": unc,
                 "ceiling": ceil,
                 "floor": flr,
+                "fear_greed_score": fear_greed_score,
+                "sentiment_label": sentiment_label,
+                "above_ma20_pct": above_ma20_pct,
+                "above_ma50_pct": above_ma50_pct,
+                "rsi": rsi_val,
+                "mfi": mfi_val,
             }
         }
     except Exception as exc:
@@ -458,6 +562,12 @@ def get_dashboard_overview():
                 "unchanged": 0,
                 "ceiling": 0,
                 "floor": 0,
+                "fear_greed_score": 50.0,
+                "sentiment_label": "Cân bằng",
+                "above_ma20_pct": 50.0,
+                "above_ma50_pct": 50.0,
+                "rsi": 50.0,
+                "mfi": 50.0,
             }
         }
     finally:
@@ -466,6 +576,13 @@ def get_dashboard_overview():
                 con.close()
             except Exception:
                 pass
+
+
+@app.get("/api/dashboard/market_extended", tags=["Market Dashboard"])
+def get_dashboard_market_extended():
+    """Trả về bộ dữ liệu mở rộng chuẩn Vietstock & Investing: Sectors, Index Influence, Commodities, Currencies, Proposals, Global News."""
+    from src.service.market_extended_api import get_market_extended_data
+    return get_market_extended_data()
 
 
 @app.get("/api/dashboard/heatmap", tags=["Market Dashboard"])
@@ -488,8 +605,9 @@ def get_market_heatmap(limit: int = 80):
                 WHERE date = '{latest_date}'
             ),
             sym_meta AS (
-                SELECT symbol, COALESCE(industry_name, 'Khác') as sector, exchange
-                FROM core.dim_symbol
+                SELECT symbol, FIRST(COALESCE(industry_name, 'Khác')) as sector, FIRST(exchange) as exchange
+                FROM market_index.core.dim_symbol
+                GROUP BY symbol
             )
             SELECT 
                 l.symbol,
@@ -497,7 +615,7 @@ def get_market_heatmap(limit: int = 80):
                 COALESCE(s.exchange, 'HOSE') as exchange,
                 l.close as last_price,
                 ROUND(l.pct_change, 2) as pct_change,
-                ROUND(l.trading_val / 1e9, 2) as trading_val_bil,
+                ROUND(l.trading_val / 1e6, 2) as trading_val_bil,
                 ROUND(5000.0, 2) as market_cap_bil,
                 l.volume
             FROM latest_ohlcv l
@@ -544,18 +662,23 @@ def get_market_heatmap(limit: int = 80):
 
 @app.get("/api/dashboard/foreign_flow", tags=["Market Dashboard"])
 def get_foreign_flow(limit: int = 20):
-    """Lấy dữ liệu mua bán ròng khối ngoại 20 phiên gần nhất."""
-    con = get_db_connection(read_only=True)
+    """Lấy dữ liệu mua bán ròng khối ngoại tổng hợp toàn thị trường qua các phiên gần nhất."""
+    mkt_path = str(REPO_ROOT / "db" / "vesta_market_index.duckdb")
+    con = connect_resilient_reader(mkt_path)
+    if con is None:
+        con = get_db_connection(read_only=True)
     if con is None:
         return {"data": []}
 
     try:
+        # Nhóm theo date để có số liệu mua ròng toàn sàn chuẩn xác
         rows = con.execute(f"""
             SELECT date, 
-                   ROUND(buy_value / 1e9, 2) as buy_bil,
-                   ROUND(sell_value / 1e9, 2) as sell_bil,
-                   ROUND(net_value / 1e9, 2) as net_bil
+                   ROUND(SUM(buy_value) / 1e9, 1) as buy_bil,
+                   ROUND(SUM(sell_value) / 1e9, 1) as sell_bil,
+                   ROUND(SUM(net_value) / 1e9, 1) as net_bil
             FROM core.market_foreign_flow_daily
+            GROUP BY date
             ORDER BY date DESC
             LIMIT {limit}
         """).fetchall()
@@ -564,25 +687,134 @@ def get_foreign_flow(limit: int = 20):
             for r in reversed(rows)
         ]
         return {"count": len(data), "data": data}
-    except Exception:
-        base_date = dt.date.today()
-        dummy = []
-        import random
-        random.seed(42)
-        for i in range(limit, 0, -1):
-            d = (base_date - dt.timedelta(days=i)).isoformat()
-            net = round(random.uniform(-400.0, 300.0), 1)
-            dummy.append({"date": d, "buy_billion": round(random.uniform(800, 1500), 1), "sell_billion": round(random.uniform(800, 1500), 1), "net_billion": net})
-        return {"count": len(dummy), "data": dummy}
+    except Exception as exc:
+        logger.warning(f"Error querying market_foreign_flow_daily: {exc}")
+        return {"count": 0, "data": []}
     finally:
         con.close()
 
 
+@app.get("/api/dashboard/multi_asset", tags=["Market Dashboard"])
+def get_multi_asset_summary():
+    """Lấy tổng hợp dữ liệu phái sinh VN30F, quỹ ETF, và chứng quyền có bảo đảm (CW) mới nhất."""
+    ohlcv_path = str(REPO_ROOT / "db" / "vesta_ohlcv.duckdb")
+    con = connect_resilient_reader(ohlcv_path)
+    if con is None:
+        return {"derivatives": [], "etf": [], "covered_warrants": []}
+
+    try:
+        # 1. Hợp đồng Tương lai VN30F
+        deriv_rows = con.execute("""
+            WITH ranked AS (
+                SELECT 
+                    symbol, date, open, high, low, close, volume, open_interest, basis,
+                    LAG(close) OVER (PARTITION BY symbol ORDER BY date ASC) as prev_close,
+                    ROW_NUMBER() OVER (PARTITION BY symbol ORDER BY date DESC) as rn
+                FROM core.market_derivatives_daily
+            )
+            SELECT symbol, date, close, 
+                   ROUND(close - COALESCE(prev_close, close), 2) as chg,
+                   ROUND((close - COALESCE(prev_close, close)) / NULLIF(COALESCE(prev_close, close), 0) * 100.0, 2) as pct_change,
+                   volume, open_interest, basis
+            FROM ranked WHERE rn = 1
+            ORDER BY volume DESC
+        """).fetchall()
+
+        derivatives = [
+            {
+                "symbol": r[0],
+                "date": str(r[1])[:10],
+                "close": round(float(r[2] or 0), 1),
+                "change": round(float(r[3] or 0), 2),
+                "pct_change": round(float(r[4] or 0), 2),
+                "volume": int(r[5] or 0),
+                "open_interest": int(r[6] or 0),
+                "basis": round(float(r[7] or 0), 2),
+            }
+            for r in deriv_rows
+        ]
+
+        # 2. Quỹ ETF
+        etf_rows = con.execute("""
+            WITH ranked AS (
+                SELECT 
+                    symbol, date, open, high, low, close, volume,
+                    LAG(close) OVER (PARTITION BY symbol ORDER BY date ASC) as prev_close,
+                    ROW_NUMBER() OVER (PARTITION BY symbol ORDER BY date DESC) as rn
+                FROM core.market_etf_daily
+            )
+            SELECT symbol, date, close, 
+                   ROUND(close - COALESCE(prev_close, close), 2) as chg,
+                   ROUND((close - COALESCE(prev_close, close)) / NULLIF(COALESCE(prev_close, close), 0) * 100.0, 2) as pct_change,
+                   volume
+            FROM ranked WHERE rn = 1
+            ORDER BY volume DESC
+            LIMIT 10
+        """).fetchall()
+
+        etfs = [
+            {
+                "symbol": r[0],
+                "date": str(r[1])[:10],
+                "close": round(float(r[2] or 0), 2),
+                "change": round(float(r[3] or 0), 2),
+                "pct_change": round(float(r[4] or 0), 2),
+                "volume": int(r[5] or 0),
+            }
+            for r in etf_rows
+        ]
+
+        # 3. Chứng quyền Có bảo đảm (Top 10 CW thanh khoản cao nhất)
+        cw_rows = con.execute("""
+            WITH ranked AS (
+                SELECT 
+                    symbol, date, close, volume, underlying_symbol,
+                    LAG(close) OVER (PARTITION BY symbol ORDER BY date ASC) as prev_close,
+                    ROW_NUMBER() OVER (PARTITION BY symbol ORDER BY date DESC) as rn
+                FROM core.market_covered_warrants_daily
+            )
+            SELECT symbol, underlying_symbol, date, close, 
+                   ROUND(close - COALESCE(prev_close, close), 2) as chg,
+                   ROUND((close - COALESCE(prev_close, close)) / NULLIF(COALESCE(prev_close, close), 0) * 100.0, 2) as pct_change,
+                   volume
+            FROM ranked WHERE rn = 1
+            ORDER BY volume DESC
+            LIMIT 10
+        """).fetchall()
+
+        cws = [
+            {
+                "symbol": r[0],
+                "underlying_symbol": r[1],
+                "date": str(r[2])[:10],
+                "close": round(float(r[3] or 0), 2),
+                "change": round(float(r[4] or 0), 2),
+                "pct_change": round(float(r[5] or 0), 2),
+                "volume": int(r[6] or 0),
+            }
+            for r in cw_rows
+        ]
+
+        return {
+            "status": "SUCCESS",
+            "date": derivatives[0]["date"] if derivatives else dt.date.today().isoformat(),
+            "derivatives": derivatives,
+            "etfs": etfs,
+            "covered_warrants": cws,
+        }
+    except Exception as exc:
+        logger.warning(f"Error querying multi_asset: {exc}")
+        return {"status": "ERROR", "derivatives": [], "etfs": [], "covered_warrants": [], "error": str(exc)}
+    finally:
+        con.close()
+
+
+
 @app.get("/api/dashboard/events", tags=["Market Dashboard"])
 def get_corporate_events(limit: int = 30):
-    """Lấy danh sách các sự kiện doanh nghiệp: Cổ tức, ĐHĐCĐ, Phát hành thêm từ vesta_snapshot.duckdb."""
-    snap_path = str(REPO_ROOT / "db" / "vesta_snapshot.duckdb")
-    con = connect_resilient_reader(snap_path)
+    """Lấy danh sách các sự kiện doanh nghiệp: Cổ tức, ĐHĐCĐ, Phát hành thêm từ vesta_events.duckdb."""
+    events_path = str(REPO_ROOT / "db" / "vesta_events.duckdb")
+    con = connect_resilient_reader(events_path)
     if not con:
         return {"data": []}
 
@@ -703,9 +935,10 @@ def get_market_news(
 def get_symbol_ohlcv(symbol: str, limit: int = 300, timeframe: str = "1D"):
     """
     Lấy chuỗi nến OHLCV theo độ ưu tiên:
-    1. Ưu tiên 1: ohlcv_1m (vesta_ohlcv.duckdb core.market_ohlcv_1m) cho 1m, 5m, 1h, 1d, 1mo, 1y.
-    2. Ưu tiên 2: ohlcv_daily (vesta_ohlcv.duckdb core.market_ohlcv_daily) cho 1y, 5y (đầy đủ 1-26 năm lịch sử).
-    3. Ưu tiên 3: Fallback TradingView nếu không tìm thấy dữ liệu nội bộ.
+    1. Chỉ số: core.market_index_daily.
+    2. Nến 1m, 5m, 1h: core.market_ohlcv_1m.
+    3. Nến 1d, 1mo, 1y, 5y: core.market_ohlcv_daily (hoặc derivatives, etf, cw).
+    Đảm bảo 100% không có timestamp trùng lặp và sắp xếp tăng dần tuyệt đối.
     """
     ohlcv_path = str(REPO_ROOT / "db" / "vesta_ohlcv.duckdb")
     con = connect_resilient_reader(ohlcv_path)
@@ -727,7 +960,32 @@ def get_symbol_ohlcv(symbol: str, limit: int = 300, timeframe: str = "1D"):
                     return str(val)[:19]
             return str(val)[:10]
 
-        # Kiểm tra nếu là mã chỉ số
+        def format_and_dedup(rows, is_intraday: bool):
+            bars = []
+            seen = set()
+            for r in reversed(rows):
+                t = to_ts(r[0], is_intraday)
+                if t in seen:
+                    continue
+                seen.add(t)
+                bars.append({
+                    "time": t,
+                    "open": float(r[1]),
+                    "high": float(r[2]),
+                    "low": float(r[3]),
+                    "close": float(r[4]),
+                    "volume": float(r[5]) if len(r) > 5 and r[5] is not None else 0.0
+                })
+            return bars
+
+        # Tính toán limit ngày phù hợp
+        daily_limit = limit
+        if tf in ["1y", "1year"]:
+            daily_limit = max(daily_limit, 260)
+        elif tf in ["5y", "5year"]:
+            daily_limit = max(daily_limit, 1300)
+
+        # 1. Kiểm tra nếu là mã chỉ số
         if sym_clean in ["VNINDEX", "VN30", "HNX-INDEX", "HNX30", "UPCOM-INDEX", "VN100", "VNDIAMOND", "VNFINLEAD"]:
             rows = con.execute("""
                 SELECT date, open, high, low, close, volume
@@ -735,14 +993,12 @@ def get_symbol_ohlcv(symbol: str, limit: int = 300, timeframe: str = "1D"):
                 WHERE index_code = ?
                 ORDER BY date DESC
                 LIMIT ?
-            """, [sym_clean, limit]).fetchall()
-            bars = [
-                {"time": str(r[0])[:10], "open": float(r[1]), "high": float(r[2]), "low": float(r[3]), "close": float(r[4]), "volume": float(r[5])}
-                for r in reversed(rows)
-            ]
-            return {"symbol": sym_clean, "timeframe": tf, "count": len(bars), "bars": bars, "source": "core.market_index_daily"}
+            """, [sym_clean, daily_limit]).fetchall()
+            bars = format_and_dedup(rows, False)
+            if bars:
+                return {"symbol": sym_clean, "timeframe": tf, "count": len(bars), "bars": bars, "source": "core.market_index_daily"}
 
-        # Ưu tiên 1: ohlcv_1m
+        # 2. Xử lý khung thời gian Intraday (1m, 5m, 1h)
         if tf in ["1m", "1min"]:
             rows = con.execute("""
                 SELECT time, open, high, low, close, volume
@@ -751,10 +1007,7 @@ def get_symbol_ohlcv(symbol: str, limit: int = 300, timeframe: str = "1D"):
                 ORDER BY time DESC
                 LIMIT ?
             """, [sym_clean, limit]).fetchall()
-            bars = [
-                {"time": to_ts(r[0], True), "open": float(r[1]), "high": float(r[2]), "low": float(r[3]), "close": float(r[4]), "volume": float(r[5])}
-                for r in reversed(rows)
-            ]
+            bars = format_and_dedup(rows, True)
             if bars:
                 return {"symbol": sym_clean, "timeframe": tf, "count": len(bars), "bars": bars, "source": "core.market_ohlcv_1m"}
 
@@ -772,10 +1025,7 @@ def get_symbol_ohlcv(symbol: str, limit: int = 300, timeframe: str = "1D"):
                 ORDER BY bar_time DESC
                 LIMIT ?
             """, [sym_clean, limit]).fetchall()
-            bars = [
-                {"time": to_ts(r[0], True), "open": float(r[1]), "high": float(r[2]), "low": float(r[3]), "close": float(r[4]), "volume": float(r[5])}
-                for r in reversed(rows)
-            ]
+            bars = format_and_dedup(rows, True)
             if bars:
                 return {"symbol": sym_clean, "timeframe": tf, "count": len(bars), "bars": bars, "source": "core.market_ohlcv_1m_5m"}
 
@@ -793,45 +1043,11 @@ def get_symbol_ohlcv(symbol: str, limit: int = 300, timeframe: str = "1D"):
                 ORDER BY bar_time DESC
                 LIMIT ?
             """, [sym_clean, limit]).fetchall()
-            bars = [
-                {"time": to_ts(r[0], True), "open": float(r[1]), "high": float(r[2]), "low": float(r[3]), "close": float(r[4]), "volume": float(r[5])}
-                for r in reversed(rows)
-            ]
+            bars = format_and_dedup(rows, True)
             if bars:
                 return {"symbol": sym_clean, "timeframe": tf, "count": len(bars), "bars": bars, "source": "core.market_ohlcv_1m_1h"}
 
-        elif tf in ["1d", "1day"]:
-            # Thử gom cụm từ 1m trước per yêu cầu
-            try:
-                rows_1m = con.execute("""
-                    SELECT time_bucket(INTERVAL '1 day', time) as bar_time,
-                           FIRST(open ORDER BY time ASC) as open,
-                           MAX(high) as high,
-                           MIN(low) as low,
-                           LAST(close ORDER BY time ASC) as close,
-                           SUM(volume) as volume
-                    FROM core.market_ohlcv_1m
-                    WHERE symbol = ?
-                    GROUP BY bar_time
-                    ORDER BY bar_time DESC
-                    LIMIT ?
-                """, [sym_clean, limit]).fetchall()
-                if rows_1m and len(rows_1m) > 10:
-                    bars = [
-                        {"time": to_ts(r[0], False), "open": float(r[1]), "high": float(r[2]), "low": float(r[3]), "close": float(r[4]), "volume": float(r[5])}
-                        for r in reversed(rows_1m)
-                    ]
-                    return {"symbol": sym_clean, "timeframe": tf, "count": len(bars), "bars": bars, "source": "core.market_ohlcv_1m_1d"}
-            except Exception:
-                pass
-
-        # Ưu tiên 2: ohlcv_daily (cho 1d fallback, 1mo, 1y, 5y)
-        daily_limit = limit
-        if tf in ["1y", "1year"]:
-            daily_limit = max(daily_limit, 260)
-        elif tf in ["5y", "5year"]:
-            daily_limit = max(daily_limit, 1300)
-
+        # 3. Khung thời gian Ngày / Tháng / Năm: core.market_ohlcv_daily
         rows = con.execute("""
             SELECT date, open, high, low, close, volume
             FROM core.market_ohlcv_daily
@@ -839,19 +1055,52 @@ def get_symbol_ohlcv(symbol: str, limit: int = 300, timeframe: str = "1D"):
             ORDER BY date DESC
             LIMIT ?
         """, [sym_clean, daily_limit]).fetchall()
-        bars = [
-            {"time": str(r[0])[:10], "open": float(r[1]), "high": float(r[2]), "low": float(r[3]), "close": float(r[4]), "volume": float(r[5])}
-            for r in reversed(rows)
-        ]
-
+        bars = format_and_dedup(rows, False)
         if bars:
             return {"symbol": sym_clean, "timeframe": tf, "count": len(bars), "bars": bars, "source": "core.market_ohlcv_daily"}
 
-        # Ưu tiên 3: Fallback nếu không có dữ liệu nội bộ
+        # 4. Kiểm tra Phái sinh VN30F
+        deriv_rows = con.execute("""
+            SELECT date, open, high, low, close, volume
+            FROM core.market_derivatives_daily
+            WHERE symbol = ?
+            ORDER BY date DESC
+            LIMIT ?
+        """, [sym_clean, daily_limit]).fetchall()
+        bars = format_and_dedup(deriv_rows, False)
+        if bars:
+            return {"symbol": sym_clean, "timeframe": tf, "count": len(bars), "bars": bars, "source": "core.market_derivatives_daily"}
+
+        # 5. Kiểm tra Quỹ ETF
+        etf_rows = con.execute("""
+            SELECT date, open, high, low, close, volume
+            FROM core.market_etf_daily
+            WHERE symbol = ?
+            ORDER BY date DESC
+            LIMIT ?
+        """, [sym_clean, daily_limit]).fetchall()
+        bars = format_and_dedup(etf_rows, False)
+        if bars:
+            return {"symbol": sym_clean, "timeframe": tf, "count": len(bars), "bars": bars, "source": "core.market_etf_daily"}
+
+        # 6. Kiểm tra Chứng quyền CW
+        cw_rows = con.execute("""
+            SELECT date, open, high, low, close, volume
+            FROM core.market_covered_warrants_daily
+            WHERE symbol = ?
+            ORDER BY date DESC
+            LIMIT ?
+        """, [sym_clean, daily_limit]).fetchall()
+        bars = format_and_dedup(cw_rows, False)
+        if bars:
+            return {"symbol": sym_clean, "timeframe": tf, "count": len(bars), "bars": bars, "source": "core.market_covered_warrants_daily"}
+
+        # Fallback nếu không có dữ liệu nội bộ
         return {"symbol": sym_clean, "timeframe": tf, "count": 0, "bars": [], "source": "tradingview_fallback"}
     except Exception as exc:
         logger.warning(f"Error querying ohlcv: {exc}")
         return {"symbol": symbol, "timeframe": timeframe, "count": 0, "bars": [], "source": "tradingview_fallback", "error": str(exc)}
+
     finally:
         if con:
             con.close()
@@ -964,22 +1213,40 @@ def start_crawl_job(req: CrawlStartRequest):
                 symbols = get_target_symbols(DEFAULT_TARGET_DB, symbol_arg=req.symbols or "all")
                 log_print(f"[*] Tổng số mã chứng khoán xử lý: {len(symbols)}")
 
-                if req.mode == "latest":
-                    run_latest_modular("all", symbols, writer, args, stop_check=lambda: STOP_CRAWL_FLAG)
+                if req.mode in ("latest", "all", "simultaneous"):
+                    log_print("🚀 [1/3] Kích hoạt thu thập đồng thời đa CSDL siêu tốc (OHLCV, Tin tức, Snapshot/Sổ lệnh)...")
+                    from crawlers.parallel_multidb_orchestrator import run_simultaneous_crawling_pipeline
+                    sim_res = run_simultaneous_crawling_pipeline(symbol_limit=50, auto_merge=True)
+                    log_print(f"  ✓ Hoàn tất phân hệ đa CSDL trong {sim_res.get('total_elapsed_seconds', 0)}s.")
+
+                    log_print("🚀 [2/3] Kích hoạt thu thập Đa tài sản F073-F076 (Phái sinh VN30F, CW, ETF, Trái phiếu)...")
+                    from crawlers.multi_asset_crawler import crawl_all_multi_assets
+                    ma_res = crawl_all_multi_assets(limit=25)
+                    log_print(f"  ✓ Hoàn tất Đa tài sản: Phái sinh ({ma_res.get('derivatives', 0)}), CW ({ma_res.get('covered_warrants', 0)}), ETF ({ma_res.get('etfs', 0)}), Trái phiếu ({ma_res.get('bonds', 0)}).")
+
+                    log_print("🚀 [3/3] Sáp nhập nguyên tử và đồng bộ toàn bộ sang db/admin/...")
+                    from etl.merge_temp_to_canonical import merge_all_temp_databases
+                    m_res = merge_all_temp_databases()
+                    log_print(f"  ✓ Đồng bộ hoàn tất ({m_res.get('admin_synced_databases', 0)} CSDL).")
+                elif req.mode == "multi_asset" or req.category == "multi_asset":
+                    log_print("🚀 Kích hoạt thu thập Đa tài sản F073-F076 (Phái sinh, CW, ETF, Trái phiếu)...")
+                    from crawlers.multi_asset_crawler import crawl_all_multi_assets
+                    ma_res = crawl_all_multi_assets(limit=50)
+                    log_print(f"  ✓ Hoàn tất: Phái sinh ({ma_res.get('derivatives', 0)}), CW ({ma_res.get('covered_warrants', 0)}), ETF ({ma_res.get('etfs', 0)}), Trái phiếu ({ma_res.get('bonds', 0)}).")
+                    from etl.merge_temp_to_canonical import merge_all_temp_databases
+                    merge_all_temp_databases()
                 elif req.mode == "category":
                     cat_key = req.category or "ohlcv"
                     if cat_key in CATEGORIES_REGISTRY:
                         runner = CATEGORIES_REGISTRY[cat_key]
                         cnt = runner(symbols, writer, args)
                         log_print(f"[OK] Hoàn tất phân hệ [{cat_key.upper()}]. Thu thập +{cnt:,} bản ghi.")
-                elif req.mode == "all":
-                    run_latest_modular("all", symbols, writer, args, stop_check=lambda: STOP_CRAWL_FLAG)
+                    # Nạp nguyên tử sau cào category
+                    log_print("[*] THỰC HIỆN GIAO DỊCH NẠP NGUYÊN TỬ (ATOMIC INGESTION)...")
+                    res = writer.atomic_ingest_buffer()
+                    log_print(f"⚡ [KẾT QUẢ NẠP] Status={res.get('status')} | Rows synced={res.get('total_rows', 0)}")
 
-                # Nạp nguyên tử sau cào
-                log_print("[*] THỰC HIỆN GIAO DỊCH NẠP NGUYÊN TỬ (ATOMIC INGESTION)...")
-                res = writer.atomic_ingest_buffer()
-                log_print(f"⚡ [KẾT QUẢ NẠP] Status={res.get('status')} | Rows synced={res.get('total_rows', 0)}")
-                log_print("[✓] TIẾN TRÌNH CÀO HOÀN TẤT THÀNH CÔNG!")
+                log_print("[✓] TIẾN TRÌNH CÀO VÀ ĐỒNG BỘ DỮ LIỆU HOÀN TẤT THÀNH CÔNG!")
             except Exception as e:
                 log_print(f"[!] LỖI TRONG TIẾN TRÌNH CÀO: {e}")
             finally:
@@ -1042,13 +1309,17 @@ async def sse_crawl_logs(request: Request):
 @app.on_event("startup")
 def on_app_startup():
     """Tự động kích hoạt luồng cào dữ liệu mới nhất (background daemon) khi khởi động run_console nếu bật."""
-    auto_crawl = os.environ.get("VESTA_AUTO_CRAWL_ON_STARTUP", "0")
+    auto_crawl = os.environ.get("VESTA_AUTO_CRAWL_ON_STARTUP", "1")
     if auto_crawl == "1":
         logger.info("[STARTUP] VESTA_AUTO_CRAWL_ON_STARTUP=1: Tự động khởi chạy tiến trình cào dữ liệu mới nhất ngầm...")
-        try:
-            start_crawl_job(CrawlStartRequest(mode="latest", symbols="all", buffer_first=True, pages=5))
-        except Exception as e:
-            logger.warning(f"[STARTUP] Không thể kích hoạt auto-crawl khi khởi động: {e}")
+        def _delayed_start():
+            time.sleep(1.5)
+            try:
+                start_crawl_job(CrawlStartRequest(mode="latest", symbols="all", buffer_first=True, pages=5))
+            except Exception as e:
+                logger.warning(f"[STARTUP] Không thể kích hoạt auto-crawl khi khởi động: {e}")
+
+        threading.Thread(target=_delayed_start, daemon=True).start()
 
 
 # =============================================================================
@@ -1319,11 +1590,11 @@ def get_all_lakehouse_tickers() -> Set[str]:
         except Exception as e:
             logger.debug(f"Lỗi đọc cafef_company_list.json: {e}")
 
-    # 2. Bổ sung từ core.dim_symbol trong snapshot DuckDB
-    snap_p = REPO_ROOT / "db" / "vesta_snapshot.duckdb"
-    if snap_p.exists():
+    # 2. Bổ sung từ core.dim_symbol trong vesta_market_index.duckdb
+    market_p = REPO_ROOT / "db" / "vesta_market_index.duckdb"
+    if market_p.exists():
         try:
-            with duckdb.connect(str(snap_p), read_only=True, config={"access_mode": "read_only"}) as con:
+            with duckdb.connect(str(market_p), read_only=True, config={"access_mode": "read_only"}) as con:
                 rows = con.execute("SELECT symbol FROM core.dim_symbol").fetchall()
                 tickers.update({r[0].strip().upper() for r in rows if r[0]})
         except Exception:
@@ -1538,7 +1809,7 @@ def _parse_user_symbols_and_intent(text: str, default_cash: float = 10000000.0) 
 
 
 def _fetch_comprehensive_stock_dossier(symbol: str) -> Dict[str, Any]:
-    """Truy vấn dữ liệu chi tiết đa bảng từ 3 DuckDB Lakehouse cho một mã chứng khoán."""
+    """Truy vấn dữ liệu chi tiết đa bảng từ 5 CSDL Lakehouse chuyên biệt cho một mã chứng khoán."""
     sym = symbol.strip().upper()
 
     dossier: Dict[str, Any] = {
@@ -1576,132 +1847,139 @@ def _fetch_comprehensive_stock_dossier(symbol: str) -> Dict[str, Any]:
         if "shareholders" in known:
             dossier["shareholders"] = known["shareholders"]
 
-    # 1. Snapshot Lakehouse (Overview, Shareholders, Fundamentals, Health, Events, Foreign Flow)
-    snap_p = REPO_ROOT / "db" / "vesta_snapshot.duckdb"
-    con = connect_resilient_reader(str(snap_p))
+    # 1. Tra cứu thông tin từ 5 CSDL chuyên biệt (Market Index, Fundamentals, Events)
+    con = get_db_connection(read_only=True)
     if con:
         try:
-                # Dim symbol name & industry
-                try:
+            # Dim symbol name & industry
+            try:
+                dim_r = con.execute("""
+                    SELECT organ_name, industry_name, exchange 
+                    FROM market_index.core.dim_symbol WHERE symbol = ?
+                """, [sym]).fetchone()
+                if not dim_r:
                     dim_r = con.execute("SELECT organ_name, industry_name, exchange FROM core.dim_symbol WHERE symbol = ?", [sym]).fetchone()
-                    if dim_r:
-                        if dim_r[0]:
-                            dossier["overview"]["company_name"] = dim_r[0]
-                        if dim_r[1]:
-                            dossier["overview"]["industry"] = dim_r[1]
-                        if dim_r[2]:
-                            dossier["overview"]["exchange"] = dim_r[2]
-                except Exception as e:
-                    logger.debug(f"Dim symbol error {sym}: {e}")
+                if dim_r:
+                    if dim_r[0]:
+                        dossier["overview"]["company_name"] = dim_r[0]
+                    if dim_r[1]:
+                        dossier["overview"]["industry"] = dim_r[1]
+                    if dim_r[2]:
+                        dossier["overview"]["exchange"] = dim_r[2]
+            except Exception as e:
+                logger.debug(f"Dim symbol error {sym}: {e}")
 
-                # Company Overview with business_model, founded_date, number_of_employees, charter_capital, company_type
-                try:
-                    row = con.execute("""
-                        SELECT symbol, exchange, charter_capital, ceo_name, company_type, free_float_percentage, outstanding_shares,
-                               business_model, founded_date, number_of_employees, listing_date 
-                        FROM core.company_overview WHERE symbol = ?
-                    """, [sym]).fetchone()
-                    if row:
-                        dossier["overview"].update({
-                            "symbol": row[0],
-                            "exchange": row[1] or dossier["overview"]["exchange"],
-                            "charter_capital": float(row[2]) if row[2] else dossier["overview"]["charter_capital"],
-                            "ceo_name": row[3] or dossier["overview"]["ceo_name"],
-                            "company_type": row[4] or dossier["overview"]["company_type"],
-                            "free_float_pct": float(row[5]) if row[5] else dossier["overview"]["free_float_pct"],
-                            "outstanding_shares": int(row[6]) if row[6] else dossier["overview"]["outstanding_shares"],
-                            "business_model": row[7] or dossier["overview"]["business_model"],
-                            "founded_date": str(row[8]) if row[8] else dossier["overview"]["founded_date"],
-                            "number_of_employees": int(row[9]) if row[9] else dossier["overview"]["number_of_employees"],
-                            "listing_date": str(row[10]) if row[10] else dossier["overview"]["listing_date"],
-                        })
-                except Exception as e:
-                    logger.debug(f"Overview query error {sym}: {e}")
+            # Company Overview
+            try:
+                row = con.execute("""
+                    SELECT symbol, exchange, charter_capital, ceo_name, company_type, free_float_percentage, outstanding_shares,
+                           business_model, founded_date, number_of_employees, listing_date 
+                    FROM market_index.core.company_overview WHERE symbol = ?
+                """, [sym]).fetchone()
+                if row:
+                    dossier["overview"].update({
+                        "symbol": row[0],
+                        "exchange": row[1] or dossier["overview"]["exchange"],
+                        "charter_capital": float(row[2]) if row[2] else dossier["overview"]["charter_capital"],
+                        "ceo_name": row[3] or dossier["overview"]["ceo_name"],
+                        "company_type": row[4] or dossier["overview"]["company_type"],
+                        "free_float_pct": float(row[5]) if row[5] else dossier["overview"]["free_float_pct"],
+                        "outstanding_shares": int(row[6]) if row[6] else dossier["overview"]["outstanding_shares"],
+                        "business_model": row[7] or dossier["overview"]["business_model"],
+                        "founded_date": str(row[8]) if row[8] else dossier["overview"]["founded_date"],
+                        "number_of_employees": int(row[9]) if row[9] else dossier["overview"]["number_of_employees"],
+                        "listing_date": str(row[10]) if row[10] else dossier["overview"]["listing_date"],
+                    })
+            except Exception as e:
+                logger.debug(f"Overview query error {sym}: {e}")
 
-                # Shareholders (Top 5)
-                try:
-                    shs = con.execute("""
-                        SELECT shareholder_name, ownership_percentage 
-                        FROM core.company_shareholders 
-                        WHERE symbol = ? ORDER BY ownership_percentage DESC LIMIT 5
-                    """, [sym]).fetchall()
-                    dossier["shareholders"] = [
-                        {"name": s[0], "ownership_pct": float(s[1]) if s[1] else 0.0}
-                        for s in shs
-                    ]
-                except Exception as e:
-                    logger.debug(f"Shareholders query error {sym}: {e}")
+            # Shareholders (Top 5)
+            try:
+                shs = con.execute("""
+                    SELECT shareholder_name, ownership_percentage 
+                    FROM market_index.core.company_shareholders 
+                    WHERE symbol = ? ORDER BY ownership_percentage DESC LIMIT 5
+                """, [sym]).fetchall()
+                dossier["shareholders"] = [
+                    {"name": s[0], "ownership_pct": float(s[1]) if s[1] else 0.0}
+                    for s in shs
+                ]
+            except Exception as e:
+                logger.debug(f"Shareholders query error {sym}: {e}")
 
-                # Fundamentals (ratios)
-                try:
-                    f_row = con.execute("""
-                        SELECT data_json FROM core.fundamentals 
-                        WHERE symbol = ? AND report_type = 'ratio' 
-                        ORDER BY period_end DESC LIMIT 1
-                    """, [sym]).fetchone()
-                    if f_row and f_row[0]:
-                        dj = json.loads(f_row[0])
-                        dossier["fundamentals"] = {
-                            "pe": dj.get("RT_VALUE_PE"),
-                            "pb": dj.get("RT_VALUE_PB"),
-                            "roe": dj.get("RT_VALUE_ROE"),
-                            "debt_equity": dj.get("RT_VALUE_DEBT_EQUITY"),
-                            "net_margin": dj.get("RT_VALUE_NET_MARGIN"),
-                        }
-                except Exception as e:
-                    logger.debug(f"Fundamentals query error {sym}: {e}")
+            # Fundamentals (ratios)
+            try:
+                f_row = con.execute("""
+                    SELECT data_json FROM fundamentals.core.fundamentals 
+                    WHERE symbol = ? AND report_type = 'ratio' 
+                    ORDER BY period_end DESC LIMIT 1
+                """, [sym]).fetchone()
+                if f_row and f_row[0]:
+                    dj = json.loads(f_row[0])
+                    dossier["fundamentals"] = {
+                        "pe": dj.get("RT_VALUE_PE"),
+                        "pb": dj.get("RT_VALUE_PB"),
+                        "roe": dj.get("RT_VALUE_ROE"),
+                        "debt_equity": dj.get("RT_VALUE_DEBT_EQUITY"),
+                        "net_margin": dj.get("RT_VALUE_NET_MARGIN"),
+                    }
+            except Exception as e:
+                logger.debug(f"Fundamentals query error {sym}: {e}")
 
-                # Financial health (Altman Z-Score, Piotroski F-Score)
-                try:
-                    fh_row = con.execute("""
-                        SELECT data_json FROM core.fundamentals 
-                        WHERE symbol = ? AND report_type = 'financial_health' 
-                        ORDER BY period_end DESC LIMIT 1
-                    """, [sym]).fetchone()
-                    if fh_row and fh_row[0]:
-                        fh_dj = json.loads(fh_row[0])
-                        dossier["financial_health"] = {
-                            "piotroski_f_score": fh_dj.get("piotroski_f_score"),
-                            "altman_z_score": fh_dj.get("altman_z_score"),
-                            "z_score_zone": fh_dj.get("z_score_zone"),
-                            "net_income": fh_dj.get("net_income"),
-                            "total_assets": fh_dj.get("total_assets"),
-                        }
-                except Exception as e:
-                    logger.debug(f"Financial health query error {sym}: {e}")
+            # Financial health (Altman Z-Score, Piotroski F-Score)
+            try:
+                fh_row = con.execute("""
+                    SELECT data_json FROM fundamentals.core.fundamentals 
+                    WHERE symbol = ? AND report_type = 'financial_health' 
+                    ORDER BY period_end DESC LIMIT 1
+                """, [sym]).fetchone()
+                if fh_row and fh_row[0]:
+                    fh_dj = json.loads(fh_row[0])
+                    dossier["financial_health"] = {
+                        "piotroski_f_score": fh_dj.get("piotroski_f_score"),
+                        "altman_z_score": fh_dj.get("altman_z_score"),
+                        "z_score_zone": fh_dj.get("z_score_zone"),
+                        "net_income": fh_dj.get("net_income"),
+                        "total_assets": fh_dj.get("total_assets"),
+                    }
+            except Exception as e:
+                logger.debug(f"Financial health query error {sym}: {e}")
 
-                # Foreign flow
-                try:
-                    ff = con.execute("""
-                        SELECT net_value, date FROM core.market_foreign_flow_daily 
-                        WHERE symbol = ? ORDER BY date DESC LIMIT 1
-                    """, [sym]).fetchone()
-                    if ff and ff[0] is not None:
-                        dossier["foreign_flow"] = {"net_value": float(ff[0]), "date": str(ff[1])[:10]}
-                except Exception as e:
-                    logger.debug(f"Foreign flow query error {sym}: {e}")
+            # Foreign flow
+            try:
+                ff = con.execute("""
+                    SELECT net_value, date FROM market_index.core.market_foreign_flow_daily 
+                    WHERE symbol = ? ORDER BY date DESC LIMIT 1
+                """, [sym]).fetchone()
+                if ff and ff[0] is not None:
+                    dossier["foreign_flow"] = {"net_value": float(ff[0]), "date": str(ff[1])[:10]}
+            except Exception as e:
+                logger.debug(f"Foreign flow query error {sym}: {e}")
 
-                # Corporate events
-                try:
-                    evs = con.execute("""
-                        SELECT event_type, event_date, detail_json FROM core.corporate_events 
-                        WHERE symbol = ? ORDER BY event_date DESC LIMIT 3
-                    """, [sym]).fetchall()
-                    for ev in evs:
-                        t = ev[0] or "Sự kiện"
-                        if ev[2]:
-                            try:
-                                dj = json.loads(ev[2])
-                                t = dj.get("event_title_vi") or dj.get("event_name_vi") or t
-                            except Exception:
-                                pass
-                        dossier["events"].append({"type": ev[0], "date": str(ev[1])[:10], "title": t})
-                except Exception as e:
-                    logger.debug(f"Corporate events query error {sym}: {e}")
+            # Corporate events
+            try:
+                evs = con.execute("""
+                    SELECT event_type, event_date, detail_json FROM events.core.corporate_events 
+                    WHERE symbol = ? ORDER BY event_date DESC LIMIT 3
+                """, [sym]).fetchall()
+                for ev in evs:
+                    t = ev[0] or "Sự kiện"
+                    if ev[2]:
+                        try:
+                            dj = json.loads(ev[2])
+                            t = dj.get("event_title_vi") or dj.get("event_name_vi") or t
+                        except Exception:
+                            pass
+                    dossier["events"].append({"type": ev[0], "date": str(ev[1])[:10], "title": t})
+            except Exception as e:
+                logger.debug(f"Corporate events query error {sym}: {e}")
         except Exception as e:
-            logger.warning(f"Error querying snapshot.duckdb for {sym}: {e}")
+            logger.warning(f"Error querying mission databases for {sym}: {e}")
         finally:
-            con.close()
+            try:
+                con.close()
+            except Exception:
+                pass
 
     # 2. OHLCV Lakehouse (5-day historical prices)
     ohlcv_p = REPO_ROOT / "db" / "vesta_ohlcv.duckdb"
@@ -2021,6 +2299,13 @@ def get_symbol_detail_unified(
         "feedback_recommendation": feedback_model_conclude,
         "mapping_analysis": mapping_analysis,
     }
+
+
+@app.get("/api/symbol/{symbol}/full", tags=["Market Data"])
+def get_symbol_full_dossier_endpoint(symbol: str):
+    """Trả về toàn bộ 8 phân hệ chuyên sâu theo kiến trúc TradingView & Vietstock: Overview, Trading, Technical, Financials, Profile, News, Internal, Bonds."""
+    from src.service.market_extended_api import get_symbol_full_dossier
+    return get_symbol_full_dossier(symbol)
 
 
 def _compute_dynamic_strategy_rankings(

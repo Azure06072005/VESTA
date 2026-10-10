@@ -23,11 +23,40 @@ import pandas as pd
 logger = logging.getLogger("db_writer")
 
 PROJECT_ROOT = pathlib.Path(__file__).resolve().parents[2]
-ADMIN_DB_DIR = PROJECT_ROOT / "db" / "admin"
-ADMIN_DB_DIR.mkdir(parents=True, exist_ok=True)
-DEFAULT_TARGET_DB = str(ADMIN_DB_DIR / "vesta_snapshot.duckdb")
-DEFAULT_BUFFER_DB = str(ADMIN_DB_DIR / "vesta_crawled_fresh.duckdb")
-DEFAULT_BACKUP_DB = str(ADMIN_DB_DIR / "vesta_backup.duckdb")
+TEMP_DB_DIR = PROJECT_ROOT / "db" / "temp"
+TEMP_DB_DIR.mkdir(parents=True, exist_ok=True)
+
+TEMP_OHLCV_DB = str(TEMP_DB_DIR / "temp_ohlcv.duckdb")
+TEMP_NEWS_DB = str(TEMP_DB_DIR / "temp_news.duckdb")
+TEMP_MARKET_INDEX_DB = str(TEMP_DB_DIR / "temp_market_index.duckdb")
+TEMP_FUNDAMENTALS_DB = str(TEMP_DB_DIR / "temp_fundamentals.duckdb")
+TEMP_EVENTS_DB = str(TEMP_DB_DIR / "temp_events.duckdb")
+
+# 5 CSDL chính chuyên biệt theo nghiệp vụ (Domain-Driven Architecture)
+MAIN_OHLCV_DB = str(PROJECT_ROOT / "db" / "vesta_ohlcv.duckdb")
+MAIN_NEWS_DB = str(PROJECT_ROOT / "db" / "vesta_news.duckdb")
+MAIN_FUNDAMENTALS_DB = str(PROJECT_ROOT / "db" / "vesta_fundamentals.duckdb")
+MAIN_EVENTS_DB = str(PROJECT_ROOT / "db" / "vesta_events.duckdb")
+MAIN_MARKET_INDEX_DB = str(PROJECT_ROOT / "db" / "vesta_market_index.duckdb")
+
+DEFAULT_TARGET_DB = TEMP_OHLCV_DB
+DEFAULT_BUFFER_DB = str(TEMP_DB_DIR / "temp_buffer.duckdb")
+DEFAULT_BACKUP_DB = str(PROJECT_ROOT / "db" / "vesta_backup.duckdb")
+
+
+def get_target_db_for_table(table_name: str) -> str:
+    """Định tuyến tự động từng bảng vào CSDL tạm phù hợp trong 5 phân hệ chuyên biệt."""
+    tbl = table_name.lower().split(".")[-1]
+    if any(k in tbl for k in ["ohlcv", "index_daily", "intraday_trades", "order_book", "derivative", "warrant", "etf", "bond"]):
+        return TEMP_OHLCV_DB
+    elif any(k in tbl for k in ["news", "macro_policy", "sector_news", "article"]):
+        return TEMP_NEWS_DB
+    elif any(k in tbl for k in ["fundamental", "financial_note", "balance_sheet", "income_statement", "cash_flow", "ratio", "cafef_disclosure"]):
+        return TEMP_FUNDAMENTALS_DB
+    elif any(k in tbl for k in ["corporate_event", "price_adjustment", "pit_event"]):
+        return TEMP_EVENTS_DB
+    else:
+        return TEMP_MARKET_INDEX_DB
 
 
 class ResilientDuckDBWriter:
@@ -52,8 +81,10 @@ class ResilientDuckDBWriter:
         self._init_schemas(self.target_db)
 
     def _init_schemas(self, db_path: str) -> None:
-        """Khởi tạo cấu trúc schema và các bảng cốt lõi (idempotent)."""
-        ddl = """
+        """Khởi tạo cấu trúc schema và các bảng cốt lõi (idempotent, phân vùng chính xác theo nghiệp vụ CSDL)."""
+        db_name = os.path.basename(db_path).lower()
+
+        base_ddl = """
         CREATE SCHEMA IF NOT EXISTS staging;
         CREATE SCHEMA IF NOT EXISTS core;
         CREATE SCHEMA IF NOT EXISTS meta;
@@ -66,437 +97,278 @@ class ResilientDuckDBWriter:
             last_attempt  TIMESTAMP,
             PRIMARY KEY (dataset_name, symbol)
         );
-
-        CREATE TABLE IF NOT EXISTS core.dim_symbol (
-            symbol         VARCHAR NOT NULL PRIMARY KEY,
-            organ_name     VARCHAR NOT NULL,
-            en_organ_name  VARCHAR,
-            exchange       VARCHAR,
-            industry_code  VARCHAR,
-            industry_name  VARCHAR,
-            delisted_date  DATE,
-            is_delisted    BOOLEAN,
-            fetched_at     TIMESTAMP NOT NULL
-        );
-
-        CREATE TABLE IF NOT EXISTS staging.market_ohlcv_daily (
-            symbol      VARCHAR NOT NULL,
-            date        DATE NOT NULL,
-            open        DOUBLE,
-            high        DOUBLE,
-            low         DOUBLE,
-            close       DOUBLE,
-            volume      BIGINT,
-            fetched_at  TIMESTAMP NOT NULL
-        );
-
-        CREATE TABLE IF NOT EXISTS core.market_ohlcv_daily (
-            symbol      VARCHAR NOT NULL,
-            date        DATE NOT NULL,
-            open        DOUBLE,
-            high        DOUBLE,
-            low         DOUBLE,
-            close       DOUBLE,
-            volume      BIGINT,
-            fetched_at  TIMESTAMP NOT NULL,
-            PRIMARY KEY (symbol, date)
-        );
-
-        CREATE TABLE IF NOT EXISTS core.fundamentals (
-            symbol       VARCHAR NOT NULL,
-            report_type  VARCHAR NOT NULL,
-            period_end   DATE NOT NULL,
-            available_at DATE NOT NULL,
-            data_json    VARCHAR NOT NULL,
-            fetched_at   TIMESTAMP NOT NULL,
-            source       VARCHAR NOT NULL DEFAULT 'vnstock_data',
-            PRIMARY KEY (symbol, report_type, period_end, fetched_at)
-        );
-
-        CREATE TABLE IF NOT EXISTS core.financial_notes (
-            symbol        VARCHAR NOT NULL,
-            period        VARCHAR NOT NULL,
-            note_id       VARCHAR NOT NULL,
-            note_name     VARCHAR,
-            item_order    INTEGER,
-            item_level    INTEGER,
-            unit          VARCHAR,
-            value         DOUBLE,
-            fetched_at    TIMESTAMP NOT NULL,
-            PRIMARY KEY (symbol, period, note_id)
-        );
-
-        CREATE TABLE IF NOT EXISTS core.corporate_events (
-            symbol       VARCHAR NOT NULL,
-            event_id     VARCHAR NOT NULL,
-            event_type   VARCHAR NOT NULL,
-            event_date   DATE,
-            detail_json  VARCHAR NOT NULL,
-            fetched_at   TIMESTAMP NOT NULL,
-            PRIMARY KEY (symbol, event_id)
-        );
-
-        CREATE TABLE IF NOT EXISTS core.stock_research_reports (
-            report_id      VARCHAR,
-            symbol         VARCHAR,
-            broker         VARCHAR,
-            title          VARCHAR NOT NULL,
-            recommendation VARCHAR,
-            target_price   DOUBLE,
-            upside_pct     DOUBLE,
-            report_date    DATE,
-            report_url     VARCHAR PRIMARY KEY,
-            pdf_url        VARCHAR,
-            summary        TEXT,
-            fetched_at     TIMESTAMP NOT NULL
-        );
-
-        CREATE TABLE IF NOT EXISTS core.proprietary_flow (
-            symbol        VARCHAR NOT NULL,
-            date          DATE NOT NULL,
-            buy_vol       DOUBLE,
-            buy_val       DOUBLE,
-            sell_vol      DOUBLE,
-            sell_val      DOUBLE,
-            net_vol       DOUBLE,
-            net_val       DOUBLE,
-            fetched_at    TIMESTAMP NOT NULL,
-            PRIMARY KEY (symbol, date)
-        );
-
-        CREATE TABLE IF NOT EXISTS core.market_foreign_flow_daily (
-            symbol        VARCHAR NOT NULL,
-            date          DATE NOT NULL,
-            buy_volume    DOUBLE,
-            sell_volume   DOUBLE,
-            net_volume    DOUBLE,
-            foreign_room  DOUBLE,
-            fetched_at    TIMESTAMP NOT NULL,
-            PRIMARY KEY (symbol, date)
-        );
-
-        CREATE TABLE IF NOT EXISTS core.macro_rates (
-            rate_type     VARCHAR NOT NULL,
-            term          VARCHAR NOT NULL,
-            date          DATE NOT NULL,
-            rate_value    DOUBLE NOT NULL,
-            source        VARCHAR NOT NULL,
-            fetched_at    TIMESTAMP NOT NULL,
-            PRIMARY KEY (rate_type, term, date)
-        );
-        CREATE TABLE IF NOT EXISTS staging.news (
-            source_url   VARCHAR,
-            news_type    VARCHAR,
-            symbol       VARCHAR,
-            source       VARCHAR,
-            issuing_body VARCHAR,
-            doc_type     VARCHAR,
-            doc_number   VARCHAR,
-            published_at TIMESTAMP,
-            available_at TIMESTAMP,
-            headline     VARCHAR,
-            summary      VARCHAR,
-            body         VARCHAR,
-            duplicate_of VARCHAR,
-            fetched_at   TIMESTAMP
-        );
-
-        -- core.news (Unified News Schema): Lưu trữ toàn bộ 1.15M+ tin tức cổ phiếu, vĩ mô và tài chính
-        CREATE TABLE IF NOT EXISTS core.news (
-            source_url   VARCHAR NOT NULL PRIMARY KEY,
-            news_type    VARCHAR NOT NULL,
-            symbol       VARCHAR,
-            source       VARCHAR NOT NULL,
-            issuing_body VARCHAR,
-            doc_type     VARCHAR,
-            doc_number   VARCHAR,
-            published_at TIMESTAMP NOT NULL,
-            available_at TIMESTAMP NOT NULL,
-            headline     VARCHAR NOT NULL,
-            summary      VARCHAR,
-            body         VARCHAR,
-            duplicate_of VARCHAR,
-            fetched_at   TIMESTAMP NOT NULL
-        );
-
-        -- Đảm bảo staging.news và core.news có đầy đủ các cột mở rộng trước khi tạo view
-        ALTER TABLE staging.news ADD COLUMN IF NOT EXISTS news_type VARCHAR;
-        ALTER TABLE staging.news ADD COLUMN IF NOT EXISTS issuing_body VARCHAR;
-        ALTER TABLE staging.news ADD COLUMN IF NOT EXISTS doc_type VARCHAR;
-        ALTER TABLE staging.news ADD COLUMN IF NOT EXISTS doc_number VARCHAR;
-        ALTER TABLE staging.news ADD COLUMN IF NOT EXISTS headline VARCHAR;
-        ALTER TABLE staging.news ADD COLUMN IF NOT EXISTS summary VARCHAR;
-        ALTER TABLE staging.news ADD COLUMN IF NOT EXISTS body VARCHAR;
-        ALTER TABLE staging.news ADD COLUMN IF NOT EXISTS duplicate_of VARCHAR;
-
-        ALTER TABLE core.news ADD COLUMN IF NOT EXISTS news_type VARCHAR;
-        ALTER TABLE core.news ADD COLUMN IF NOT EXISTS issuing_body VARCHAR;
-        ALTER TABLE core.news ADD COLUMN IF NOT EXISTS doc_type VARCHAR;
-        ALTER TABLE core.news ADD COLUMN IF NOT EXISTS doc_number VARCHAR;
-        ALTER TABLE core.news ADD COLUMN IF NOT EXISTS headline VARCHAR;
-        ALTER TABLE core.news ADD COLUMN IF NOT EXISTS summary VARCHAR;
-        ALTER TABLE core.news ADD COLUMN IF NOT EXISTS body VARCHAR;
-        ALTER TABLE core.news ADD COLUMN IF NOT EXISTS duplicate_of VARCHAR;
-
-        -- Views tương thích ngược
-        DROP VIEW IF EXISTS core.news_resources;
-        DROP VIEW IF EXISTS core.macro_policy;
-        CREATE OR REPLACE VIEW core.news_resources AS
-        SELECT source, issuing_body, doc_type, doc_number, published_at, available_at, headline, summary, body, source_url, fetched_at
-        FROM core.news
-        WHERE symbol IS NULL;
-
-        CREATE OR REPLACE VIEW core.macro_policy AS
-        SELECT source, issuing_body, doc_type, doc_number, published_at, available_at, headline, summary, body, source_url, fetched_at
-        FROM core.news
-        WHERE news_type = 'MACRO_POLICY' OR (symbol IS NULL AND source IN ('baochinhphu', 'ssc', 'mof', 'sbv', 'gdt', 'moit', 'thoibaonganhang'));
-
-        CREATE OR REPLACE VIEW core.v_stock_news AS
-        SELECT * FROM core.news WHERE symbol IS NOT NULL;
-
-        CREATE OR REPLACE VIEW core.v_macro_news AS
-        SELECT * FROM core.news WHERE symbol IS NULL;
-
-        CREATE TABLE IF NOT EXISTS core.cafef_disclosures (
-            doc_id          VARCHAR NOT NULL PRIMARY KEY,
-            symbol          VARCHAR NOT NULL,
-            company_name    VARCHAR,
-            trade_center_id INTEGER,
-            exchange        VARCHAR,
-            year            INTEGER,
-            quarter         INTEGER,
-            report_type     VARCHAR,
-            content         VARCHAR,
-            file_name       VARCHAR,
-            file_url        VARCHAR,
-            lnstctm         DOUBLE,
-            published_at    TIMESTAMP,
-            raw_json        VARCHAR,
-            fetched_at      TIMESTAMP NOT NULL
-        );
-
-        CREATE TABLE IF NOT EXISTS staging.macro_economic_series (
-            indicator     VARCHAR NOT NULL,
-            sub_indicator VARCHAR NOT NULL,
-            report_period VARCHAR NOT NULL,
-            period_date   DATE,
-            numeric_value DOUBLE,
-            unit          VARCHAR,
-            meta_json     VARCHAR,
-            source        VARCHAR NOT NULL DEFAULT 'vnstock',
-            fetched_at    TIMESTAMP NOT NULL
-        );
-
-        CREATE TABLE IF NOT EXISTS core.macro_economic_series (
-            indicator     VARCHAR NOT NULL,
-            sub_indicator VARCHAR NOT NULL,
-            report_period VARCHAR NOT NULL,
-            period_date   DATE,
-            numeric_value DOUBLE,
-            unit          VARCHAR,
-            meta_json     VARCHAR,
-            source        VARCHAR NOT NULL DEFAULT 'vnstock',
-            fetched_at    TIMESTAMP NOT NULL,
-            PRIMARY KEY (indicator, sub_indicator, report_period)
-        );
-
-        CREATE TABLE IF NOT EXISTS staging.market_screener_snapshot (
-            symbol                   VARCHAR NOT NULL,
-            snapshot_date            DATE NOT NULL,
-            exchange                 VARCHAR,
-            price                    DOUBLE,
-            reference_price          DOUBLE,
-            ceiling_price            DOUBLE,
-            floor_price              DOUBLE,
-            price_change_percent     DOUBLE,
-            market_cap               DOUBLE,
-            accumulated_value        DOUBLE,
-            accumulated_volume       DOUBLE,
-            stock_strength           DOUBLE,
-            data_json                VARCHAR,
-            source                   VARCHAR NOT NULL DEFAULT 'VIETCAP_IQ_DIRECT',
-            fetched_at               TIMESTAMP NOT NULL
-        );
-
-        CREATE TABLE IF NOT EXISTS core.market_screener_snapshot (
-            symbol                   VARCHAR NOT NULL,
-            snapshot_date            DATE NOT NULL,
-            exchange                 VARCHAR,
-            price                    DOUBLE,
-            reference_price          DOUBLE,
-            ceiling_price            DOUBLE,
-            floor_price              DOUBLE,
-            price_change_percent     DOUBLE,
-            market_cap               DOUBLE,
-            accumulated_value        DOUBLE,
-            accumulated_volume       DOUBLE,
-            stock_strength           DOUBLE,
-            data_json                VARCHAR,
-            source                   VARCHAR NOT NULL DEFAULT 'VIETCAP_IQ_DIRECT',
-            fetched_at               TIMESTAMP NOT NULL,
-            PRIMARY KEY (symbol, snapshot_date)
-        );
-
-        CREATE TABLE IF NOT EXISTS staging.index_valuation_series (
-            index_code    VARCHAR NOT NULL,
-            ratio_code    VARCHAR NOT NULL,
-            report_date   DATE NOT NULL,
-            ratio_value   DOUBLE NOT NULL,
-            source        VARCHAR NOT NULL DEFAULT 'VNDIRECT_FINFO_DIRECT',
-            fetched_at    TIMESTAMP NOT NULL
-        );
-
-        CREATE TABLE IF NOT EXISTS core.index_valuation_series (
-            index_code    VARCHAR NOT NULL,
-            ratio_code    VARCHAR NOT NULL,
-            report_date   DATE NOT NULL,
-            ratio_value   DOUBLE NOT NULL,
-            source        VARCHAR NOT NULL DEFAULT 'VNDIRECT_FINFO_DIRECT',
-            fetched_at    TIMESTAMP NOT NULL,
-            PRIMARY KEY (index_code, ratio_code, report_date)
-        );
-
-        CREATE TABLE IF NOT EXISTS staging.market_breadth_series (
-            exchange               VARCHAR NOT NULL,
-            trade_date             DATE NOT NULL,
-            pe                     DOUBLE,
-            pb                     DOUBLE,
-            above_ma20_pct         DOUBLE,
-            above_ma50_pct         DOUBLE,
-            above_ma200_pct        DOUBLE,
-            avg_20d_above_ma50_pct DOUBLE,
-            position_line          DOUBLE,
-            close_index            DOUBLE,
-            source                 VARCHAR NOT NULL DEFAULT 'ASEAN_SC_DIRECT',
-            fetched_at             TIMESTAMP NOT NULL
-        );
-
-        CREATE TABLE IF NOT EXISTS core.market_breadth_series (
-            exchange               VARCHAR NOT NULL,
-            trade_date             DATE NOT NULL,
-            pe                     DOUBLE,
-            pb                     DOUBLE,
-            above_ma20_pct         DOUBLE,
-            above_ma50_pct         DOUBLE,
-            above_ma200_pct        DOUBLE,
-            avg_20d_above_ma50_pct DOUBLE,
-            position_line          DOUBLE,
-            close_index            DOUBLE,
-            source                 VARCHAR NOT NULL DEFAULT 'ASEAN_SC_DIRECT',
-            fetched_at             TIMESTAMP NOT NULL,
-            PRIMARY KEY (exchange, trade_date)
-        );
-
-        CREATE TABLE IF NOT EXISTS staging.market_sentiment_snapshot (
-            exchange           VARCHAR NOT NULL,
-            snapshot_date      DATE NOT NULL,
-            fear_greed_score   DOUBLE,
-            advances           INTEGER,
-            declines           INTEGER,
-            no_change          INTEGER,
-            mfi                DOUBLE,
-            rsi                DOUBLE,
-            index_change       DOUBLE,
-            volume_change      DOUBLE,
-            raw_json           VARCHAR,
-            source             VARCHAR NOT NULL DEFAULT 'ASEAN_SC_DIRECT',
-            fetched_at         TIMESTAMP NOT NULL
-        );
-
-        CREATE TABLE IF NOT EXISTS core.market_sentiment_snapshot (
-            exchange           VARCHAR NOT NULL,
-            snapshot_date      DATE NOT NULL,
-            fear_greed_score   DOUBLE,
-            advances           INTEGER,
-            declines           INTEGER,
-            no_change          INTEGER,
-            mfi                DOUBLE,
-            rsi                DOUBLE,
-            index_change       DOUBLE,
-            volume_change      DOUBLE,
-            raw_json           VARCHAR,
-            source             VARCHAR NOT NULL DEFAULT 'ASEAN_SC_DIRECT',
-            fetched_at         TIMESTAMP NOT NULL,
-            PRIMARY KEY (exchange, snapshot_date)
-        );
-
-        CREATE TABLE IF NOT EXISTS core.company_overview (
-            symbol                 VARCHAR NOT NULL PRIMARY KEY,
-            business_model         VARCHAR,
-            founded_date           VARCHAR,
-            charter_capital        DOUBLE,
-            number_of_employees    INTEGER,
-            listing_date           VARCHAR,
-            par_value              DOUBLE,
-            exchange               VARCHAR,
-            listing_price          DOUBLE,
-            listed_volume          BIGINT,
-            ceo_name               VARCHAR,
-            ceo_position           VARCHAR,
-            inspector_name         VARCHAR,
-            inspector_position     VARCHAR,
-            establishment_license  VARCHAR,
-            business_code          VARCHAR,
-            tax_id                 VARCHAR,
-            auditor                VARCHAR,
-            company_type           VARCHAR,
-            address                VARCHAR,
-            phone                  VARCHAR,
-            fax                    VARCHAR,
-            email                  VARCHAR,
-            website                VARCHAR,
-            branches               VARCHAR,
-            history                VARCHAR,
-            free_float_percentage  DOUBLE,
-            free_float             BIGINT,
-            outstanding_shares     BIGINT,
-            as_of_date             VARCHAR,
-            source                 VARCHAR NOT NULL DEFAULT 'vnstock',
-            fetched_at             TIMESTAMP NOT NULL
-        );
-
-        CREATE TABLE IF NOT EXISTS core.company_shareholders (
-            symbol               VARCHAR NOT NULL,
-            shareholder_name     VARCHAR NOT NULL,
-            shares_owned         BIGINT,
-            ownership_percentage DOUBLE,
-            update_date          VARCHAR,
-            source               VARCHAR NOT NULL DEFAULT 'vnstock',
-            fetched_at           TIMESTAMP NOT NULL,
-            PRIMARY KEY (symbol, shareholder_name)
-        );
-
-        CREATE TABLE IF NOT EXISTS core.dim_sector (
-            sector_id   INTEGER NOT NULL PRIMARY KEY,
-            sector_name VARCHAR NOT NULL
-        );
-
-        CREATE TABLE IF NOT EXISTS core.dim_symbol_sector (
-            symbol      VARCHAR NOT NULL,
-            sector_id   INTEGER NOT NULL,
-            PRIMARY KEY (symbol, sector_id)
-        );
-
-        CREATE TABLE IF NOT EXISTS core.sector_news_signal (
-            source_url      VARCHAR NOT NULL,
-            sector_id       INTEGER NOT NULL,
-            sector_name     VARCHAR NOT NULL,
-            matched_keyword VARCHAR NOT NULL,
-            match_tier      VARCHAR NOT NULL,
-            market_anchor   VARCHAR NOT NULL,
-            fetched_at      TIMESTAMP NOT NULL,
-            PRIMARY KEY (source_url, sector_id)
-        );
         """
-        schema_file = PROJECT_ROOT / "configs" / "duckdb_schema.sql"
-        schema_sql = ""
-        if schema_file.exists():
-            try:
-                schema_sql = schema_file.read_text(encoding="utf-8")
-            except Exception:
-                pass
-        
-        full_ddl = (schema_sql + "\n" + ddl) if schema_sql else ddl
+
+        domain_ddl = ""
+        # 1. Domain OHLCV & Giá & Đa tài sản
+        if "ohlcv" in db_name:
+            domain_ddl = """
+            CREATE TABLE IF NOT EXISTS staging.market_ohlcv_daily (
+                symbol VARCHAR NOT NULL, date DATE NOT NULL,
+                open DOUBLE, high DOUBLE, low DOUBLE, close DOUBLE, volume BIGINT,
+                fetched_at TIMESTAMP NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS core.market_ohlcv_daily (
+                symbol VARCHAR NOT NULL, date DATE NOT NULL,
+                open DOUBLE, high DOUBLE, low DOUBLE, close DOUBLE, volume BIGINT,
+                fetched_at TIMESTAMP NOT NULL,
+                PRIMARY KEY (symbol, date)
+            );
+            CREATE TABLE IF NOT EXISTS core.market_ohlcv_1m (
+                symbol VARCHAR NOT NULL, time TIMESTAMP NOT NULL,
+                open DOUBLE, high DOUBLE, low DOUBLE, close DOUBLE, volume BIGINT,
+                fetched_at TIMESTAMP NOT NULL,
+                PRIMARY KEY (symbol, time)
+            );
+            CREATE TABLE IF NOT EXISTS core.market_derivatives_daily (
+                symbol VARCHAR NOT NULL, date DATE NOT NULL,
+                open DOUBLE, high DOUBLE, low DOUBLE, close DOUBLE, volume BIGINT,
+                open_interest BIGINT, basis DOUBLE, contract_type VARCHAR,
+                fetched_at TIMESTAMP,
+                PRIMARY KEY (symbol, date)
+            );
+            CREATE TABLE IF NOT EXISTS core.market_covered_warrants_daily (
+                symbol VARCHAR NOT NULL, date DATE NOT NULL,
+                open DOUBLE, high DOUBLE, low DOUBLE, close DOUBLE, volume BIGINT,
+                underlying_symbol VARCHAR,
+                fetched_at TIMESTAMP,
+                PRIMARY KEY (symbol, date)
+            );
+            CREATE TABLE IF NOT EXISTS core.market_etf_daily (
+                symbol VARCHAR NOT NULL, date DATE NOT NULL,
+                open DOUBLE, high DOUBLE, low DOUBLE, close DOUBLE, volume BIGINT,
+                fetched_at TIMESTAMP,
+                PRIMARY KEY (symbol, date)
+            );
+            CREATE TABLE IF NOT EXISTS core.market_bonds_daily (
+                symbol VARCHAR NOT NULL PRIMARY KEY,
+                bond_type VARCHAR, issuer VARCHAR, par_value DOUBLE,
+                status VARCHAR, fetched_at TIMESTAMP
+            );
+            CREATE TABLE IF NOT EXISTS core.intraday_trades (
+                trade_id VARCHAR NOT NULL PRIMARY KEY,
+                symbol VARCHAR NOT NULL, time TIMESTAMP NOT NULL,
+                price DOUBLE NOT NULL, volume BIGINT NOT NULL,
+                trade_type VARCHAR, fetched_at TIMESTAMP NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS core.order_book_depth (
+                symbol VARCHAR NOT NULL, timestamp TIMESTAMP NOT NULL,
+                bid_price_1 DOUBLE, bid_vol_1 BIGINT,
+                ask_price_1 DOUBLE, ask_vol_1 BIGINT,
+                total_bid_depth DOUBLE, total_ask_depth DOUBLE,
+                spread DOUBLE, ofi_ratio DOUBLE,
+                fetched_at TIMESTAMP NOT NULL,
+                PRIMARY KEY (symbol, timestamp)
+            );
+            """
+
+        # 2. Domain News & Phân tích tin tức
+        elif "news" in db_name:
+            domain_ddl = """
+            CREATE TABLE IF NOT EXISTS staging.news (
+                source_url VARCHAR, news_type VARCHAR, symbol VARCHAR,
+                source VARCHAR, issuing_body VARCHAR, doc_type VARCHAR, doc_number VARCHAR,
+                published_at TIMESTAMP, available_at TIMESTAMP,
+                headline VARCHAR, summary VARCHAR, body VARCHAR,
+                duplicate_of VARCHAR, fetched_at TIMESTAMP
+            );
+            CREATE TABLE IF NOT EXISTS core.news (
+                source_url VARCHAR NOT NULL PRIMARY KEY,
+                news_type VARCHAR NOT NULL, symbol VARCHAR,
+                source VARCHAR NOT NULL, issuing_body VARCHAR, doc_type VARCHAR, doc_number VARCHAR,
+                published_at TIMESTAMP NOT NULL, available_at TIMESTAMP NOT NULL,
+                headline VARCHAR NOT NULL, summary VARCHAR, body VARCHAR,
+                duplicate_of VARCHAR, fetched_at TIMESTAMP NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS core.sector_news_signal (
+                source_url VARCHAR NOT NULL, sector_id INTEGER NOT NULL,
+                sector_name VARCHAR NOT NULL, matched_keyword VARCHAR NOT NULL,
+                match_tier VARCHAR NOT NULL, market_anchor VARCHAR NOT NULL,
+                fetched_at TIMESTAMP NOT NULL,
+                PRIMARY KEY (source_url, sector_id)
+            );
+            CREATE TABLE IF NOT EXISTS core.news_entity_map (
+                source_url VARCHAR NOT NULL, symbol VARCHAR NOT NULL,
+                confidence DOUBLE, fetched_at TIMESTAMP NOT NULL,
+                PRIMARY KEY (source_url, symbol)
+            );
+            CREATE TABLE IF NOT EXISTS core.news_relevance_meta (
+                source_url VARCHAR NOT NULL PRIMARY KEY,
+                relevance_score DOUBLE, sentiment_score DOUBLE,
+                fetched_at TIMESTAMP NOT NULL
+            );
+            CREATE OR REPLACE VIEW core.macro_policy AS
+            SELECT source, issuing_body, doc_type, doc_number, published_at, available_at, headline, summary, body, source_url, fetched_at
+            FROM core.news
+            WHERE news_type = 'MACRO_POLICY' OR (symbol IS NULL AND source IN ('baochinhphu', 'ssc', 'mof', 'sbv', 'gdt', 'moit', 'thoibaonganhang'));
+
+            CREATE OR REPLACE VIEW core.news_resources AS
+            SELECT source, issuing_body, doc_type, doc_number, published_at, available_at, headline, summary, body, source_url, fetched_at
+            FROM core.news WHERE symbol IS NULL;
+
+            CREATE OR REPLACE VIEW core.v_stock_news AS SELECT * FROM core.news WHERE symbol IS NOT NULL;
+            CREATE OR REPLACE VIEW core.v_macro_news AS SELECT * FROM core.news WHERE symbol IS NULL;
+            """
+
+        # 3. Domain BCTC & Fundamentals
+        elif "fundamental" in db_name:
+            domain_ddl = """
+            CREATE TABLE IF NOT EXISTS core.fundamentals (
+                symbol VARCHAR NOT NULL, report_type VARCHAR NOT NULL,
+                period_end DATE NOT NULL, available_at DATE NOT NULL,
+                data_json VARCHAR NOT NULL, fetched_at TIMESTAMP NOT NULL,
+                source VARCHAR NOT NULL DEFAULT 'vnstock_data',
+                PRIMARY KEY (symbol, report_type, period_end, fetched_at)
+            );
+            CREATE TABLE IF NOT EXISTS core.financial_notes (
+                symbol VARCHAR NOT NULL, period VARCHAR NOT NULL,
+                note_id VARCHAR NOT NULL, note_name VARCHAR,
+                item_order INTEGER, item_level INTEGER, unit VARCHAR,
+                value DOUBLE, fetched_at TIMESTAMP NOT NULL,
+                PRIMARY KEY (symbol, period, note_id)
+            );
+            CREATE TABLE IF NOT EXISTS core.cafef_disclosures (
+                doc_id VARCHAR NOT NULL PRIMARY KEY,
+                symbol VARCHAR NOT NULL, company_name VARCHAR,
+                trade_center_id INTEGER, exchange VARCHAR,
+                year INTEGER, quarter INTEGER, report_type VARCHAR,
+                content VARCHAR, file_name VARCHAR, file_url VARCHAR,
+                lnstctm DOUBLE, published_at TIMESTAMP, raw_json VARCHAR,
+                fetched_at TIMESTAMP NOT NULL
+            );
+            """
+
+        # 4. Domain Events
+        elif "event" in db_name:
+            domain_ddl = """
+            CREATE TABLE IF NOT EXISTS core.corporate_events (
+                symbol VARCHAR NOT NULL, event_id VARCHAR NOT NULL,
+                event_type VARCHAR NOT NULL, event_date DATE,
+                detail_json VARCHAR NOT NULL, fetched_at TIMESTAMP NOT NULL,
+                PRIMARY KEY (symbol, event_id)
+            );
+            CREATE TABLE IF NOT EXISTS core.price_adjustment_events (
+                symbol VARCHAR NOT NULL, ex_date DATE NOT NULL,
+                ratio DOUBLE, cash_dividend DOUBLE,
+                adjustment_factor DOUBLE, fetched_at TIMESTAMP NOT NULL,
+                PRIMARY KEY (symbol, ex_date)
+            );
+            CREATE TABLE IF NOT EXISTS core.pit_events (
+                event_id VARCHAR NOT NULL PRIMARY KEY,
+                symbol VARCHAR NOT NULL, event_time TIMESTAMP NOT NULL,
+                event_type VARCHAR NOT NULL, details_json VARCHAR,
+                fetched_at TIMESTAMP NOT NULL
+            );
+            """
+
+        # 5. Domain Market & Index & Dimension
+        else:
+            domain_ddl = """
+            CREATE TABLE IF NOT EXISTS core.dim_symbol (
+                symbol VARCHAR NOT NULL PRIMARY KEY,
+                organ_name VARCHAR NOT NULL, en_organ_name VARCHAR,
+                exchange VARCHAR, industry_code VARCHAR, industry_name VARCHAR,
+                delisted_date DATE, is_delisted BOOLEAN, fetched_at TIMESTAMP NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS core.dim_sector (
+                sector_id INTEGER NOT NULL PRIMARY KEY, sector_name VARCHAR NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS core.dim_symbol_sector (
+                symbol VARCHAR NOT NULL, sector_id INTEGER NOT NULL,
+                PRIMARY KEY (symbol, sector_id)
+            );
+            CREATE TABLE IF NOT EXISTS core.dim_icb_hierarchy (
+                icb_code VARCHAR NOT NULL PRIMARY KEY,
+                icb_name VARCHAR NOT NULL, level INTEGER NOT NULL,
+                parent_code VARCHAR, updated_at TIMESTAMP NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS core.dim_index_metadata (
+                index_code VARCHAR NOT NULL PRIMARY KEY,
+                index_name VARCHAR NOT NULL, exchange VARCHAR,
+                created_at TIMESTAMP NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS core.dim_index_constituents (
+                index_code VARCHAR NOT NULL, symbol VARCHAR NOT NULL,
+                effective_date DATE NOT NULL, weight DOUBLE,
+                PRIMARY KEY (index_code, symbol, effective_date)
+            );
+            CREATE TABLE IF NOT EXISTS core.company_overview (
+                symbol VARCHAR NOT NULL PRIMARY KEY,
+                business_model VARCHAR, founded_date VARCHAR,
+                charter_capital DOUBLE, number_of_employees INTEGER,
+                listing_date VARCHAR, exchange VARCHAR,
+                ceo_name VARCHAR, address VARCHAR, website VARCHAR,
+                free_float_percentage DOUBLE, free_float BIGINT,
+                outstanding_shares BIGINT, fetched_at TIMESTAMP NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS core.company_shareholders (
+                symbol VARCHAR NOT NULL, shareholder_name VARCHAR NOT NULL,
+                shares_owned BIGINT, ownership_percentage DOUBLE,
+                update_date VARCHAR, source VARCHAR NOT NULL DEFAULT 'vnstock',
+                fetched_at TIMESTAMP NOT NULL,
+                PRIMARY KEY (symbol, shareholder_name)
+            );
+            CREATE TABLE IF NOT EXISTS core.market_foreign_flow_daily (
+                symbol VARCHAR NOT NULL, date DATE NOT NULL,
+                buy_volume DOUBLE, sell_volume DOUBLE, net_volume DOUBLE,
+                foreign_room DOUBLE, fetched_at TIMESTAMP NOT NULL,
+                PRIMARY KEY (symbol, date)
+            );
+            CREATE TABLE IF NOT EXISTS core.proprietary_flow (
+                symbol VARCHAR NOT NULL, date DATE NOT NULL,
+                buy_vol DOUBLE, buy_val DOUBLE, sell_vol DOUBLE, sell_val DOUBLE,
+                net_vol DOUBLE, net_val DOUBLE, fetched_at TIMESTAMP NOT NULL,
+                PRIMARY KEY (symbol, date)
+            );
+            CREATE TABLE IF NOT EXISTS core.realtime_quote_snapshot (
+                symbol VARCHAR NOT NULL, snapshot_at TIMESTAMP NOT NULL,
+                data_json VARCHAR, fetched_at TIMESTAMP NOT NULL,
+                PRIMARY KEY (symbol, snapshot_at)
+            );
+            CREATE TABLE IF NOT EXISTS core.market_screener_snapshot (
+                symbol VARCHAR NOT NULL, snapshot_date DATE NOT NULL,
+                exchange VARCHAR, price DOUBLE, market_cap DOUBLE,
+                data_json VARCHAR, fetched_at TIMESTAMP NOT NULL,
+                PRIMARY KEY (symbol, snapshot_date)
+            );
+            CREATE TABLE IF NOT EXISTS core.market_sentiment_snapshot (
+                exchange VARCHAR NOT NULL, snapshot_date DATE NOT NULL,
+                fear_greed_score DOUBLE, advances INTEGER, declines INTEGER,
+                no_change INTEGER, mfi DOUBLE, rsi DOUBLE,
+                fetched_at TIMESTAMP NOT NULL,
+                PRIMARY KEY (exchange, snapshot_date)
+            );
+            CREATE TABLE IF NOT EXISTS core.market_breadth_series (
+                exchange VARCHAR NOT NULL, trade_date DATE NOT NULL,
+                pe DOUBLE, pb DOUBLE, above_ma20_pct DOUBLE,
+                above_ma50_pct DOUBLE, above_ma200_pct DOUBLE,
+                close_index DOUBLE, fetched_at TIMESTAMP NOT NULL,
+                PRIMARY KEY (exchange, trade_date)
+            );
+            CREATE TABLE IF NOT EXISTS core.index_valuation_series (
+                index_code VARCHAR NOT NULL, ratio_code VARCHAR NOT NULL,
+                report_date DATE NOT NULL, ratio_value DOUBLE NOT NULL,
+                source VARCHAR NOT NULL DEFAULT 'VNDIRECT_FINFO_DIRECT',
+                fetched_at TIMESTAMP NOT NULL,
+                PRIMARY KEY (index_code, ratio_code, report_date)
+            );
+            CREATE TABLE IF NOT EXISTS core.macro_rates (
+                rate_type VARCHAR NOT NULL, term VARCHAR NOT NULL,
+                date DATE NOT NULL, rate_value DOUBLE NOT NULL,
+                source VARCHAR NOT NULL, fetched_at TIMESTAMP NOT NULL,
+                PRIMARY KEY (rate_type, term, date)
+            );
+            CREATE TABLE IF NOT EXISTS core.macro_economic_series (
+                indicator VARCHAR NOT NULL, sub_indicator VARCHAR NOT NULL,
+                report_period VARCHAR NOT NULL, period_date DATE,
+                numeric_value DOUBLE, unit VARCHAR, meta_json VARCHAR,
+                source VARCHAR NOT NULL DEFAULT 'vnstock',
+                fetched_at TIMESTAMP NOT NULL,
+                PRIMARY KEY (indicator, sub_indicator, report_period)
+            );
+            """
+
+        full_ddl = base_ddl + "\n" + domain_ddl
 
         try:
             con = duckdb.connect(db_path, read_only=False)
@@ -504,7 +376,6 @@ class ResilientDuckDBWriter:
             con.close()
         except Exception as e:
             logger.debug("Không thể khởi tạo DDL trực tiếp trên %s: %s", db_path, e)
-            # Khởi tạo trên buffer_db để dự phòng
             try:
                 con_buf = duckdb.connect(self.buffer_db, read_only=False)
                 con_buf.execute(full_ddl)
@@ -566,6 +437,68 @@ class ResilientDuckDBWriter:
                         )
                         return self.write_to_buffer(func)
                 raise
+
+    def ensure_table_exists(self, table_name: str, columns_def: str) -> None:
+        """Đảm bảo bảng tồn tại với định nghĩa cột được cung cấp nếu chưa có."""
+        parts = table_name.split(".")
+        schema = parts[0] if len(parts) > 1 else "core"
+        tbl = parts[-1]
+
+        def _ensure(con: duckdb.DuckDBPyConnection) -> None:
+            con.execute(f"CREATE SCHEMA IF NOT EXISTS {schema};")
+            con.execute(f"CREATE TABLE IF NOT EXISTS {schema}.{tbl} ({columns_def});")
+
+        self.execute_with_retry(_ensure)
+
+    def upsert(
+        self,
+        table_name: str,
+        df: pd.DataFrame,
+        primary_keys: Optional[List[str]] = None,
+    ) -> int:
+        """Nạp dữ liệu từ DataFrame vào bảng chỉ định, hỗ trợ upsert theo primary keys."""
+        if df.empty:
+            return 0
+
+        parts = table_name.split(".")
+        schema = parts[0] if len(parts) > 1 else "core"
+        tbl = parts[-1]
+        pks = primary_keys or []
+
+        def _do_upsert(con: duckdb.DuckDBPyConnection) -> int:
+            con.execute(f"CREATE SCHEMA IF NOT EXISTS {schema};")
+            tbl_exists = con.execute("""
+                SELECT count(*) 
+                FROM information_schema.tables 
+                WHERE table_schema = ? AND table_name = ?
+            """, [schema, tbl]).fetchone()[0] > 0
+
+            con.register("_df_upsert_staging", df)
+            cols = [f'"{c}"' for c in df.columns]
+            cols_str = ", ".join(cols)
+
+            if not tbl_exists:
+                con.execute(f"CREATE TABLE {schema}.{tbl} AS SELECT * FROM _df_upsert_staging WHERE 1=0;")
+
+            if pks:
+                pk_cond = " AND ".join([f'"{schema}"."{tbl}".{k} = _df_upsert_staging.{k}' for k in pks])
+                try:
+                    con.execute(f"DELETE FROM {schema}.{tbl} WHERE EXISTS (SELECT 1 FROM _df_upsert_staging WHERE {pk_cond});")
+                except Exception:
+                    pass
+
+            try:
+                con.execute(f"INSERT OR REPLACE INTO {schema}.{tbl} ({cols_str}) SELECT {cols_str} FROM _df_upsert_staging;")
+            except Exception:
+                try:
+                    con.execute(f"INSERT OR IGNORE INTO {schema}.{tbl} ({cols_str}) SELECT {cols_str} FROM _df_upsert_staging;")
+                except Exception:
+                    con.execute(f"INSERT INTO {schema}.{tbl} ({cols_str}) SELECT {cols_str} FROM _df_upsert_staging;")
+
+            con.unregister("_df_upsert_staging")
+            return len(df)
+
+        return self.execute_with_retry(_do_upsert)
 
     def atomic_ingest_buffer(
         self,

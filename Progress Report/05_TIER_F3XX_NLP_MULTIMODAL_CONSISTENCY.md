@@ -503,7 +503,7 @@ Nhằm tối ưu hóa năng lực dự báo và hấp thụ 100% các bảng cơ
 
 ### 6.1. Xếp Hạng Ưu Tiên & Danh Mục Đặc Trưng Bổ Sung
 
-| Thứ Tự Ưu Tiên | Bảng Dữ Liệu Nguồn (`db/vesta_snapshot.duckdb`) | Các Đặc Trưng Bổ Sung (Added Features) | Ý Nghĩa Kinh Tế Định Lượng Trong Thị Trường Việt Nam |
+| Thứ Tự Ưu Tiên | Bảng Dữ Liệu Nguồn (`db/vesta_fundamentals.duckdb / db/vesta_events.duckdb`) | Các Đặc Trưng Bổ Sung (Added Features) | Ý Nghĩa Kinh Tế Định Lượng Trong Thị Trường Việt Nam |
 | :--- | :--- | :--- | :--- |
 | **Giai đoạn 0 (Baseline)** | `data/processed/f104/f104_train.parquet` | 24 đặc trưng gốc (FFD Price, RankGauss Volume, 22 Ratios) | Nền tảng định giá cơ bản, phân phối khối lượng và động lượng chuỗi giá dừng. |
 | **1st Priority** | `core.market_foreign_flow_daily` | `foreign_net_val_5d`, `foreign_net_val_20d`, `foreign_room` | Tín hiệu dòng vốn ngoại FII tích lũy/xả ròng và tỷ lệ sở hữu hở room ngoại – động lực dẫn dắt sóng VN30. |

@@ -110,7 +110,27 @@ flowchart TD
 
 ---
 
-### 3. Cơ Chế Phòng Vệ Lỗi & Rào Cản Kỹ Thuật (Fail-Closed & Resilience Mechanics)
+### 3. Cơ Chế Phòng Vệ Lỗi, Hạ Tầng 5 CSDL Chuyên Biệt & Quy Chuẩn Requirements SLA
+
+1. **Phân Tách 5 Cơ Sở Dữ Liệu Nhiệm Vụ Chuyên Biệt (5 Mission Databases Architecture):**
+   - Để chấm dứt triệt để xung đột khóa tệp độc quyền (`EXCLUSIVE_LOCK`) của DuckDB trên Windows khi nhiều tiến trình cào và Web Console/API chạy song song, hệ thống đã **khai tử hoàn toàn cơ sở dữ liệu gộp `vesta_snapshot.duckdb`** và chia tách thành 5 CSDL nhiệm vụ độc lập:
+     * `db/vesta_ohlcv.duckdb` (1.84 GB): Toàn bộ nến ngày (4.29M dòng), nến 1 phút (22.84M dòng) và 4 lớp tài sản mở rộng (Phái sinh VN30F, CW, ETF, Trái phiếu HNX).
+     * `db/vesta_news.duckdb` (7.73 GB): Toàn văn 939K+ bài báo tài chính từ các nguồn CafeF, Vietstock, VnEconomy, Báo Chính phủ và các hiệp hội.
+     * `db/vesta_fundamentals.duckdb` (1.90 GB): Toàn bộ 5 bảng BCTC quý và tỷ số tài chính chuẩn VAS từ năm 2000 đến nay.
+     * `db/vesta_events.duckdb` (496 MB): 40K+ sự kiện quyền doanh nghiệp, lịch chi trả cổ tức, họp ĐHCĐ và giao dịch cổ đông nội bộ.
+     * `db/vesta_market_index.duckdb` (102 MB): Chuỗi lịch sử 22 chỉ số thị trường chuẩn (VNINDEX, VN30...), dòng vốn khối ngoại và độ rộng thị trường.
+   - Cơ chế ghi đệm qua thư mục `db/admin/` và tệp tạm `db/temp_*.duckdb` giúp tiến trình cào ghi dữ liệu mà không làm nghẽn tiến trình đọc của Web Console hay mô hình AI.
+
+2. **Kiểm Toán & Loại Bỏ 29 Bảng Rỗng (0-Row Table Purge Gate):**
+   - Đã thực hiện rà soát toàn bộ các bảng trong CSDL; phát hiện và loại bỏ triệt để 29 bảng rác không có dữ liệu (0 rows) phát sinh từ các đợt test crawler cũ.
+   - Bảo đảm kho dữ liệu nến `vesta_ohlcv.duckdb` chỉ duy trì đúng 8 bảng dữ liệu cốt lõi có hàng triệu bản ghi sạch.
+
+3. **Chuẩn Hóa Yêu Cầu Thu Thập Dữ Liệu (Requirements SLA Engine) Cho F001 - F009:**
+   - Toàn bộ các crawler từ F001 đến F009 đều được tích hợp khóa `"requirements"` trong `Harness/feature_list.json`:
+     * **Phạm vi vũ trụ (`target_universe`):** Toàn bộ 1.751 mã cổ phiếu (HOSE, HNX, UPCOM) cùng 22 chỉ số benchmark.
+     * **Biên thời gian sâu (`min_date`):** Yêu cầu tối thiểu từ năm **2000-01-01** (hoặc ngày IPO / thành lập thị trường).
+     * **Biên thời gian cập nhật (`max_date`):** Tự động hướng tới ngày hiện tại (`CURRENT_DATE / istoday()`) theo chuẩn T-0.
+     * **Ngoại lệ kỹ thuật (`exception_rule`):** Riêng nến 1 phút (F002b) được khống chế trong cửa sổ trượt 3 năm (2023 - Nay) để bảo toàn giới hạn dung lượng đĩa và RAM.
 
 1. **Phân Tách 3 Tầng Dữ Liệu Độc Lập (Staging - Core - Meta Isolation):**
    - Không bao giờ ghi trực tiếp dữ liệu thô từ mạng vào bảng `core.*`. Mọi payload bắt buộc phải qua `staging.*` và chạy qua hàm `src/etl/promote.py` với ràng buộc kiểm tra schema, deduplication và kiểm tra kiểu dữ liệu nghiêm ngặt.

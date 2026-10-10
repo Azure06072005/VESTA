@@ -1249,6 +1249,107 @@ p.isfinite trên chuỗi return, triệt tiêu hoàn toàn 1,038 sự kiện có
      - Toàn bộ 12/12 unit tests đạt 100% PASS.
 - Next Session Should: Tiếp tục thực hiện live smoke test pipeline vào ngày mai và theo dõi hành vi tự chọn chiến lược của 308 bot trên dữ liệu mới nhất.
 
+## Session 35 — 2026-10-09 (T-0 Deep Crawl, 5 Mission DBs, Deduplication, Multi-Asset Web Console & Chat History Logging)
+- Branch: main
+- Status: Hoàn thành 100% toàn bộ chuỗi nhiệm vụ:
+  1. **5 Cơ Sở Dữ Liệu Nhiệm Vụ Chuyên Biệt**: Tách hoàn toàn `vesta_snapshot.duckdb` thành 5 CSDL chuyên biệt (`vesta_ohlcv`, `vesta_market_index`, `vesta_news`, `vesta_fundamentals`, `vesta_events`). Nhân bản sang `db/admin/`.
+  2. **Dữ Liệu Toàn Diện T-0 (2026-10-09) & Inception Crawl**:
+     - `core.market_ohlcv_1m`: 23.1M nến (cào bù 3 tuần thiếu +279k nến đến 2026-10-09 14:59:00).
+     - `core.market_ohlcv_daily`: 4.28M nến (2000-07-28 -> 2026-10-09).
+     - `core.market_derivatives_daily` (F073): 9,152 nến (2017-08-10 -> 2026-10-09).
+     - `core.market_covered_warrants_daily` (F074): 27,087 nến (339 CWs).
+     - `core.market_etf_daily` (F075): 26,007 nến (24 ETFs).
+     - `core.market_foreign_flow_daily` (F054): 4.85M dòng (2001-04-02 -> 2026-10-09).
+     - `core.news`: 1.15M bài viết (đến 2026-10-09 17:53:34).
+     - `core.corporate_events`: 37.5k sự kiện (đến 21/10/2026).
+  3. **Khử Hoàn Toàn 956,211 Hàng Trùng Lặp**: Xử lý triệt để nguyên nhân cột `fetched_at` và chuẩn hóa cơ chế sáp nhập 2 bước ACID.
+  4. **Nâng Cấp Web Console (Port 8899)**:
+     - Dải KPI: Fear & Greed 36.05 (Thận trọng), RSI 37.2, MFI 27.5, Độ rộng MA20 (32%) / MA50 (29%), Thanh khoản 12,538 Tỷ, Khối ngoại bán ròng -406.3 Tỷ.
+     - Phân lớp Đa Tài sản: Tabs Cổ phiếu Heatmap, Phái sinh VN30F, Quỹ ETF, Chứng quyền CW; liên kết biểu đồ Candlestick.
+     - Kiểm thử trực quan trình duyệt hoàn tất với video và ảnh chụp màn hình.
+  5. **Nhật Ký Hội Thoại Toàn Diện (Chat History Protocol)**:
+     - Tạo tệp `d:\VESTA\CHAT_HISTORY.md` ghi nhận đầy đủ 100% câu hỏi, hành động kỹ thuật và câu trả lời xuyên suốt toàn bộ phiên làm việc.
+     - Thiết lập quy chuẩn tự động ghi nối tiếp (append log) cho mọi lượt trao đổi tiếp theo.
+- Next Session Should: Tiếp tục duy trì quy tắc tự động cập nhật `CHAT_HISTORY.md` cho mỗi lượt hội thoại và vận hành hệ thống tác nhân VESTA.
+
+## Session 36 — 2026-10-10 (Autonomous Crawling Pipeline, Data Quality Suite 100% Pass & Candlestick Technical Chart Overhaul)
+- Branch: main
+- Status: Hoàn thành 100% toàn bộ chuỗi nhiệm vụ:
+  1. **Khắc Phục Toàn Diện Lỗi Biểu Đồ Nến Kỹ Thuật (Candlestick Chart)**:
+     - Sửa bước nhảy giá 1,000x: Chuẩn hóa 263,063 hàng nến 1m từ 21/09/2026 đến 09/10/2026 về đơn vị chuẩn 1,000 VND (đồng nhất với 22.8M hàng lịch sử).
+     - Khử sạch 40,940 hàng trùng lặp trong `core.market_ohlcv_daily` (đạt 4,238,046 dòng duy nhất không trùng).
+     - Loại bỏ 8,806 hàng giá bằng 0 do ngày không khớp lệnh, chuẩn hóa ràng buộc hình học nến (`high >= max(open, close)` và `low <= min(open, close)`).
+     - Nâng cấp `DashboardPage.tsx` với `chart.timeScale().fitContent()` giúp nến lấp đầy toàn bộ khung hình, nhấp thẻ cổ phiếu trên Heatmap lập tức cập nhật biểu đồ nến sang mã đó.
+  2. **Bộ Kiểm Định Chất Lượng Dữ Liệu Đa Chiều (Data Quality Suite — 100% PASS)**:
+     - Xây dựng `src/pipeline/data_quality.py` bao quát 6 Trọng tâm đo lường (Accuracy, Completeness, Consistency, Uniqueness, Timeliness, Validity) và 5 Loại hình kiểm tra (Mandatory/Null, Unique, Volume, Schema, Outlier/Anomaly).
+     - Đạt chuẩn tuyệt đối: **14/14 kiểm định PASSED (100.0%)** trên cả 5 CSDL Lakehouse.
+  3. **Điều Phối Tự Động Hóa Toàn Diện 4 Giai Đoạn (Autonomous Pipeline)**:
+     - Xây dựng `src/pipeline/autonomous_pipeline.py` hoàn tất chu trình khép kín: Crawl All-Universe -> Data Quality Audit -> Preprocessing & Dual Sync -> Web Console Verification trong **34.47 giây**.
+  4. **Kiểm Thử Trình Duyệt & Ghi Nhật Ký Hội Thoại**:
+     - Browser Subagent kiểm thử thành công biểu đồ nến FPT, chuyển khung thời gian, chụp ảnh nghiệm thu `fpt_detail_candlestick.png`.
+     - Cập nhật nhật ký hội thoại Turn 14 vào `d:\VESTA\CHAT_HISTORY.md`.
+- Next Session Should: Tiếp tục duy trì quy tắc tự động cập nhật `CHAT_HISTORY.md` cho mỗi lượt hội thoại và vận hành mô hình dự báo HybridACD.
+
+## Session 37 — 2026-10-10 (Deep History OHLCV Merge, Symbol Depth Classification, WinError 10048 Port Fix & Zero-Row Clean)
+- Branch: main
+- Status: Hoàn thành 100% toàn bộ chuỗi nhiệm vụ:
+  1. **Khôi Phục Dữ Liệu Lịch Sử Sâu Toàn Diện (NVL & Core Equities)**:
+     - Sáp nhập 3,509,057 hàng nến lịch sử sâu từ `db/admin/vesta_crawled_fresh.duckdb` vào `core.market_ohlcv_daily` trong `db/admin/vesta_ohlcv.duckdb`.
+     - Tổng nến ngày tăng lên **4,717,392 dòng duy nhất** (+479,346 dòng sâu).
+     - Phục hồi mã NVL trọn vẹn **2,439 phiên giao dịch** (từ ngày niêm yết 28/12/2016 đến 09/10/2026).
+  2. **Phân Loại Độ Sâu Lịch Sử Toàn Thị Trường (3 Danh Sách Mã)**:
+     - Danh sách 1 (>= 10 năm): **957 mã** (VCB, FPT, HPG, SSI, ACB, VNM, REE, MBB, MWG, VIC, VHM...).
+     - Danh sách 2 (5 - 10 năm): **677 mã** (NVL với 9.78 năm/2,439 phiên, BCM, ACV, VRE, LPB, MSB, TPB, OCB...).
+     - Danh sách 3 (1 - 5 năm): **249 mã** (BAF, BCR, AIG, và các ETF/CW kỳ hạn dài).
+     - Xuất báo cáo hoàn chỉnh tại `out/symbol_depth_classification.json`.
+  3. **Kiểm Tra & Loại Bỏ Bảng 0 Hàng & View Hỏng**:
+     - Xóa vĩnh viễn 2 bảng đệm rỗng `core.intraday_trades` và `core.order_book_depth` khỏi `vesta_ohlcv.duckdb`.
+     - Dọn dẹp view hỏng `core.v_active_index_constituents`, `staging.macro_policy`, `staging.news_resources`.
+     - Xác nhận `vesta_snapshot.duckdb` là kho lưu trữ archive cũ; hệ thống đang vận hành chuẩn trên 5 Mission Databases.
+  4. **Khắc Phục Lỗi `[WinError 10048]` Trên Web Console ([run_console.py](file:///d:/VESTA/run_console.py))**:
+     - Bổ sung hàm `free_port()` tự động giải phóng PID chiếm dụng cổng 8899 trước khi uvicorn khởi chạy.
+     - Web Console và API chạy ổn định tại `http://127.0.0.1:8899`.
+  5. **Đồng Bộ Hóa Toàn Trình Autonomous Pipeline ([autonomous_pipeline.py](file:///d:/VESTA/src/pipeline/autonomous_pipeline.py))**:
+     - Data Quality Suite 14/14 PASS (100.0%).
+     - Tự động hóa 4 giai đoạn hoàn tất 100% trong 22.22 giây, cả 5 API endpoint phản hồi HTTP 200 OK.
+  6. **Cập Nhật Nhật Ký Hội Thoại**:
+     - Ghi chép đầy đủ Turn 15 vào `d:\VESTA\CHAT_HISTORY.md`.
+- Next Session Should: Tiếp tục duy trì quy tắc tự động cập nhật `CHAT_HISTORY.md` cho mỗi lượt hội thoại và vận hành hệ thống tác nhân VESTA.
+
+## Session 38 — 2026-10-10 (Snapshot Migration, TickerStrip Marquee Animation & TradingView + Vietstock Dashboard Architecture Overhaul)
+- Branch: main
+- Status: Hoàn thành 100% toàn bộ chuỗi nhiệm vụ:
+  1. **Kiểm Toán & Di Chuyển Các Bảng Snapshot Còn Thiếu**:
+     - Phát hiện 5 bảng còn nằm trong `vesta_snapshot.duckdb`: `core.intraday_trades` (32,062 hàng), `core.order_book_depth` (611 hàng), `core.foreign_flow_intraday` (2 hàng), `core.foreign_ownership_room` (2 hàng) và `meta.automated_training_watermark` (1 hàng).
+     - Chạy [`scratch/migrate_missing_snapshot_tables.py`](file:///d:/VESTA/scratch/migrate_missing_snapshot_tables.py): Di chuyển toàn bộ sang `vesta_ohlcv` và `vesta_market_index` (cả hai bản `db/` và `db/admin/`).
+  2. **Cập Nhật Typography Font-Family Chuẩn Thiết Kế ([web/src/index.css](file:///d:/VESTA/web/src/index.css))**:
+     - `--mono: 'Syne Mono', monospace;`
+     - `--serif: 'Playfair Display', serif;`
+     - `--sans: 'Syne', sans-serif;`
+     - Bổ sung `@keyframes tickerSlide` lướt mượt mà từ phải sang trái 40s liên tục.
+  3. **Nâng Cấp TickerStrip ([web/src/components/TickerStrip.tsx](file:///d:/VESTA/web/src/components/TickerStrip.tsx))**:
+     - Đồng bộ chỉ số VNINDEX, VN30, HNX-INDEX, UPCOM, VN100, VNDIAMOND, VNFINLEAD, Khối ngoại ròng, Tổng thanh khoản.
+     - Hiệu ứng marquee sliding vô tận từ phải sang trái, mảng nhân đôi liền mạch, lớp mặt nạ gradient hai đầu, hover tạm dừng.
+  4. **Xây Dựng Phân Hệ API Mở Rộng ([src/service/market_extended_api.py](file:///d:/VESTA/src/service/market_extended_api.py))**:
+     - Trích xuất dữ liệu từ các tệp HAR Vietstock (`du_lieu_nganh.har`, `trang_chu.har`, `tong_quan.har`).
+     - `GET /api/dashboard/market_extended`: 11 ngành GICS Vietstock, Index Influence (Top 5 tăng/giảm điểm), Top AI Proposals (FPT, HPG, VCB, MWG, SSI), Hàng hóa (SJC, Spot Gold, Brent, WTI, HRC), Tỷ giá quy đổi VND (USD, EUR, JPY, GBP, CNY, BTC), Định giá lịch sử P/E P/B 2020-2026, Tin tức quốc tế ("Quốc tế, thế giới").
+     - `GET /api/symbol/{symbol}/full`: Bộ dữ liệu hồ sơ 8 phân hệ chuyên sâu (VIC, FPT, VCB, MCH...) kèm nến 1 phút cao tần `bars_1m` và lợi suất đa kỳ hạn (1D, 5D, 1M, 3M, 6M, YTD, 1Y, 5Y, ALL).
+  5. **Đại Tu Kiến Trúc Giao Diện DashboardPage ([web/src/pages/DashboardPage.tsx](file:///d:/VESTA/web/src/pages/DashboardPage.tsx))**:
+     - **Chế độ Thị Trường (Market Dashboard)**: Thẻ chỉ số, 11 nhóm ngành GICS, Index Influence, AI Proposals, Bảng điện/Heatmap tương tác, Trung tâm vĩ mô (Hàng hóa & Tỷ giá), Định giá P/E P/B, Tin tức quốc tế & Tin tức trong nước.
+     - **Chế độ Hồ Sơ Cổ Phiếu / Chỉ Số (Symbol Overview — TradingView VIC & Vietstock MCH)**:
+       - Header chuẩn TradingView: Giá hiện tại, Giá trần/sàn/tham chiếu, 52W range, Định giá, Điểm số AI Consensus.
+       - 8 Tabs: `Tổng Quan (Overview)`, `Giao Dịch (Trading)`, `Kỹ Thuật (Technical)`, `Tài Chính (Financials)`, `Hồ Sơ (Profile)`, `Tin Tức & Sự Kiện (News & Events)`, `Giao Dịch Nội Bộ (Internal Trading)`, `Trái Phiếu (Bonds)`.
+       - Tab Tổng quan: Biểu đồ đường (Line chart) hiển thị riêng **`ohlcv_1m`** mặc định, nút mở rộng **TradingView Full Chart** (Candlestick + Volume + MA20), thanh chọn đa khung thời gian (`1D`, `5D`, `1M`, `3M`, `6M`, `YTD`, `1Y`, `5Y`, `ALL`) kèm tỷ lệ % lợi suất trực quan.
+  6. **Đồng Bộ Song Ngữ EN / VI Toàn Diện & Kiểm Thử Trình Duyệt**:
+     - Cập nhật từ điển `web/src/i18n.ts`, nút chuyển đổi ngôn ngữ hoạt động tức thì.
+     - `npm run build` thành công 100% trong 634ms không cảnh báo linter.
+     - Browser Subagent kiểm thử trên `http://127.0.0.1:8899` xác nhận giao diện hoạt động mượt mà, layout chuẩn xác.
+  7. **Cập Nhật Nhật Ký Hội Thoại**:
+     - Ghi nhận đầy đủ Turn 15 vào `d:\VESTA\CHAT_HISTORY.md`.
+- Next Session Should: Tiếp tục duy trì quy tắc tự động cập nhật `CHAT_HISTORY.md` cho mỗi lượt hội thoại và vận hành hệ thống tác nhân VESTA.
+
+
+
 
 
 

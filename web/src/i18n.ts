@@ -80,6 +80,58 @@ export interface Translations {
     buy_bil: string;
     sell_bil: string;
     net_bil: string;
+    // Vietstock & TradingView extensions
+    sector_index_title: string;
+    index_influence_title: string;
+    proposals_title: string;
+    trading_board_title: string;
+    total_market_title: string;
+    commodities_title: string;
+    currencies_title: string;
+    financial_analytics_title: string;
+    global_news_title: string;
+    full_chart_btn: string;
+    line_chart_mode: string;
+    time_range_label: string;
+    tab_overview: string;
+    tab_trading: string;
+    tab_technical: string;
+    tab_financials: string;
+    tab_profile: string;
+    tab_news_events: string;
+    tab_internal_trading: string;
+    tab_bonds: string;
+    back_to_market: string;
+    ceiling_floor_ref: string;
+    valuation_size: string;
+    consensus_badge: string;
+    trading_stats_title: string;
+    fundamental_ratios_title: string;
+    listing_profile_title: string;
+    headline_scorer_title: string;
+    enter_headline_label: string;
+    source_label: string;
+    score_btn: string;
+    scoring_btn: string;
+    order_book_title: string;
+    tick_deals_title: string;
+    oscillators_title: string;
+    ma_title: string;
+    pivots_title: string;
+    financial_statements_title: string;
+    company_profile_title: string;
+    shareholders_title: string;
+    news_events_sub_title: string;
+    internal_trading_sub_title: string;
+    bonds_sub_title: string;
+    foamtree_view: string;
+    table_view: string;
+    grid_view: string;
+    sector_size_traded: string;
+    sector_size_cap: string;
+    selected_period_return: string;
+    positive_contributors: string;
+    negative_contributors: string;
   };
   crawler: {
     title: string;
@@ -303,6 +355,58 @@ export const translations: Record<Language, Translations> = {
       buy_bil: 'Mua (Tỷ)',
       sell_bil: 'Bán (Tỷ)',
       net_bil: 'Ròng (Tỷ)',
+      // Vietstock & TradingView extensions
+      sector_index_title: 'Chỉ Số Ngành & Dữ Liệu Ngành (Vietstock Sector Hub)',
+      index_influence_title: 'Tác Động Chỉ Số VN-Index (Kéo Tăng / Giảm)',
+      proposals_title: 'Khuyến Nghị Đầu Tư Định Lượng AI (VESTA Consensus)',
+      trading_board_title: 'Bảng Điện Khớp Lệnh Thời Gian Thực (Trading Board)',
+      total_market_title: 'Tổng Quan Toàn Thị Trường Hôm Nay',
+      commodities_title: 'Thị Trường Hàng Hóa Thế Giới & Trong Nước',
+      currencies_title: 'Tỷ Giá Ngoại Tệ Quy Đổi VND (VCB / SBV)',
+      financial_analytics_title: 'Phân Tích Tài Chính & Định Giá Thị Trường P/E, P/B',
+      global_news_title: 'Tin Tức Quốc Tế & Kinh Tế Thế Giới',
+      full_chart_btn: 'Biểu Đồ Đầy Đủ (TradingView Full Chart)',
+      line_chart_mode: 'Biểu Đồ Đường (Nến 1 Phút)',
+      time_range_label: 'Khung Thời Gian & Hiệu Suất:',
+      tab_overview: 'Tổng Quan',
+      tab_trading: 'Giao Dịch',
+      tab_technical: 'Kỹ Thuật',
+      tab_financials: 'Tài Chính',
+      tab_profile: 'Hồ Sơ',
+      tab_news_events: 'Tin Tức & Sự Kiện',
+      tab_internal_trading: 'Giao Dịch Nội Bộ',
+      tab_bonds: 'Trái Phiếu',
+      back_to_market: 'Quay lại Bảng Điện Thị Trường',
+      ceiling_floor_ref: 'Biên độ trần / sàn / tham chiếu',
+      valuation_size: 'Định giá & Quy mô',
+      consensus_badge: 'Đồng thuận Định lượng VESTA',
+      trading_stats_title: 'Thống Kê Khớp Lệnh & Giá',
+      fundamental_ratios_title: 'Chỉ Số Tài Chính Cơ Bản',
+      listing_profile_title: 'Thông Tin Niêm Yết',
+      headline_scorer_title: 'Mô Phỏng Chấm Điểm Tin Tức Cho',
+      enter_headline_label: 'Nhập tiêu đề hoặc công bố thông tin cần kiểm định:',
+      source_label: 'Nguồn tin:',
+      score_btn: 'Chấm Điểm Sentiment',
+      scoring_btn: 'Đang chấm điểm...',
+      order_book_title: 'Sổ Lệnh 3 Mức Giá Tốt Nhất (Level 2 Order Book)',
+      tick_deals_title: 'Khớp Lệnh Từng Lô (Tick Deals History)',
+      oscillators_title: 'Chỉ Báo Dao Động (Oscillators)',
+      ma_title: 'Đường Trung Bình Động (Moving Averages)',
+      pivots_title: 'Điểm Xoay Kỹ Thuật (Classic Pivot Points)',
+      financial_statements_title: 'Báo Cáo Tài Chính & Kết Quả Kinh Doanh (Tỷ VNĐ)',
+      company_profile_title: 'Hồ Sơ Doanh Nghiệp & Ban Lãnh Đạo',
+      shareholders_title: 'Cơ Cấu Cổ Đông Lớn',
+      news_events_sub_title: 'Tin Tức & Lịch Sự Kiện Doanh Nghiệp Của',
+      internal_trading_sub_title: 'Lịch Sử Giao Dịch Cổ Đông Nội Bộ & Người Có Liên Quan',
+      bonds_sub_title: 'Danh Sách Trái Phiếu Doanh Nghiệp Niêm Yết',
+      foamtree_view: 'Bản Đồ FoamTree',
+      table_view: 'Dạng Bảng',
+      grid_view: 'Lưới Thẻ',
+      sector_size_traded: 'Theo GTGD (Tỷ)',
+      sector_size_cap: 'Theo Vốn Hóa',
+      selected_period_return: 'Hiệu suất kỳ được chọn:',
+      positive_contributors: '▲ CỔ PHIẾU ĐÓNG GÓP TĂNG ĐIỂM (TOP POSITIVE)',
+      negative_contributors: '▼ CỔ PHIẾU GÂY ÁP LỰC GIẢM ĐIỂM (TOP NEGATIVE)',
     },
     crawler: {
       title: 'Bộ Điều Phối Thu Thập Dữ Liệu Lakehouse',
@@ -524,6 +628,58 @@ export const translations: Record<Language, Translations> = {
       buy_bil: 'Buy (Bn)',
       sell_bil: 'Sell (Bn)',
       net_bil: 'Net (Bn)',
+      // Vietstock & TradingView extensions
+      sector_index_title: 'Sector Performance & Industry Hub (Vietstock Style)',
+      index_influence_title: 'Index Influence & Contributors (Points Impact)',
+      proposals_title: 'Quantitative Investment Proposals (AI Consensus)',
+      trading_board_title: 'Real-Time Order Flow & Trading Board',
+      total_market_title: 'Comprehensive Today Market Overview',
+      commodities_title: 'Global & Domestic Commodity Markets',
+      currencies_title: 'Foreign Exchange Rates to VND (VCB / SBV)',
+      financial_analytics_title: 'Financial Analytics & Market Valuation (P/E, P/B)',
+      global_news_title: 'International & Global Macro News',
+      full_chart_btn: 'TradingView Full Chart',
+      line_chart_mode: '1-Minute Line Chart Mode',
+      time_range_label: 'Time Range & Period Return:',
+      tab_overview: 'Overview',
+      tab_trading: 'Trading',
+      tab_technical: 'Technical',
+      tab_financials: 'Financials',
+      tab_profile: 'Profile',
+      tab_news_events: 'News & Events',
+      tab_internal_trading: 'Internal Trading',
+      tab_bonds: 'Bonds',
+      back_to_market: 'Back to Market Dashboard',
+      ceiling_floor_ref: 'Ceiling / Floor / Reference Range',
+      valuation_size: 'Valuation & Size',
+      consensus_badge: 'VESTA Quantitative Consensus',
+      trading_stats_title: 'Trading & Price Statistics',
+      fundamental_ratios_title: 'Fundamental Financial Ratios',
+      listing_profile_title: 'Listing & Corporate Profile',
+      headline_scorer_title: 'Interactive Headline Scorer Sandbox for',
+      enter_headline_label: 'Enter news headline or corporate disclosure to evaluate:',
+      source_label: 'Source:',
+      score_btn: 'Score Sentiment',
+      scoring_btn: 'Scoring...',
+      order_book_title: 'Level 2 Order Book (Top 3 Bids & Asks)',
+      tick_deals_title: 'Recent Tick Deals Stream',
+      oscillators_title: 'Technical Oscillators',
+      ma_title: 'Moving Averages',
+      pivots_title: 'Classic Pivot Points',
+      financial_statements_title: 'Financial Statements & Earnings Summary (Bn VND)',
+      company_profile_title: 'Company Profile & Executive Leadership',
+      shareholders_title: 'Major Shareholders Structure',
+      news_events_sub_title: 'Corporate News & Event Calendar for',
+      internal_trading_sub_title: 'Insider & Related Parties Trading History',
+      bonds_sub_title: 'Listed Corporate Bonds Directory',
+      foamtree_view: 'FoamTree Treemap',
+      table_view: 'Table View',
+      grid_view: 'Cards Grid',
+      sector_size_traded: 'By Traded Value (Bn)',
+      sector_size_cap: 'By Market Cap',
+      selected_period_return: 'Selected period return:',
+      positive_contributors: '▲ POSITIVE CONTRIBUTORS (POINTS IMPACT)',
+      negative_contributors: '▼ NEGATIVE CONTRIBUTORS (POINTS IMPACT)',
     },
     crawler: {
       title: 'Lakehouse Data Crawler & Ingestion Controller',
