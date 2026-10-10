@@ -53,6 +53,39 @@ def main():
     print("    • 6. Bot Arena Studio (308 Bots, Vốn 10M VNĐ Odd-lot, AI Generator)")
     print("═" * 70)
 
+    def free_port(port: int, host: str = "127.0.0.1"):
+        import socket
+        import subprocess
+        import time
+        for attempt in range(5):
+            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            try:
+                s.bind((host, port))
+                s.close()
+                return
+            except OSError:
+                pass
+            print(f"⚠️ Cổng {port} đang bị chiếm dụng (lần thử {attempt+1}/5). Đang tự động giải phóng...")
+            try:
+                out = subprocess.check_output(
+                    f'powershell -Command "Get-NetTCPConnection -LocalPort {port} -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess"',
+                    shell=True,
+                    text=True,
+                )
+                pids = set(out.strip().split())
+                for p in pids:
+                    if p and p.isdigit():
+                        pid_int = int(p)
+                        if pid_int > 4 and pid_int != os.getpid():
+                            subprocess.run(f"taskkill /F /PID {pid_int}", shell=True, capture_output=True)
+                            print(f"✓ Đã buộc dừng tiến trình chiếm dụng PID {pid_int}.")
+                time.sleep(1)
+            except Exception as e:
+                print(f"Cảnh báo khi giải phóng cổng: {e}")
+                time.sleep(1)
+
+    free_port(args.port, args.host)
+
     if args.open:
         try:
             webbrowser.open(url)
@@ -61,6 +94,7 @@ def main():
 
     import uvicorn
     uvicorn.run("src.service.console_api:app", host=args.host, port=args.port, reload=False)
+
 
 
 if __name__ == "__main__":

@@ -25,7 +25,8 @@ import pandas as pd
 
 logger = logging.getLogger("news_fundamental_entity_matcher")
 
-DEFAULT_SNAPSHOT_DB = "db/vesta_snapshot.duckdb"
+DEFAULT_MARKET_INDEX_DB = "db/vesta_market_index.duckdb"
+DEFAULT_ADMIN_INDEX_DB = "db/admin/vesta_market_index.duckdb"
 DEFAULT_BACKUP_DB = "db/vesta_backup.duckdb"
 DEFAULT_NEWS_DB = "db/vesta_news.duckdb"
 
@@ -172,7 +173,7 @@ class FundamentalEntityRegistry:
 
     def __init__(self, db_path: Optional[str] = None) -> None:
         self.db_path = db_path or (
-            DEFAULT_SNAPSHOT_DB if os.path.exists(DEFAULT_SNAPSHOT_DB) else DEFAULT_BACKUP_DB
+            DEFAULT_MARKET_INDEX_DB if os.path.exists(DEFAULT_MARKET_INDEX_DB) else DEFAULT_BACKUP_DB
         )
         self.entities_by_norm_name: Dict[str, List[FundamentalEntity]] = {}
         self.company_names_by_symbol: Dict[str, Set[str]] = {}
@@ -182,7 +183,7 @@ class FundamentalEntityRegistry:
 
     def load_registry(self) -> int:
         """Đọc dữ liệu từ DuckDB snapshot/backup và biên dịch regex index siêu tốc."""
-        candidate_paths = [p for p in [self.db_path, DEFAULT_SNAPSHOT_DB, DEFAULT_BACKUP_DB] if os.path.exists(p)]
+        candidate_paths = [p for p in [self.db_path, DEFAULT_MARKET_INDEX_DB, DEFAULT_ADMIN_INDEX_DB, DEFAULT_BACKUP_DB] if os.path.exists(p)]
         con: Optional[duckdb.DuckDBPyConnection] = None
 
         for path in candidate_paths:

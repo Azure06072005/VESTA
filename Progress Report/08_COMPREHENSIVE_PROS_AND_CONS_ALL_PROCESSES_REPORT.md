@@ -567,3 +567,20 @@ Báo cáo trên đã hoàn thành trọn vẹn yêu cầu kiểm toán và tổn
 
 ---
 *Báo cáo được biên soạn và lưu trữ tại `d:\VESTA\Progress Report\08_COMPREHENSIVE_PROS_AND_CONS_ALL_PROCESSES_REPORT.md`.*
+
+### 4.10. F073 - F076: Bộ Thu Thập Đa Phân Lớp Tài Sản (Phái Sinh, CW, ETF, Trái Phiếu HNX)
+- **Ưu điểm (Pros):**
+  * Mở rộng phạm vi phân tích từ cổ phiếu đơn lẻ sang toàn bộ hệ sinh thái tài chính phái sinh và tài sản thu nhập cố định của Việt Nam.
+  * Cung cấp chỉ số VN30F và basis phái sinh làm biến dẫn dắt dự báo xu hướng thị trường sớm hơn thị trường cơ sở từ 15-30 phút.
+  * Hỗ trợ chiến lược phòng hộ danh mục (Portfolio Hedging) bằng hợp đồng tương lai chỉ số khi thị trường vào pha downtrend.
+- **Nhược điểm (Cons) & Rủi ro:**
+  * Thị trường phái sinh Việt Nam mới thành lập từ tháng 08/2017 và CW từ tháng 06/2019, nên chuỗi lịch sử ngắn hơn so với cổ phiếu cơ sở (năm 2000).
+  * Thanh khoản thị trường trái phiếu doanh nghiệp trên HNX còn phân tán, giao dịch chủ yếu thỏa thuận làm hạn chế độ mịn của chuỗi giá.
+
+### 9.2. F502 & F503: Bộ Sinh Chiến Lược AI & Kiểm Thử Admin Walk-Forward (BOT-N1 vs BOT-A108)
+- **Ưu điểm (Pros):**
+  * Kiểm toán khách quan trên dữ liệu Out-of-Sample độc lập 100% không rò rỉ giá tương lai (2025-01-02 đến 2026-07-21).
+  * Đối đầu trực diện giữa bot thuần kỹ thuật (BOT-N1) và bot có sự hỗ trợ của mô hình AI (BOT-A108), chứng minh rõ ràng giá trị gia tăng (Alpha) của mô hình PhoBERT + FinDPO + HybridACD.
+  * Giao diện Admin trực quan giúp nhà quản trị theo dõi chi tiết từng lệnh mua/bán, giá vốn, lãi lỗ thực tế và biểu đồ sụt giảm tài sản.
+- **Nhược điểm (Cons):**
+  * Tốc độ suy luận của mô hình AI đòi hỏi GPU hoặc xử lý batch tối ưu để đáp ứng thời gian thực nếu mở rộng sang hàng trăm bot đồng thời.

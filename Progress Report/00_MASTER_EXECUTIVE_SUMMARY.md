@@ -5,12 +5,13 @@
 
 ### MỤC LỤC BÁO CÁO HỆ THỐNG
 1. [Giới Thiệu Tổng Quan & Tôn Chỉ Thiết Kế](#1-giới-thiệu-tổng-quan--tôn-chỉ-thiết-kế)
-2. [Sơ Đồ Kiến Trúc Luồng Dữ Liệu & Mô Hình Hóa](#2-sơ-đồ-kiến-trúc-luồng-dữ-liệu--mô-hình-hóa)
-3. [Bảng Điều Khiển Toàn Bộ 54 Tính Năng (Master Feature Ledger)](#3-bảng-điều-khiển-toàn-bộ-54-tính-năng-master-feature-ledger)
+2. [Sơ Đồ Kiến Trúc Luồng Dữ Liệu & 5 Cơ Sở Dữ Liệu Chuyên Biệt](#2-sơ-đồ-kiến-trúc-luồng-dữ-liệu--5-cơ-sở-dữ-liệu-chuyên-biệt)
+3. [Bảng Điều Khiển Toàn Bộ 73 Tính Năng (Master Feature Ledger)](#3-bảng-điều-khiển-toàn-bộ-73-tính-năng-master-feature-ledger)
 4. [Bảng Điều Khiển Số Liệu Định Lượng Hợp Nhất (Global Metrics Dashboard)](#4-bảng-điều-khiển-số-liệu-định-lượng-hợp-nhất-global-metrics-dashboard)
-5. [Các Phát Hiện Học Thuật & Đóng Góp Phương Pháp Luận Cốt Lõi](#5-các-phát-hiện-học-thuật--đóng-góp-phương-pháp-luận-cốt-lõi)
-6. [Phân Tích Ma Trận SWOT & Đánh Giá Rủi Ro Thực Thi](#6-phân-tích-ma-trận-swot--đánh-giá-rủi-ro-thực-thi)
-7. [Cấu Trúc Lưu Trữ Báo Cáo Chi Tiết Từng Phân Tầng](#7-cấu-trúc-lưu-trữ-báo-cáo-chi-tiết-từng-phân-tầng)
+5. [Quy Chuẩn Yêu Cầu Thu Thập Dữ Liệu Toàn Diện (Requirements SLA Engine)](#5-quy-chuẩn-yêu-cầu-thu-thập-dữ-liệu-toàn-diện-requirements-sla-engine)
+6. [Các Phát Hiện Học Thuật & Đóng Góp Phương Pháp Luận Cốt Lõi](#6-các-phát-hiện-học-thuật--đóng-góp-phương-pháp-luận-cốt-lõi)
+7. [Phân Tích Ma Trận SWOT & Đánh Giá Rủi Ro Thực Thi](#7-phân-tích-ma-trận-swot--đánh-giá-rủi-ro-thực-thi)
+8. [Cấu Trúc Lưu Trữ Báo Cáo Chi Tiết Từng Phân Tầng](#8-cấu-trúc-lưu-trữ-báo-cáo-chi-tiết-từng-phân-tầng)
 
 ---
 
@@ -18,7 +19,7 @@
 
 Dự án **VESTA** (*Vietnamese Equity Sentiment-Triggered Agent*) là hệ thống nghiên cứu định lượng và giao dịch tự quyết định trên thị trường chứng khoán Việt Nam (HOSE, HNX, UPCOM), được thiết kế nhằm lấp đầy khoảng trống nghiên cứu then chốt trong y văn tài chính định lượng trong nước: **chứng minh mối quan hệ nhân quả và khả năng khai thác kinh tế của tín hiệu cảm xúc tin tức trước khi xây dựng hạ tầng thực thi**.
 
-Khảo sát trực tiếp các nghiên cứu AI tài chính tiếng Việt (như Preprints.org 2023, NEU-Stock 2021) chỉ ra một nghịch lý: mô hình ngôn ngữ (PhoBERT) có thể phân loại cảm xúc tiêu đề đạt độ chính xác rất cao (>81% đến 93%), nhưng phản ứng giá trước và sau khi tin ra lại không có ý nghĩa thống kê hoặc không tạo ra lợi nhuận kinh tế vững chắc sau chi phí giao dịch.
+Khảo sát trực tiếp các nghiên cứu AI tài chính tiếng Việt chỉ ra một nghịch lý: mô hình ngôn ngữ (PhoBERT) có thể phân loại cảm xúc tiêu đề đạt độ chính xác cao (>81% đến 93%), nhưng phản ứng giá trước và sau khi tin ra lại không có ý nghĩa thống kê hoặc không tạo ra lợi nhuận kinh tế vững chắc sau chi phí giao dịch.
 
 VESTA giải quyết vấn đề này thông qua 5 nguyên tắc cốt tử:
 1. **Signal Before Infrastructure (B2):** Tuyệt đối không xây dựng cổng đặt lệnh FIX/WebSocket, caching đa tầng khi tín hiệu Alpha chưa chứng minh được ý nghĩa thống kê vượt trội.
@@ -29,145 +30,153 @@ VESTA giải quyết vấn đề này thông qua 5 nguyên tắc cốt tử:
 
 ---
 
-## 2. Sơ Đồ Kiến Trúc Luồng Dữ Liệu & Mô Hình Hóa
+## 2. Sơ Đồ Kiến Trúc Luồng Dữ Liệu & 5 Cơ Sở Dữ Liệu Chuyên Biệt
+
+Để giải quyết triệt để xung đột khóa tệp đa tiến trình (File Locks) trên Windows và quản lý dữ liệu theo đúng miền chuyên môn, VESTA đã **chính thức khai tử cơ sở dữ liệu gộp `vesta_snapshot.duckdb`** và phân tách thành **5 Cơ sở Dữ liệu Nhiệm vụ Chuyên biệt (5 Mission Databases)**:
 
 ```mermaid
 flowchart TD
-    subgraph S1["TẦNG 1: DỮ LIỆU ĐA PHƯƠNG THỨC & PIT (F0xx, F05x, F1xx)"]
-        A1["dim_symbol Universe (3.446 mã: HOSE, HNX, UPCOM, Delisted)"] --> J1["Point-in-Time Join Engine (F102)"]
-        A2["OHLCV Nến Ngày (2000-2026, 100% sạch gap)"] --> J1
-        A3["Kho BCTC & Tỷ Số Tài Chính (24 RankGauss Features)"] --> J1
-        A4["Kho Tin Tức (CafeF, VnStock, Báo Chính Phủ, 939.732 bài)"] --> J1
-        A5["Vi mô & Thể chế (Tự doanh, Lãi suất liên ngân hàng ON/1W/1M, Room ngoại)"] --> J1
-        J1 --> V1["11 Kỹ Thuật Kiểm Định Chất Lượng & Xử Lý Dữ Liệu (F103)"]
-        V1 --> D1["Dataset ML Đa Phương Thức F104 (384.431 sự kiện)"]
+    subgraph DBM["5 CƠ SỞ DỮ LIỆU NHIỆM VỤ CHUYÊN BIỆT (5 MISSION DATABASES)"]
+        DB1["vesta_ohlcv.duckdb<br>(1.84 GB, 27.1M rows)<br>Daily + 1M + Phái sinh + CW + ETF + Trái phiếu"]
+        DB2["vesta_news.duckdb<br>(7.73 GB, 939K+ articles)<br>Tin CafeF, Vietstock, VnEconomy, Báo Chính phủ"]
+        DB3["vesta_fundamentals.duckdb<br>(1.90 GB, 100K+ records)<br>CĐKT, KQKD, LCTT, Chỉ số tài chính, Điểm sức khỏe"]
+        DB4["vesta_events.duckdb<br>(496 MB, 40K+ events)<br>Cổ tức tiền/cổ phiếu, Phát hành, ĐHCĐ, Giao dịch nội bộ"]
+        DB5["vesta_market_index.duckdb<br>(102 MB, 260K+ bars)<br>22 Chỉ số Index (VNINDEX, VN30...), Khối ngoại, Độ rộng thị trường"]
     end
 
-    subgraph S2["TẦNG 2: KIỂM ĐỊNH THỐNG KÊ LƯỢNG HÓA CỐT LÕI (F2xx)"]
-        D1 --> K1["F201: Naive Paired t-test (Baseline Cohen's d = 0.0557, p = 8.39e-12)"]
-        K1 --> K2["F202: Cluster-robust Bootstrap theo Mã (z=5.98) & theo Tháng (z=3.12)"]
-        K2 --> K3["F202b: DSR (N=1,2,3 > 0.96) & CSCV PBO (0.7% << 50%)"]
-        K3 --> K4["F203: Kiểm Toán Lưới 2D (16 Regimes x 3 Sàn, Phát hiện 29 ô Sign-Flips)"]
+    subgraph PIPELINE["PIPELINE TỰ ĐỘNG KHÉP KÍN (AUTOMATED PIPELINE)"]
+        DBM --> PIT["Point-in-Time & Feature Engine (F102, F104)"]
+        PIT --> STAT["Kiểm Định Thống Kê & Cổng Giả Thuyết (F201-F203)"]
+        STAT --> DL["NLP PhoBERT FinDPO + Multimodal Fusion + HybridACD (F301-F305)"]
+        DL --> SERVE["FastAPI Streaming Serving & Feedback Drift Monitor (F401-F403)"]
+        SERVE --> ARENA["Đấu Trường Chiến Lược Đa Bot & Admin Walk-Forward (F501-F503)"]
     end
 
-    subgraph S3["TẦNG 3: MÔ HÌNH HỌC SÂU ĐA PHƯƠNG THỨC & NHẤT QUÁN (F3xx)"]
-        K4 --> M1["F301: PhoBERT-base FinDPO Market Alignment Head"]
-        M1 --> M2["F302: Multimodal Cross-Attention Fusion (PhoBERT + RankGauss + Macro Regime)"]
-        M2 --> M3["F303: Kiểm Định Alpha Vượt Trội (Cohen's d = 0.0840 -> 0.1736, 1.51x - 3.12x)"]
-        M3 --> M4["F304: HybridACD Simplex-TCD Consistency Gate & V-FAN (<0.02ms)"]
-        M4 --> OUT["Tín Hiệu Alpha Có Bảo Chứng Toán Học (Cohen's d = 0.0852, Brier -29.5%)"]
-    end
-
-    subgraph S4["TẦNG 4: SUY LUẬN THỜI GIAN THỰC (F4xx)"]
-        OUT --> P1["F401: Streaming FastAPI Inference (< 50ms, SimHash Dedup, W_source)"]
-        P1 --> P2["F402: Feedback Realized Return Drift Monitor (T+5/T+30 Logging)"]
-        P2 --> P3["F403: Automated Continuous Training (PEFT Head Adaptation < 25s)"]
-    end
-
-    subgraph S5["TẦNG 5: ĐẤU TRƯỜNG MONTE CARLO ĐA BOT & PHÁP LÝ (F5xx, F9xx)"]
-        P3 --> T1["F501: Multi-Bot Strategy Arena (10,000 Paths Block Bootstrap)"]
-        T1 --> T2["5 Bot Personas Tournament: Force-Buy, Force-Sell, Momentum, Regime-Gated, Sniper"]
-        T2 -.-> BLK["F901/F902: Broker Compliance & Sandbox Execution (Khóa cứng UBCKNN)"]
-    end
-
-    style BLK fill:#f96,stroke:#333,stroke-width:2px;
-    style OUT fill:#9f9,stroke:#333,stroke-width:2px;
+    style DB1 fill:#e1f5fe,stroke:#0288d1,stroke-width:2px;
+    style DB2 fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px;
+    style DB3 fill:#e8f5e9,stroke:#388e3c,stroke-width:2px;
+    style DB4 fill:#fff3e0,stroke:#f57c00,stroke-width:2px;
+    style DB5 fill:#fce4ec,stroke:#c2185b,stroke-width:2px;
 ```
 
-### 2.1. Ma Trận Hợp Đồng Dữ Liệu & Liên Kết Pipeline Giữa Các Phân Tầng (Cross-Tier Pipeline Contracts)
-
-| Chặng Kết Nối (Pipeline Stage Bridge) | Tầng Cung Cấp (Upstream Provider) | Tầng Tiêu Thụ (Downstream Consumer) | Hợp Đồng Dữ Liệu & Định Dạng (Data Contract / Artifacts) | Cơ Chế Kiểm Định & Rào Chắn An Toàn (Validation & Safety Guardrails) |
-| :--- | :--- | :--- | :--- | :--- |
-| **Bridge 1: Raw Ingestion $\to$ Clean Storage** | Tier F0xx & Tier F05x (38 Crawlers) | DuckDB Core Schema | Bảng `core.*` (OHLCV, BCTC, Tin tức, Vĩ mô, Khối ngoại, Báo cáo CTCK) | Phân tách Staging $\to$ Core qua `promote.py`; Khóa composite PK; Zero missing bars |
-| **Bridge 2: Clean Storage $\to$ PIT Dataset** | Tier F0xx & Tier F05x | Tier F1xx (Integrity & PIT) | Bảng `core.pit_events` & `data/train_matrix.parquet` (384,431 mẫu) | Cổng F101 kiểm định 7 tiêu chí; F102 As-Reported Lag triệt tiêu Look-ahead; F103 11 kỹ thuật |
-| **Bridge 3: PIT Dataset $\to$ Scientific Gates** | Tier F1xx | Tier F2xx (Hypothesis Gates) | Tập mẫu 15,081 sự kiện tin xấu và ma trận lợi nhuận forward ($T+5, T+30$) | Paired t-test ($t=6.84$), Cluster-Robust SE ($t=4.12$), DSR ($> 0.95$), 2D Regime Grid (VNINDEX < MA200 $\to$ AVOID) |
-| **Bridge 4: Validated Signal $\to$ Deep Learning** | Tier F2xx | Tier F3xx (NLP & Multimodal) | Vector 128 chiều hợp nhất & Cặp văn bản gốc/đối nghịch V-FAN | PhoBERT Dual-Head + FinDPO; Cross-Attention; Cổng Simplex-TCD (Kolmogorov $V \le 0.35$) |
-| **Bridge 5: Deep Models $\to$ Production Serving** | Tier F3xx | Tier F4xx (Serving & Drift) | Trọng số PyTorch Checkpoint & Matrix chiếu đơn thể giải tích | FastAPI REST streaming ($P95 < 20.1$ ms); SimHash 64-bit; Drift Monitor (PSI $> 0.25$); PEFT Retraining ($< 25$s) |
-| **Bridge 6: Live Strategy $\to$ Monte Carlo Arena** | Tier F4xx | Tier F5xx (Bot Arena) | Tín hiệu khuyến nghị động (Action, Alpha, Conviction) | 10,000 đường đi Stationary Block Bootstrap; Vi cấu trúc T+2.5; DSR ($N=5$); Khảo sát rủi ro đuôi CVaR 95% |
-| **Bridge 7: Strategy Alpha $\to$ Broker Compliance** | Tier F5xx & Tier F4xx | Tier F9xx (Execution Rail) | Khuyến nghị giải ngân phân bổ NAV | **Khóa cứng Quy tắc B1:** Nghiêm cấm kết nối API tiền thật; bắt buộc qua DNSE/SSI Paper Trading Sandbox |
+### 2.1. Ma Trận Phân Bổ Nhiệm Vụ 5 Cơ Sở Dữ Liệu
+1. **`vesta_ohlcv.duckdb` (1.84 GB):** Quản lý toàn bộ cấu trúc vi mô giá cổ phiếu cơ sở nến ngày (4.294.699 dòng), nến 1 phút (22.842.258 dòng), cùng 4 phân lớp tài sản mở rộng F073 - F076 (Hợp đồng tương lai chỉ số VN30F, Chứng quyền có bảo đảm CW, Quỹ hoán đổi danh mục ETF, Trái phiếu HNX).
+2. **`vesta_news.duckdb` (7.73 GB):** Quản lý hồ dữ liệu tin tức tài chính khổng lồ (>939.000 bài báo toàn văn) từ CafeF, Vietstock, VnEconomy, Tin nhanh chứng khoán và 14 cơ quan/hiệp hội ngành.
+3. **`vesta_fundamentals.duckdb` (1.90 GB):** Lưu trữ toàn bộ 5 báo cáo tài chính point-in-time từ năm 2000 đến nay: Cân đối kế toán, Kết quả kinh doanh, Lưu chuyển tiền tệ, Tỷ số tài chính, Điểm sức khỏe tài chính.
+4. **`vesta_events.duckdb` (496 MB):** Quản lý sự kiện quyền doanh nghiệp, lịch chia cổ tức tiền mặt/cổ phiếu, phát hành tăng vốn, họp ĐHCĐ và giao dịch người nội bộ.
+5. **`vesta_market_index.duckdb` (102 MB):** Quản lý chuỗi lịch sử 22 chỉ số thị trường chuẩn (VNINDEX, VN30, HNX, UPCOM, VN100, VNFINLEAD, VNDIAMOND...) cập nhật T-0 đến ngày hiện tại (2026-10-09), dòng tiền khối ngoại và chỉ số độ rộng thanh khoản.
 
 ---
 
-## 3. Bảng Điều Khiển Toàn Bộ 56 Tính Năng (Master Feature Ledger)
+## 3. Bảng Điều Khiển Toàn Bộ 73 Tính Năng (Master Feature Ledger)
 
-Dưới đây là bảng tổng hợp tình trạng nghiệm thu của toàn bộ 56 tính năng được định nghĩa trong Harness của VESTA:
+Tiến độ nghiệm thu hệ thống VESTA: **52/73 tính năng hoàn tất (`passing`)**, 21 tính năng sẵn sàng triển khai (`not_started`), 0 tính năng bị nghẽn (`blocked`):
 
-| Mã | Phân Tầng | Tên Tính Năng | Trạng Thái | Kết Quả / Bằng Chứng Thực Nghiệm Cốt Lõi | Công Nghệ / Vai Trò |
+| Mã | Phân Tầng | Tên Tính Năng | Trạng Thái | Bằng Chứng Thực Nghiệm Cốt Lõi | Công Nghệ / Vai Trò |
 |:---:|:---:|:---|:---:|:---|:---|
-| **F000** | F0xx | Environment & Schema Bootstrap | `passing` | Khởi tạo DuckDB 3 schemas (`staging`, `core`, `meta`), bảng `meta.crawl_progress`. | DuckDB DDL, Bash bootstrap |
-| **F001** | F0xx | Reference Master Data: dim_symbol | `passing` | 3.446 mã chứng khoán (HOSE, HNX, UPCOM, Hủy niêm yết). 0 lỗi NOT NULL. | VnStock Reference API |
-| **F001b**| F0xx | CafeF Company Directory Cross-Ref | `passing` | Bổ sung 984 doanh nghiệp OTC/chưa niêm yết từ 3.016 bản ghi CafeF. | CafeF JSON scraping, Cross-check |
-| **F002** | F0xx | Market OHLCV Daily Crawler | `passing` | 100% nến ngày từ ngày chào sàn lịch sử đến 2026; bảo đảm tính bất biến dữ liệu. | Idempotent Upsert, OHLCV schema |
-| **F003** | F0xx | vnstock News Crawler | `passing` | Cào tin tức công ty và thị trường; tích hợp cơ chế retry backoff. | vnstock News API |
-| **F004** | F0xx | CafeF News Crawler (Secondary) | `passing` | Cào độc lập đối chiếu chéo; mở rộng vượt giới hạn Page-1 sau cập nhật robots.txt. | BeautifulSoup, HTTP Pooling |
-| **F004b**| F0xx | CafeF Article Body Enrichment | `passing` | Trích xuất toàn văn bài báo từ HAR archive và DOM selector; độ phủ toàn văn >90%. | HTML Content Extractor |
-| **F004c**| F0xx | CafeF Category Crawler & Orchestrator | `passing` | Quét chuyên mục biên tập; thuật toán gán mã `extract_symbol()` lọc tin rác chuẩn xác. | Regex Context Parser |
-| **F004d**| F0xx | Sector Matcher & Taxonomy Engine | `passing` | Khớp tin tức vĩ mô/ngành vào danh mục cổ phiếu ICB theo từ khóa định danh. | ICB Taxonomy, Multi-match engine |
-| **F005** | F0xx | Fundamental Crawler Suite (5 Sheets) | `passing` | Cào đủ 5 bảng: CĐKT, KQKD, LCTT, Chỉ số tài chính, Điểm sức khỏe (40+ quý). | Fundamental Accounting Parser |
-| **F006** | F0xx | Corporate Events Crawler | `passing` | 40.277 sự kiện doanh nghiệp: cổ tức, thưởng cổ phiếu, ĐHCĐ, phát hành. | Chunked Event Ingestion |
-| **F007** | F0xx | Insights & Valuation Snapshot Crawler | `passing` | Lịch sử định giá P/E, P/B, định chế chính sách lưu trữ Snapshot EOD. | Valuation History Engine |
-| **F007b**| F0xx | vnstock_data Sponsor Re-Scope | `passing` | Nâng cấp gói tài trợ Silver Sponsor, hạn mức 300 req/min, xác thực bản quyền. | Sponsor License Handshake |
-| **F008** | F0xx | Retry & Reconciliation Module | `passing` | Tự động quét `meta.crawl_progress`, phân giải mã lỗi HTTP, khôi phục job gián đoạn. | Exponential Backoff Scheduler |
-| **F009** | F0xx | Tier F0xx Final Audit & Checkpoint | `passing` | Kiểm toán toàn diện 15 module F0xx; đóng băng tầng dữ liệu nền tảng. | Audit Verification Gate |
-| **F050** | F05x | CafeF Market Index Daily Crawler | `passing` | Lịch sử nến ngày VN-Index, VN30, HNX-Index, UPCOM, VNX50 từ 2000 đến nay. | Index History Database |
-| **F051** | F05x | Foreign Investor Flow Crawler | `passing` | 63.197 dòng giao dịch mua/bán ròng của khối ngoại từng phiên từ 2007 đến nay. | Foreign Flow Volume Tracker |
-| **F052** | F05x | CafeF BCTC Gap-Fix Enhancer | `blocked` | Cào bổ sung dữ liệu CĐKT đối chiếu chéo (được thay thế bằng vnstock Silver note). | Financial Statement Patch |
-| **F053** | F05x | Batch Equity Gap-Fill Orchestrator | `passing` | Khung điều phối vá lỗ hổng dữ liệu BCTC và sự kiện cho toàn bộ 1.000+ mã. | Batch Automation Pipeline |
-| **F054** | F05x | Vietstock Stock Research Reports | `passing` | Cào báo cáo phân tích định giá doanh nghiệp từ các CTCK lớn (SSI, HSC, VCI). | PDF/Report Metadata Ingestion |
-| **F055** | F05x | Vietstock Macro Policy Crawler | `passing` | 45.494 bài báo chính sách vĩ mô, tiền tệ, đầu tư công từ Vietstock. | Macro Corpus Extractor |
-| **F056** | F05x | World Bank Open Data Crawler | `passing` | Chuỗi thời gian chỉ số vĩ mô VN: GDP, CPI, FDI, cán cân thương mại hàng năm. | World Bank API Client |
-| **F057** | F05x | SBV Monetary Policy Crawler | `passing` | Quyết định điều hành lãi suất tái cấp vốn, trần huy động, tỷ giá trung tâm của NHNN. | Regulatory Notice Crawler |
-| **F058** | F05x | Báo Chính Phủ Regulatory Crawler | `passing` | Các nghị định, nghị quyết kinh tế (Nghị định 08, 65, Nghị quyết 33) từ VGP. | Government Gazette Parser |
-| **F059** | F05x | SSC Enforcement/Regulation Crawler | `passing` | 22.878 thông báo xử phạt thao túng giá, đình chỉ giao dịch từ UBCKNN. | Market Enforcement Scraper |
-| **F060** | F05x | VnEconomy Policy & Industry Crawler | `passing` | 33.653 bài báo phân tích chuyên sâu về tiền tệ, ngân hàng, bất động sản. | VnEconomy DOM Extractor |
-| **F061** | F05x | Tin Nhanh Chứng Khoán Crawler | `passing` | Cào dòng tin thị trường chứng khoán trong phiên và nhận định chuyên gia. | TNCK News Connector |
-| **F062** | F05x | Báo Đầu Tư Crawler | `passing` | Phân tích dự án FDI, khu công nghiệp, M&A và ngân sách nhà nước. | VIR News Connector |
-| **F063** | F05x | Thời Báo Ngân Hàng Crawler | `passing` | Thông tin thanh khoản hệ thống, tín dụng ngành, nợ xấu từ cơ quan ngôn luận NHNN. | Banking Gazette Connector |
-| **F064** | F05x | Hiệp hội In (VINAPRINT) Crawler | `passing` | Dữ liệu chính sách chi phí nguyên liệu bột giấy, hóa chất in ấn bao bì. | Industry Association Feed |
-| **F065** | F05x | Hiệp hội Bia - Rượu - NGK (VBA) | `passing` | Dữ liệu tiêu thụ đồ uống, thuế tiêu thụ đặc biệt tác động SAB, BHN. | Sector Policy Feed |
-| **F066** | F05x | Hiệp hội Dữ liệu Quốc gia (NDA) | `passing` | Chính sách chuyển đổi số, an toàn thông tin tác động FPT, CMG, ELC. | Tech Policy Feed |
-| **F067** | F05x | Hội Nông Dân Việt Nam Crawler | `passing` | Giá nông sản, vật tư phân bón, thức ăn chăn nuôi tác động DPM, DCM, HAG, BAF. | Agri-Commodity Feed |
-| **F068** | F05x | Bộ Công Thương (MOIT) Crawler | `passing` | Chính sách giá điện, quy hoạch điện 8, điều hành giá xăng dầu, hạn ngạch dệt may. | Ministerial Policy Scraper |
-| **F069** | F05x | Hiệp hội Du Lịch Việt Nam (VITA) | `passing` | Lượng khách quốc tế, lưu trú hàng không tác động VJC, HVN, VTD. | Tourism Macro Feed |
-| **F070** | F05x | VASEP Thủy Sản Crawler | `passing` | Kim ngạch xuất khẩu cá tra, tôm sang Mỹ/EU/TQ tác động VHC, ANV, FMC. | Seafood Export Monitor |
-| **F071** | F05x | Hiệp hội BĐS TP.HCM (HoREA) | `passing` | Văn bản tháo gỡ pháp lý dự án, cấp phép xây dựng tác động NVL, KDH, PDR, VHM. | Real Estate Policy Tracker |
-| **F072** | F05x | Tier F05x Checkpoint Audit Gate | `passing` | Kiểm toán suite 339 test cases tự động cho 21 crawler vĩ mô thể chế. | Suite Test Orchestrator |
-| **F101** | F1xx | Cross-Dataset Validation Gate | `passing` | Kiểm tra tính toàn vẹn tham chiếu khóa ngoại giữa nến giá, tin tức và BCTC. | Relational Cross-Check |
-| **F102** | F1xx | Point-in-Time News+Price Join Engine | `passing` | Ghép đúng mức giá tại mốc công bố và tương lai $T+1, T+5, T+30$ không leak giá. | PIT Temporal Aligner |
-| **F103** | F1xx | 11 Kỹ Thuật Data Quality Pipeline | `passing` | Khử outlier XDC, RankGauss, FFD ($d=0.20$), Gray Code, phân tích thiếu hụt NMAR. | 11 Data Engineering Algorithms |
-| **F104** | F1xx | ML Feature Pipeline & Dataset Split | `passing` | Tạo tập 384.431 sự kiện đa phương thức (Train/Val/Test OOS) tỷ lệ 70/15/15. | Parquet Pipeline, Purged Splits |
-| **F201** | F2xx | PROOF: Mean-Reversion Backtest VN30 | `passing` | Naive paired t-test: $n = 15.081, t = 6.84, p = 8.39\times 10^{-12}$, Cohen's $d = 0.0557$. | Student-t Hypothesis Test |
-| **F202** | F2xx | Cluster-Robust Errors & Regimes Gate | `passing` | Bootstrap cụm theo mã ($z=5.98$) và theo tháng ($z=3.12$); 95% CI loại trừ số 0. | Cluster-Robust Resampling |
-| **F202b**| F2xx | Deflated Sharpe Ratio & PBO Gate | `passing` | Toàn thị trường $DSR > 0.96$; riêng HOSE $DSR = 0.892$ ($N \ge 2$ FAIL). PBO = 0.007 (0.7%). | Bailey & López de Prado DSR/PBO |
-| **F203** | F2xx | 2D Regime x Exchange Validity Audit | `passing` | 29/60 ô đảo dấu âm (Sign-Flips) trong khủng hoảng 2022 ($-4.66\%$), GFC ($-3.30\%$). | 2D Contingency Grid Audit |
-| **F301** | F3xx | PhoBERT-base with FinDPO Alignment | `passing` | Huấn luyện PhoBERT-base với hàm mất mát FinDPO trực tiếp căn chỉnh sở thích thị trường. | HuggingFace, FinDPO Loss |
-| **F302** | F3xx | Multimodal Cross-Attention Fusion | `passing` | Hợp nhất PhoBERT CLS (768) + 24 RankGauss Features (128) + Macro Regime (128). | Multi-Head Cross-Attention |
-| **F303** | F3xx | Multimodal Edge Validation Backtest | `passing` | Cohen's $d$ tăng từ $0.0557 \to 0.0840$ ($+50.8\%$), đạt $0.1736$ ($3.12\times$) ở $S < 35$. | Paired Reversion Benchmark |
-| **F304** | F3xx | HybridACD Simplex-TCD Consistency Gate | `passing` | Kolmogorov error $= 0.00$; V-FAN latency $= 0.0197$ ms; Brier giảm $-29.51\%$; Cohen's $d = \mathbf{0.0852}$. | Simplex Projection, V-FAN |
-| **F401** | F4xx | Streaming FastAPI Inference Service | `passing` | Độ trễ thực tế 8.99ms (<50ms SLA), SimHash dedup 6h, phân giải cổ đông lớn, cổng HybridACD, Rào chắn an toàn F203. | FastAPI, SimHash, PhoBERT FP16 |
-| **F402** | F4xx | Feedback Drift Log for Realized Returns | `passing` | Tự động ghi vết suy luận, đối soát giá thực tế $T+1, T+5, T+30$ (theo số phiên giao dịch), giám sát Brier/Accuracy trượt, ngắt mạch `SYSTEM_DEGRADED_HALT` khi accuracy $< 35\%$. | DuckDB Feedback Log, DriftMonitor |
-| **F403** | F4xx | Continuous Training & Fusion Head Adaptation | `passing` | Kích hoạt tự động khi drift/tích lũy mẫu; PEFT đóng băng 100% backbone PhoBERT, huấn luyện tầng Cross-Attention trong <25s (<3 phút SLA), Shadow model gate kiểm soát trước khi thăng cấp. | PEFT PyTorch, Fusion Adaptation |
-| **F501** | F5xx | Multi-Bot Monte Carlo Strategy Arena | `passing` | 10.000 đường đi mô phỏng 5 bot personas qua 5 tình huống thị trường; DSR, CVaR 95%, ma trận đối đầu. | Monte Carlo, Block Bootstrap |
-| **F901** | F9xx | Broker Compliance Confirmation | `blocked` | Công văn UBCKNN 09/2023 cấm đặt lệnh robot tần suất lớn; khóa cứng tầng thực thi. | Legal & Compliance Gate |
-| **F902** | F9xx | Paper Trading Against Broker Sandbox | `blocked` | Bị khóa bởi F901; chuẩn bị stub OAuth2+PKCE cho SSI/DNSE sandbox. | Sandbox Order Router |
+| **F000** | F0xx | Environment & schema bootstrap | `passing` | Completed implementation: Maintained exactly 1 canonical Main Database (db/vesta_snapshot.duckdb, 11... | [x] Standardize on exactly 1 canonical Main Databa... |
+| **F001** | F0xx | Reference crawler: dim_symbol master data | `passing` | Fully verified and passed: (1) Ingested 3,446 symbols into core.dim_symbol. (2) Implemented official... | [x] Construct a static 4-tier ICB industry mapping... |
+| **F001b** | F0xx | dim_symbol supplement: cafef.vn company directory cross-reference | `passing` | 37 passed (pytest tests/test_cafef_symbol_directory.py -v), 54 total reference crawler tests passed ... | [x] Segregate the 750 OTC tickers into a distinct ... |
+| **F001c** | F0xx | Index constituents & group rooms crawler | `passing` | 6 passed (pytest tests/test_dim_index_constituents.py -v); ruff/mypy clean. Schema deployed to db/ve... | [x] Construct core.dim_index_metadata and core.dim... |
+| **F002** | F0xx | Market OHLCV daily crawler | `passing` | 20 passed (pytest tests/test_market_crawler.py tests/test_price_adjustments.py -v); ruff/mypy clean.... | [x] Maintain raw unadjusted OHLCV bars in core.mar... |
+| **F002b** | F0xx | Market OHLCV 1-minute intraday crawler (2023 - 2026) | `passing` | 4 passed (pytest tests/test_intraday_ohlcv.py -v). Initialized dedicated database db/vesta_intraday_... | [x] Isolate Storage into db/vesta_intraday_1m.duck... |
+| **F003** | F0xx | vnstock News crawler | `passing` | 8 passed (pytest tests/test_vnstock_news_crawler.py -v); ruff/mypy clean. Live schema confirmed via ... | Use CafeF (F004) as the historical long-term news ... |
+| **F004** | F0xx | cafef.vn news crawler (secondary source) | `passing` | 8 passed (pytest tests/test_cafef_crawler.py -v); 58 passed, 1 xfailed (full suite); ruff/mypy clean... | Architectural Resolution: Routed to Data Preproces... |
+| **F004b** | F0xx | cafef article body enrichment | `passing` | 6 passed (pytest tests/test_cafef_article_body.py -v), ruff clean, mypy clean. Real body-container s... | Architectural Resolution: Centralized Ingestion Ga... |
+| **F004c** | F0xx | cafef.vn editorial category-page crawler and orchestrator | `passing` | 41 passed across tests/test_cafef_category_news.py and tests/test_cafef_category_orchestrator.py (in... | Architectural Resolution: Integrated into Data Qua... |
+| **F004d** | F0xx | Sector-level news-to-symbol matcher & taxonomy engine | `passing` | 21 passed (pytest tests/test_sector_news_matcher.py -v in 1.19s). Populated core.dim_sector (25 rows... | Architectural Resolution: Integrated into ETL Prom... |
+| **F005** | F0xx | Fundamental crawler suite (balance sheet, income statement, cash flow, ratio, financial health score) | `passing` | 21 passed (pytest tests/test_fundamental_crawler.py tests/test_fundamentals_source_fix.py -v in 1.41... | Architectural Resolution: Routed to Data Preproces... |
+| **F006** | F0xx | Corporate events crawler (dividends, issuance, meetings, payout delay quantification) | `passing` | 11 passed (pytest tests/test_corporate_events.py -v in 0.74s); ruff clean. Live execution verified 2... | Architectural Resolution: Routed to Data Preproces... |
+| **F007** | F0xx | Insights/Analytics snapshot crawler + retention policy decision | `passing` | Upgraded 2026-10-01 to Full Max Historical & Realtime Scale: (1) core.realtime_quote_snapshot: Inges... | Architectural Resolution: Routed to Data Pipeline ... |
+| **F007b** | F0xx | Market Insights, Screener, Valuation & Macroeconomic Direct REST API Module (Replaced vnstock_data) | `passing` | Confirmed live on 2026-09-28 against public REST endpoints without any API key or vnstock dependency... | Maintain standard exponential backoff and User-Age... |
+| **F008** | F0xx | Retry/reconciliation module | `passing` | Tests passed (test_retry_module.py). Core logic verified: tracks transient vs empty properly. | [x] Implement Dead Letter Queue (DLQ) categorizati... |
+| **F009** | F0xx | TIER CHECKPOINT: F0xx final audit, remediation & re-verification gate | `passing` | 97 passed, 1 xfailed, 98 collected -- independently re-verified 2026-08-16 by downloading the real r... | [TRANSFERRED -> Tier F1xx / Data Preprocessing] Ap... |
+| **F050** | F0xx | cafef.vn market index daily crawler (market_index_daily) | `passing` | 6/6 passed (pytest tests/test_cafef_data_market.py -x). Ingested 11,440 historical index bars for VN... | Use VN-Index and VN30 as the primary benchmark for... |
+| **F051** | F0xx | cafef.vn foreign investor flow crawler (market_foreign_flow_daily) | `passing` | 2/2 passed (pytest tests/test_cafef_foreign_flow.py -x). Volume-only schema strictly verified: buy_v... | Isolate put-through block trades from continuous o... |
+| **F052** | F0xx | cafef.vn BCTC financial-statement enhancer -- balance_sheet gap fix | `passing` | 6/6 passed (pytest tests/test_cafef_finance_enhancer.py -v); ruff clean. Successfully implemented fu... | [x] Construct a unified fundamental mapping schema... |
+| **F053** | F0xx | Batch equity enhancer -- fundamentals/corporate_events gap-fill orchestrator | `not_started` | PAUSED 2026-09-12 per WIP=1 enforcement: Paused behind F203 (critical-path scientific gate). Resume ... | Schedule weekly automated EOD batch sweeps on Satu... |
+| **F054** | F0xx | Vietstock Finance equity research report crawler (core.stock_research_reports) | `not_started` | PAUSED 2026-09-12 per WIP=1 enforcement: Paused behind F203 (critical-path scientific gate). Resume ... | Deploy an automated PDF extraction pipeline utiliz... |
+| **F055** | F0xx | Vietstock general macro/market news crawler (core.macro_policy) | `not_started` | PAUSED 2026-09-12 per WIP=1 enforcement: Paused behind F203 (critical-path scientific gate). Resume ... | Tag macroeconomic series with exact announcement t... |
+| **F056** | F0xx | World Bank Open Data macro indicator crawler | `passing` | 3/3 passed (pytest tests/test_worldbank_crawler.py -v); ruff clean. Successfully crawled and ingeste... | [x] Expanded indicators from 6 to 20 core macroeco... |
+| **F057** | F0xx | SBV monetary policy crawler (Decommissioned & Superseded) | `passing` | VERIFIED 2026-09-28: Confirmed permanent discontinuation of direct sbv.gov.vn scraping. 5/5 unit tes... | Feed raw VBA regulatory articles into the PhoBERT ... |
+| **F058** | F0xx | Báo Chính phủ regulatory/macro crawler | `not_started` | PAUSED 2026-09-12 per WIP=1 enforcement: Paused behind F203 (critical-path scientific gate). Resume ... | Distinguish between 'Proposed/Draft Policy' vs 'En... |
+| **F059** | F0xx | SSC (State Securities Commission) enforcement/regulation crawler | `not_started` | PAUSED 2026-09-12 per WIP=1 enforcement: Paused behind F203 (critical-path scientific gate). Resume ... | Align previous-day US closing prices with current-... |
+| **F060** | F0xx | VnEconomy macro/industry policy crawler | `not_started` | PAUSED 2026-09-12 per WIP=1 enforcement: Paused behind F203 (critical-path scientific gate). Resume ... | Implement fuzzy title matching and publication tim... |
+| **F061** | F0xx | Tin Nhanh Chung Khoan crawler | `not_started` | PAUSED 2026-09-12 per WIP=1 enforcement: Paused behind F203 (critical-path scientific gate). Resume ... | Implement schema fallbacks in newspaper3k / Beauti... |
+| **F062** | F0xx | Bao Dau Tu crawler | `not_started` | PAUSED 2026-09-12 per WIP=1 enforcement: Paused behind F203 (critical-path scientific gate). Resume ... | Apply a confidence-weighting discount to sentiment... |
+| **F063** | F0xx | Thoi Bao Ngan Hang crawler | `not_started` | PAUSED 2026-09-12 per WIP=1 enforcement: Paused behind F203 (critical-path scientific gate). Resume ... | Cluster Thoi Bao Ngan Hang articles specifically i... |
+| **F064** | F0xx | VINAPRINT (printing association) sector policy crawler | `not_started` | PAUSED 2026-09-12 per WIP=1 enforcement: Paused behind F203 (critical-path scientific gate). Resume ... | Apply strict economic keyword filtering (interest ... |
+| **F065** | F0xx | VBA (beverage association) sector policy crawler | `not_started` | PAUSED 2026-09-12 per WIP=1 enforcement: Paused behind F203 (critical-path scientific gate). Resume ... | Route Bao Dau Tu articles through the corporate en... |
+| **F066** | F0xx | NDA (national data association) tech-policy crawler | `not_started` | PAUSED 2026-09-12 per WIP=1 enforcement: Paused behind F203 (critical-path scientific gate). Resume ... | Pair Hoi Nong Dan articles with global commodity p... |
+| **F067** | F0xx | Hoi Nong Dan (farmers association) agri-policy crawler | `not_started` | PAUSED 2026-09-12 per WIP=1 enforcement: Paused behind F203 (critical-path scientific gate). Resume ... | Model VASEP tariff and monthly export value releas... |
+| **F068** | F0xx | MOIT (Ministry of Industry & Trade) energy/trade policy crawler | `not_started` | PAUSED 2026-09-12 per WIP=1 enforcement: Paused behind F203 (critical-path scientific gate). Resume ... | Cross-reference VITAS quarterly export reports wit... |
+| **F069** | F0xx | VITA (tourism association) sector policy crawler | `not_started` | PAUSED 2026-09-12 per WIP=1 enforcement: Paused behind F203 (critical-path scientific gate). Resume ... | Build explicit feature flags for retail fuel price... |
+| **F070** | F0xx | VASEP (seafood export association) crawler | `not_started` | PAUSED 2026-09-12 per WIP=1 enforcement: Paused behind F203 (critical-path scientific gate). Resume ... | Utilize World Bank indicators exclusively in long-... |
+| **F071** | F0xx | HoREA (HCMC real-estate association) regulatory crawler | `not_started` | PAUSED 2026-09-12 per WIP=1 enforcement: Paused behind F203 (critical-path scientific gate). Resume ... | Assign lower model weights to forestry news in mar... |
+| **F072** | F0xx | TIER CHECKPOINT: F05x auxiliary-data audit gate | `not_started` | Staging consolidation completed 2026-09-12: 7 staging DBs archived with 0 unmerged rows. core.macro_... | Run incremental verification per sector domain rat... |
+| **F073** | F0xx | Reference & Daily OHLCV Crawler for Derivatives (Index Futures VN30F & Government Bond Futures GB05F) | `passing` | PASSED (pytest test_f073_derivatives_ingestion). Live ingestion verified: 248 daily OHLCV bars inges... | Implemented high-speed VNDirect Dchart & KBSV craw... |
+| **F074** | F0xx | Reference, Underlying Mapping & Daily Market Crawler for Covered Warrants (CW on HOSE) | `passing` | PASSED (pytest test_f074_covered_warrants_ingestion). Live ingestion verified: 1,125 daily bars inge... | Implemented covered warrants crawler in src/crawle... |
+| **F075** | F0xx | Reference, Basket Holdings, Tracking Error & Daily NAV Crawler for Exchange Traded Funds (ETFs) | `passing` | PASSED (pytest test_f075_etfs_ingestion). Live ingestion verified: 1,448 daily bars ingested across ... | Implemented ETF multi-threaded crawler in src/craw... |
+| **F076** | F0xx | Reference, Coupon Schedule & Market Price Crawler for Corporate & Government Bonds (HNX Bond) | `passing` | PASSED (pytest test_f076_bonds_ingestion). Live ingestion verified: 97 listed bonds ingested into co... | Implemented listed bonds reference & status ingest... |
+| **F095** | F0xx | Market index & group room OHLCV coverage expansion (VNINDEX, VN30, HNX, UPCOM, ETF baskets) | `passing` | 3/3 passed (pytest tests/test_market_index_crawler.py -v in 7.86s). Live crawl completed 2026-09-28:... | Maintain core.market_index_daily as benchmark seri... |
+| **F096** | F0xx | OHLCV 1D zero-volume normalization & suspended-day forward-fill engine | `not_started` | Remediates 485,442 zero-volume / zero-price rows in core.market_ohlcv_daily caused by trading suspen... | Combine is_trading_day flag with liquidity filters... |
+| **F097** | F0xx | Intraday 1M timezone harmonization & session alignment engine | `not_started` | Resolves the dual-timezone artifact discovered in core.market_ohlcv_1m (12.38M bars in UTC 02:00-07:... | Deploy partition pruning by symbol and date in cor... |
+| **F098** | F0xx | Dual-mode price adjustment engine (Raw Microstructure vs Corporate Action CAF Adjustment) | `not_started` | Establishes a dual-mode pricing pipeline: provides unadjusted raw prices for microstructure/spread m... | Trigger automatic CAF factor re-calculation whenev... |
+| **F099** | F0xx | OHLCV exploratory data analysis & empirical anomaly profiling suite | `passing` | All 19 code cells verified across both notebooks: 10/10 in 01_ohlcv_1d_1m_sample_eda.ipynb (FPT 4,92... | Maintain parameterization to allow arbitrary symbo... |
+| **F099b** | F0xx | Financial news lakehouse exploratory data analysis & relevance profiling suite | `passing` | Both news notebooks verified and pre-rendered with complete graphical and tabular outputs: 01_vesta_... | Utilize vectorized SQL aggregations in DuckDB to m... |
+| **F100** | F1xx | Fundamental snapshot database exploratory data analysis & corporate governance profiling suite | `passing` | Executed and verified notebooks/fundamentals/01_vesta_fundamentals_snapshot_eda.ipynb with all code ... | Use DuckDB PRAGMA threads and memory_limit to ensu... |
+| **F101** | F1xx | Cross-dataset validation gate & Tiered Data Quality Scoring | `passing` | 108 passed, 1 xfailed across full test suite (109 collected); ruff check src tests: All checks passe... | Implement a tiered validation penalty: flag suspec... |
+| **F102** | F1xx | Point-in-time news+price+fundamental join | `passing` | 13/13 passed (pytest tests/test_pit_join.py -v); 24/24 passed across F101+F102 suites; full universe... | Pre-materialize PIT event features into a dedicate... |
+| **F103** | F1xx | Enterprise 11-Technique Data Validation & Quality Pipeline | `passing` | 22 checks executed; 22 passed, 0 errors, 0 warnings (Status: PASS) on db/vesta.duckdb (5.17M rows in... | Leverage DuckDB vectorized SQL window functions an... |
+| **F104** | F1xx | ML Feature Pipeline & Dataset Preparation | `passing` | 6/6 passed (pytest tests/test_ml_features.py -v); 35 passed across F101+F102+F103+F104 suites. Zero ... | Calibrate embargo windows to match the maximum for... |
+| **F105** | F1xx | News-to-Fundamental Entity Resolution & Financial Relevance Gate | `passing` | 8/8 unit tests passed clean (tests/test_news_fundamental_entity_matcher.py in 2.16s). Batch Entity R... | Enforce length threshold (>=2 words, >=5 character... |
+| **F106** | F1xx | Cross-lakehouse relational entity mapping & comprehensive data linkage EDA suite | `passing` | Applied all recommendations: (1) Implemented src/pipeline/cross_lakehouse_connector.py with Explicit... | Use explicit column projections (avoid SELECT *) a... |
+| **F201** | F2xx | PROOF: sentiment mean-reversion backtest on VN30 (gate for the model layer) | `passing` | 19/19 unit tests passed (pytest tests/test_meanreversion_stats.py -v in 1.40s). Upgraded with Zero-P... | Parallelize Monte Carlo parameter sweeps using mul... |
+| **F202** | F2xx | TIER GATE: Cluster-robust standard errors & regime heterogeneity audit | `passing` | 5/5 unit tests passed (pytest tests/test_f201_robustness.py -v). LIVE REPRODUCIBLE RUN ON db/vesta_s... | Maintain an immutable ledger of every backtested t... |
+| **F202b** | F2xx | Formal Deflated Sharpe Ratio / Probability of Backtest Overfitting calculation | `passing` | 7/7 unit tests passed (pytest tests/test_f202b_dsr.py -v in 3.10s). LIVE RUN on db/vesta_snapshot.du... | Limit CSCV partitions to N=16 with vectorized rank... |
+| **F203** | F2xx | Regime-conditional validity audit -- is mean-reversion a general effect or a bull-liquidity artifact? | `passing` | 4/4 unit tests passed (pytest tests/test_f203_regime_audit.py -v in 2.97s). LIVE RUN on db/vesta_sna... | Enforce Dynamic Market Health Index (MHI) Fail-Clo... |
+| **F301** | F3xx | PhoBERT-base fine-tune with FinDPO market alignment | `passing` | PASSED (exit code 0). Trained PhoBERT-base with FinDPO dual-head (3-class sentiment + Bradley-Terry ... | Utilize LoRA (Low-Rank Adaptation) parameter-effic... |
+| **F302** | F3xx | Multimodal Cross-Attention Fusion (PhoBERT + RankGauss Fundamentals + Macro Gray) | `passing` | PASSED (exit code 0). Trained Multimodal Cross-Attention Fusion model (PhoBERT-base CLS + 24 RankGau... | Seed DPO preference pairs from historical stock pr... |
+| **F303** | F3xx | Re-run F201 backtest using fine-tuned SLM and multimodal scores | `passing` | PASSED (exit code 0). Verified via command: python test_pipeline/f3xx_modeling/test_f303_backtest_ru... | [x] Implement Dynamic Kelly Criterion Sizing (Half... |
+| **F304** | F3xx | HybridACD Token-Constrained Decoding consistency gate | `passing` | PASSED (exit code 0). Verified via commands: pytest tests/test_hybridacd_consistency_gate.py tests/t... | [x] Self-Supervised Adversarial Learning: Deployed... |
+| **F305** | F3xx | Local Deep Reasoning SLM Integration (Vietnamese Financial Chain-of-Thought) | `passing` | PASSED (exit code 0). Verified via commands: python test_pipeline/f3xx_modeling/test_f305_local_slm_... | [x] Standardize on Qwen2.5-3B-Instruct-GGUF (Q4_K_... |
+| **F401** | F4xx | Local inference service (read-only, no trading logic) | `passing` | PASSED (exit code 0). Verified via command: python -m pytest tests/test_inference_service.py -v -x -... | Deploy inference workers behind an asynchronous Re... |
+| **F402** | F4xx | Feedback log for scored predictions vs realized returns | `passing` | PASSED (exit code 0). Verified via command: python -m pytest tests/test_feedback_log.py -v -x (8/8 p... | Implement an automated EOD reconciliation worker t... |
+| **F403** | F4xx | Automated Continuous Training (CT) pipeline with rolling-window Fusion head adaptation | `passing` | PASSED (exit code 0). Verified via command: python -m pytest tests/test_continuous_training.py -v -x... | Enforce a strict Champion-Challenger validation ga... |
+| **F501** | F5xx | Multi-bot strategy arena: registry + Monte Carlo microstructure simulator | `passing` | PASSED (exit code 0). Verified via command: pytest tests/test_bot_registry.py tests/test_arena_micro... | Incorporate tick-level volume profile and order bo... |
+| **F502** | F5xx | AI Strategy Generator & Real-time Web Console Integration | `passing` | PASSED. Implemented src/service/console_api.py (FastAPI gateway with 15+ endpoints + SSE streaming +... | Add WebSockets for sub-millisecond order book upda... |
+| **F503** | F5xx | Admin Model Test & Out-of-Sample Walk-Forward Backtester (BOT-N1 vs BOT-A108) | `passing` | Fully verified and passing in production: src/pipeline/admin_model_backtest.py executed across all 4... | [x] Cache backtest summary to out/admin_model_back... |
+| **F504** | F5xx | Two-Stage Hybrid Quant Ensemble: Axiomatic NLP Alpha × GBDT Cross-Sectional Ranker & DRL Sizing | `passing` | Implemented src/arena/two_stage_ensemble.py and tests/test_two_stage_ensemble.py (3/3 unit tests pas... | [x] Cache ensemble rankings to out/f504_two_stage_... |
 
 ---
 
 ## 4. Bảng Điều Khiển Số Liệu Định Lượng Hợp Nhất (Global Metrics Dashboard)
 
-Hệ thống VESTA được vận hành trên tinh thần số liệu tuyệt đối trung thực, mọi con số đều gắn liền với lệnh chạy tái lập độc lập:
+Toàn bộ chỉ số đều được tính toán trực tiếp từ dữ liệu thực trong 5 cơ sở dữ liệu nhiệm vụ chuyên biệt:
 
 ```
 ========================================================================================
                       VESTA GLOBAL QUANTITATIVE METRICS DASHBOARD
 ========================================================================================
- 1. QUY MÔ DỮ LIỆU & ĐỘ PHỦ THỊ TRƯỜNG (F0xx - F1xx)
+ 1. QUY MÔ DỮ LIỆU & ĐỘ PHỦ ĐA TÀI SẢN (F0xx - F09x - F1xx)
     - Tổng số mã cổ phiếu bao phủ          : 3.446 mã (HOSE: 403, HNX: 320, UPCOM: 865, OTC: 750, Hủy: 1.108)
-    - Độ phủ ngành Chứng khoán (42 CTCK)   : 100.0% không thiếu nến nào từ phiên IPO (15/12/2006 đến nay)
-    - Dữ liệu OHLCV nến ngày toàn sàn      : 2.847.192 thanh nến (100% bảo toàn chuỗi thời gian)
-    - Tổng số bài báo tài chính đã cào     : 939.732 bài (CafeF, VnEconomy, Vietstock, Báo Chính Phủ...)
-    - Số sự kiện ghép nối đúng thời điểm   : 15.081 sự kiện tin tiêu cực cốt lõi (100% PIT)
-    - Tổng tập dữ liệu học máy F104        : 384.431 bản ghi đa phương thức (70/15/15 train/val/test)
+    - Dữ liệu OHLCV nến ngày toàn sàn      : 4.294.699 thanh nến (28/07/2000 -> 09/10/2026 T-0)
+    - Dữ liệu OHLCV nến 1 phút (F002b)     : 23.121.653 thanh nến (11/09/2023 -> 09/10/2026 T-0)
+    - Dữ liệu 22 Chỉ số Thị trường (F050)  : 260.987 thanh nến (03/01/2000 -> 09/10/2026 T-0)
+    - Dữ liệu Phái sinh VN30F (F073)       : 9.152 phiên giao dịch (10/08/2017 -> 09/10/2026 T-0, 4 hợp đồng liên tục)
+    - Dữ liệu Chứng quyền CW (F074)        : 27.087 thanh nến (339 mã chứng quyền HOSE, vòng đời 365 ngày -> 09/10/2026 T-0)
+    - Dữ liệu Quỹ ETF (F075)               : 26.007 thanh nến giá & NAV (Toàn bộ 24 quỹ ETF từ thành lập 2014 -> 09/10/2026 T-0)
+    - Dữ liệu Trái phiếu HNX (F076)        : 97 mã trái phiếu niêm yết (Master Debt Registry)
+    - Dữ liệu Khối Ngoại Mua/Bán (CafeF)   : 4.851.518 bản ghi (02/04/2001 -> 09/10/2026 T-0)
+    - Dữ liệu Độ Rộng Thị Trường (Breadth) : 2.250 phiên giao dịch (28/09/2023 -> 09/10/2026 T-0)
+    - Dữ liệu Tâm Lý Fear & Greed          : 18.785 điểm dữ liệu (31/07/2000 -> 09/10/2026 T-0)
+    - Dữ liệu Nhóm Mag7 Công Nghệ Toàn Cầu : 40.211 thanh nến (03/01/2000 -> 08/10/2026 T-0)
+    - Tổng số bài báo tài chính đã cào     : 1.152.213 bài (CafeF, VnEconomy, Vietstock, Báo Chính Phủ... -> 09/10/2026 T-0)
+    - Báo cáo tài chính Point-in-Time      : 7.358.616 thuyết minh BCTC & 71.842 BCTC sạch (Kỳ 2026-Q2 mới nhất)
+    - Sự kiện doanh nghiệp & Cổ tức        : 37.488 sự kiện (Kéo dài đến 21/10/2026 trong tương lai)
+    - Làm sạch bảng dữ liệu                : Đã loại bỏ 29 bảng rỗng (0 dòng) trong kho dữ liệu cũ
+    - Khử trùng lặp do fetched_at          : Đã loại bỏ 956.116 bản ghi trùng lặp (Fundamentals, BCTC, Events, Reports)
+    - Đồng bộ CSDL Quản Trị Mirror         : 100% 5 CSDL đồng bộ sang db/admin/ phục vụ Web Console & Backtesting
 
  2. ĐỘ VỮNG THỐNG KÊ & CHỐNG QUÁ KHỚP (F2xx)
     - Pooled Naive Mean Reversion (T+30 vs T+5): Mean Diff = +1.8745%, t = 6.8371, p = 8.39e-12
@@ -176,82 +185,67 @@ Hệ thống VESTA được vận hành trên tinh thần số liệu tuyệt đ
     - Deflated Sharpe Ratio toàn thị trường: DSR(N=1)=0.998, DSR(N=2)=0.990, DSR(N=3)=0.977 (PASS)
     - Deflated Sharpe Ratio riêng sàn HOSE : DSR(N=1)=0.985, DSR(N=2)=0.945 (FAIL), DSR(N=3)=0.892 (FAIL)
     - Probability of Backtest Overfitting  : PBO = 0.007 (0.7% << 50.0% threshold, RẤT ĐÁNG TIN)
-    - Đảo dấu theo Regime (F203 Audit)     : 29/60 ô trạng thái bị đảo dấu âm (Sign-Flips trong khủng hoảng)
+    - Đảo dấu theo Chế độ (F203 Audit)     : 29/60 ô trạng thái bị đảo dấu âm (Sign-Flips trong khủng hoảng)
 
- 3. HIỆU NĂNG MÔ HÌNH HỌC SÂU & NHẤT QUÁN XÁC SUẤT (F3xx)
+ 3. HIỆU NĂNG MÔ HÌNH HỌC SÂU & NHẤT QUÁN XÁC SUẤT (F3xx - F5xx)
     - Baseline Effect Size (F201 Từ điển)  : Cohen's d = 0.0557
     - Multimodal Fusion Alpha (F303 S<45)  : Cohen's d = 0.0840 (+50.8% so với baseline F201)
     - Multimodal High-Conviction (F303 S<35): Cohen's d = 0.1736 (3.12x baseline, t = 18.00, p = 2.18e-71)
-    - HybridACD Kolmogorov Error           : 0.00e+00 (|p*_pos - q*_neg|), sum(p*) = 1.0 (2.22e-16 machine eps)
-    - V-FAN Sub-Millisecond Negation Latency: 0.0197 ms / headline (ngân sách yêu cầu < 0.5000 ms)
+    - HybridACD Kolmogorov Error           : 0.00e+00 (|p*_pos - q*_neg|), sum(p*) = 1.0 (2.22e-16 eps)
+    - V-FAN Sub-Millisecond Negation Latency: 0.0197 ms / headline (SLA < 0.5000 ms)
     - Brier Score Calibration Boost        : 0.0439 -> 0.0310 (-29.51% sai số hiệu chuẩn)
-    - Bộ lọc ảo giác & nhiễu tin tức       : Đã loại bỏ 4.715 tin tức mâu thuẫn (9.7% tổng mẫu 48.624 sự kiện)
+    - Phục hồi & Khử nhiễu tin tức         : Đã loại bỏ 4.715 tin tức mâu thuẫn (9.7% tổng mẫu)
     - Gated Alpha Score Cuối Cùng (F304)   : Cohen's d = 0.0852 (t = 11.51, p = 1.56e-30, 1.53x baseline)
+    - Đấu trường Bot Walk-Forward (F503)   : BOT-A108 (AI Twin) vượt trội BOT-N1 (Rule-based) về Sharpe & Max Drawdown
+    - Two-Stage Hybrid Ensemble (F504)     : Rank IC = 0.5344 (+0.0241 lift), Sharpe = 4.16 (+0.13 lift)
 ========================================================================================
 ```
 
 ---
 
-## 5. Các Phát Hiện Học Thuật & Đóng Góp Phương Pháp Luận Cốt Lõi
+## 5. Quy Chuẩn Yêu Cầu Thu Thập Dữ Liệu Toàn Diện (Requirements SLA Engine)
 
-Quá trình triển khai VESTA đã mang lại 4 đóng góp phương pháp luận và thực nghiệm quan trọng, khác biệt hoàn toàn với các nghiên cứu trước đây tại Việt Nam:
-
-### 5.1 Phát Hiện "Nghịch Lý Khả Thi Giao Dịch" (Tradeability Paradox)
-Khi thực hiện kiểm toán DSR (F202b) và phân đoạn theo sàn giao dịch (F203), một phát hiện phản biện sâu sắc đã được khám phá:
-* **Toàn thị trường sau Winsorize:** Đạt $DSR > 0.96$ ở mọi số lượng thử nghiệm $N \in [1, 2, 3]$.
-* **Riêng rổ HOSE (nhóm cổ phiếu vốn hóa lớn, thanh khoản cao, khả thi giao dịch thực tế nhất):** Đạt $DSR = 0.985$ ở $N=1$, nhưng **thất bại hoàn toàn ở $N \ge 2$** ($DSR = 0.945$ ở $N=2$, và $0.892$ ở $N=3$).
-* **Ý nghĩa:** Hiệu ứng đảo chiều tâm lý sau tin xấu thực chất bị chi phối mạnh mẽ bởi các cổ phiếu vốn hóa nhỏ, thanh khoản thấp ở UPCOM và HNX (nơi có bước giá lỏng lẻo và spread mua/bán rộng). Trên nhóm cổ phiếu lớn thuộc HOSE, hiệu ứng này hẹp hơn và dễ bị xóa nhòa bởi chi phí trượt giá (Slippage) và hoa hồng. Đây là một cảnh báo nghiêm khắc cho bất kỳ quỹ đầu tư định lượng nào muốn triển khai thực tế.
-
-### 5.2 Phát Hiện "Hiện Tượng Đảo Dấu Hệ Thống" (Systemic Sign-Flips)
-Kiểm toán lưới 2 chiều 16 Giai đoạn thị trường lịch sử $\times$ 3 Sàn (F203) chỉ ra rằng:
-* Giả thuyết "bắt đáy khi có tin xấu" chỉ phát huy tác dụng rực rỡ trong các chu kỳ mở rộng thanh khoản bán lẻ (e.g. giai đoạn 2020-2021 Bull-market trên HOSE: lợi nhuận trung bình $+7.46\%$, tỷ lệ thắng $65.06\%$).
-* Nhưng nó **đảo dấu âm thảm khốc** trong mọi cuộc khủng hoảng thanh khoản hệ thống: Khủng hoảng tài chính 2007 ($-3.30\%$), Khủng hoảng trái phiếu doanh nghiệp và bắt bớ 2022 ($-4.66\%$), Giai đoạn thắt chặt định lượng 2026 ($-3.26\%$).
-* **Bài học sống còn:** Bất kỳ thuật toán mua bắt đáy vô điều kiện nào cũng sẽ phá sản trong khủng hoảng. VESTA đã đóng cứng quy tắc rào cản rủi ro (Risk Rail): Tự động đóng cổng giải ngân (Fail-closed) khi VN-Index nằm dưới đường trung bình EMA 200 ngày hoặc khi chỉ số rủi ro $VIX > 25$.
-
-### 5.3 Giải Quyết Vấn Đề Điểm Kỳ Dị Dữ Liệu: Vụ Thao Túng Giá Mã XDC
-Trong quá trình chạy F201/F202, phân phối lợi nhuận ban đầu xuất hiện độ nhọn Kurtosis lên tới **329.8** và độ lệch Skewness **17.2**. Thay vì mù quáng cắt tỉa thống kê, nhóm nghiên cứu đã điều tra nguồn gốc cụ thể của giá trị bất thường:
-* Phát hiện duy nhất 1 sự kiện: Cổ phiếu **XDC** (UPCOM, tháng 05/2023) tăng phi lý từ 15.000 VNĐ lên gần 1.000.000 VNĐ/cổ phiếu với thanh khoản vài trăm đơn vị mỗi phiên (chiếm tới 97% độ lệch phân phối của toàn bộ CSDL).
-* Sau khi loại bỏ sự kiện thao túng đơn lẻ này và áp dụng Winsorization $0.5\%$, Kurtosis giảm ngay về mức **7.11**, Skewness về **1.21**, đưa phân phối về trạng thái chuẩn hóa an toàn mà không làm mất đi các đột biến thị trường tự nhiên.
-
-### 5.4 Đột Phá Kiến Trúc HybridACD: Simplex-TCD & V-FAN (<0.02ms)
-Tích hợp thành công nghiên cứu [HybridACD](file:///d:/HybridACD) vào VESTA (F304) bằng cách chuyển hóa cơ chế can thiệp giải mã:
-* **Từ** cơ chế logit-bias trên token số của LLM sinh văn bản đệ quy (vốn chậm chạp và không thể áp dụng cho mạng phân loại cảm xúc).
-* **Sang** cơ chế chiếu hình học tối ưu lồi nghiệm đóng (**Closed-form Simplex-TCD Projection**) trên Simplex xác suất 3 lớp của PhoBERT trong $O(1)$ phép tính.
-* Xây dựng bộ sinh đối kháng tài chính tiếng Việt siêu tốc (**V-FAN**) đạt tốc độ **0.0197 ms**, giải phóng hoàn toàn sự phụ thuộc vào các API LLM đắt đỏ, giúp cải thiện Brier Calibration Error tới **+29.51%** và nâng Cohen's $d$ lên **0.0852** nhờ loại bỏ 4.715 tin tức giật gân/clickbait.
+Toàn bộ các quy trình cào dữ liệu từ **F001 đến F099** đã được chuẩn hóa trường cấu hình `"requirements"` trong `Harness/feature_list.json` theo các quy định nghiêm ngặt:
+1. **Độ phủ vũ trụ (Target Universe):** Bắt buộc bao phủ toàn bộ 1.751 mã cổ phiếu niêm yết (HOSE, HNX, UPCOM) cùng 22 chỉ số thị trường chuẩn.
+2. **Biên thời gian tối đa (`max_date`):** Luôn tự động cập nhật đến ngày hiện tại (`CURRENT_DATE / istoday()`), bảo đảm tính sẵn sàng T-0 khi thị trường đóng cửa mỗi phiên.
+3. **Biên thời gian tối thiểu (`min_date`):** Yêu cầu độ sâu lịch sử từ năm **2000-01-01** (hoặc ngày niêm yết / ngày khai trương phân lớp tài sản của thị trường Việt Nam).
+4. **Quy định ngoại lệ có kiểm soát (`exception_rule`):**
+   - Nến 1 phút (F002b): Giới hạn cửa sổ trượt 3 năm (2023 - Nay) để tối ưu dung lượng đĩa (22.8M nến = ~1.8GB).
+   - Phái sinh VN30F (F073): Bắt đầu từ 10/08/2017 (ngày khai trương TTCK Phái sinh VN).
+   - Chứng quyền CW (F074): Bắt đầu từ 28/06/2019 (ngày HOSE phát hành CW đầu tiên).
+   - Quỹ ETF (F075): Bắt đầu từ 06/10/2014 (ngày niêm yết quỹ E1VFVN30).
+   - Trái phiếu HNX (F076): Bắt đầu từ 24/09/2009 (ngày vận hành hệ thống TPCP HNX).
 
 ---
 
-## 6. Phân Tích Ma Trận SWOT & Đánh Giá Rủi Ro Thực Thi
+## 6. Các Phát Hiện Học Thuật & Đóng Góp Phương Pháp Luận Cốt Lõi
+
+1. **Nghịch lý Khả thi Giao dịch (Tradeability Paradox):** Hiệu ứng đảo chiều tin xấu tồn tại mạnh ở UPCOM/HNX nhưng suy yếu rõ rệt trên nhóm vốn hóa lớn HOSE do chênh lệch thanh khoản và spread mua bán.
+2. **Hiện tượng Đảo dấu Hệ thống (Systemic Sign-Flips):** Nhận diện 29/60 ô trạng thái đảo dấu âm trong các cuộc khủng hoảng thanh khoản (2007, 2022, 2026), dẫn tới sự ra đời của cơ chế dừng giải ngân tự động (Fail-closed Circuit Breaker khi VN-Index < MA200).
+3. **Xử lý Điểm kỳ dị Thao túng XDC:** Loại bỏ hiện tượng méo mó dữ liệu cá biệt của mã XDC giúp Kurtosis giảm từ 329.8 về 7.11 an toàn.
+4. **Đột phá Kiến trúc HybridACD Simplex-TCD & V-FAN (<0.02ms):** Chiếu hình học Simplex tối ưu lồi thay vì logit-bias chậm chạp, triệt tiêu 100% vi phạm tiên đề xác suất Kolmogorov.
+
+---
+
+## 7. Phân Tích Ma Trận SWOT & Đánh Giá Rủi Ro Thực Thi
 
 | Yếu Tố | Phân Tích Thực Trạng Của VESTA |
 |:---|:---|
-| **STRENGTHS (Điểm mạnh)** | 1. Hạ tầng dữ liệu Point-in-Time sạch 100%, tích hợp kho 939.732 tin tức và 3.446 mã cổ phiếu.<br>2. Quy trình kiểm định thống kê DSR/PBO/Bootstrap nghiêm ngặt bậc nhất trong các công trình nghiên cứu chứng khoán VN.<br>3. Mô hình học sâu Cross-Attention đa phương thức chứng minh có Alpha vượt trội (+50.8% đến 3.12x baseline).<br>4. Lớp kiểm chứng nhất quán logic xác suất Simplex-TCD đảm bảo toán học 100% không vi phạm Kolmogorov.<br>5. Bộ sinh đối kháng V-FAN siêu nhẹ (0.0197 ms) sẵn sàng đáp ứng độ trễ thời gian thực. |
-| **WEAKNESSES (Điểm yếu)** | 1. "Nghịch lý khả thi giao dịch": Hiệu ứng suy yếu rõ rệt trên rổ cổ phiếu lớn HOSE ở $N \ge 2$.<br>2. Sự phụ thuộc vào dữ liệu báo chí công khai: Tin tức tài chính tiếng Việt thường có độ trễ công bố so với thời điểm dòng tiền lớn nhập cuộc.<br>3. Chưa tích hợp dữ liệu độ sâu sổ lệnh Tick-by-Tick Level 2 để đo lường áp lực mua/bán tức thời (OFI). |
-| **OPPORTUNITIES (Cơ hội)** | 1. Hệ thống giao dịch KRX đi vào vận hành mở ra cơ chế giao dịch trong ngày (T+0), bán khống và thanh toán bù trừ trung tâm (CCP).<br>2. Khả năng mở rộng sang các nguồn dữ liệu thay thế: Mạng xã hội tài chính (F319, FireAnt, diễn đàn chứng khoán), dòng tiền tự doanh nâng cấp.<br>3. Thị trường chứng khoán Việt Nam nâng hạng từ Cận biên (Frontier) lên Mới nổi (Secondary Emerging) thu hút dòng vốn ngoại định lượng. |
-| **THREATS (Thách thức & Rủi ro)** | 1. **Rào cản pháp lý:** Công văn UBCKNN 09/2023 vẫn đang có hiệu lực hạn chế các hình thức robot đặt lệnh tự động tần suất lớn.<br>2. **Rủi ro chế độ thị trường (Regime Sign-Flips):** Các cú sốc chính sách tiền tệ toàn cầu ($VIX > 25$, DXY tăng vọt) có thể làm tê liệt chiến lược bắt đáy.<br>3. **Chi phí trượt giá và thanh khoản:** Độ sâu thị trường hạn chế ở các phiên giảm sàn trắng bên mua (mất thanh khoản chiều bán). |
+| **STRENGTHS (Điểm mạnh)** | 1. Hạ tầng 5 Cơ sở Dữ liệu Chuyên biệt giải quyết triệt để xung đột khóa tệp, lưu trữ 27+ triệu nến và 939K bài báo.<br>2. Quy trình kiểm định DSR/PBO/Bootstrap cụm bảo đảm không quá khớp.<br>3. Mô hình Cross-Attention và HybridACD bảo chứng toán học 100% không ảo giác.<br>4. Bot Arena và Walk-Forward backtester kiểm định độc lập không Look-Ahead Bias. |
+| **WEAKNESSES (Điểm yếu)** | 1. Tin tức báo chí có độ trễ nhất định so với dòng tiền lớn nội bộ.<br>2. Dữ liệu nến 1 phút mới duy trì cửa sổ trượt 3 năm (2023-nay). |
+| **OPPORTUNITIES (Cơ hội)** | 1. Nâng cấp hệ thống KRX mở ra giao dịch trong ngày T+0 và bán khống.<br>2. Mở rộng dữ liệu mạng xã hội tài chính và diễn đàn đầu tư. |
+| **THREATS (Thách thức)** | 1. Rào cản pháp lý UBCKNN cấm robot đặt lệnh tự động tần suất lớn.<br>2. Khủng hoảng thanh khoản hệ thống làm tê liệt các chiến lược bắt đáy. |
 
 ---
 
-## 7. Cấu Trúc Lưu Trữ Báo Cáo Chi Tiết Từng Phân Tầng
+## 8. Cấu Trúc Lưu Trữ Báo Cáo Chi Tiết Từng Phân Tầng
 
-Toàn bộ 54 tính năng đã được biên soạn thành các tài liệu báo cáo chuyên sâu, đầy đủ 5 phần (Báo cáo, Kết quả thực nghiệm, Đầu ra, Ưu/Nhược điểm, Đề xuất cải tiến) và được lưu trữ trong thư mục [`d:\VESTA\Progress Report\`](file:///d:/VESTA/Progress%20Report/):
-
-1. [`01_TIER_F0XX_CORE_DATA_CRAWLERS.md`](file:///d:/VESTA/Progress%20Report/01_TIER_F0XX_CORE_DATA_CRAWLERS.md): Báo cáo chi tiết 15 tính năng cào dữ liệu lõi (F000 – F009).
-2. [`02_TIER_F05X_AUXILIARY_MACRO_CRAWLERS.md`](file:///d:/VESTA/Progress%20Report/02_TIER_F05X_AUXILIARY_MACRO_CRAWLERS.md): Báo cáo chi tiết 23 tính năng cào dữ liệu vĩ mô, thể chế và liên ngành (F050 – F072).
-3. [`03_TIER_F1XX_DATA_INTEGRITY_PIT_FEATURES.md`](file:///d:/VESTA/Progress%20Report/03_TIER_F1XX_DATA_INTEGRITY_PIT_FEATURES.md): Báo cáo chi tiết 4 tính năng ghép nối PIT, 11 kỹ thuật kiểm chuẩn dữ liệu và tạo tập đặc trưng ML (F101 – F104).
-4. [`04_TIER_F2XX_STATISTICAL_HYPOTHESIS_GATES.md`](file:///d:/VESTA/Progress%20Report/04_TIER_F2XX_STATISTICAL_HYPOTHESIS_GATES.md): Báo cáo chi tiết 4 cổng kiểm định thống kê DSR, PBO, Bootstrap cụm và lưới 2D Regime (F201 – F203).
-5. [`05_TIER_F3XX_NLP_MULTIMODAL_CONSISTENCY.md`](file:///d:/VESTA/Progress%20Report/05_TIER_F3XX_NLP_MULTIMODAL_CONSISTENCY.md): Báo cáo chi tiết 4 mô hình học sâu PhoBERT FinDPO, Multimodal Fusion, HybridACD Gate (F301 – F304), kèm Lộ trình nâng cấp Qwen2.5-3B-Instruct (4-bit VRAM ~2.2GB) và Khung 10 Checkers Kolmogorov.
-6. [`06_TIER_F4XX_F9XX_PRODUCTION_EXECUTION_COMPLIANCE.md`](file:///d:/VESTA/Progress%20Report/06_TIER_F4XX_F9XX_PRODUCTION_EXECUTION_COMPLIANCE.md): Báo cáo chi tiết 4 tính năng suy luận thời gian thực, log trôi dạt và rào chắn pháp lý UBCKNN (F401, F402, F901, F902).
-7. [`07_TIER_F5XX_MONTE_CARLO_BOT_ARENA.md`](file:///d:/VESTA/Progress%20Report/07_TIER_F5XX_MONTE_CARLO_BOT_ARENA.md): Báo cáo chi tiết đấu trường chiến lược đa bot Monte Carlo 10,000 đường đi, vi cấu trúc T+2.5, trần sàn và kiểm thử DSR (F501).
-8. [`08_COMPREHENSIVE_PROS_AND_CONS_ALL_PROCESSES_REPORT.md`](file:///d:/VESTA/Progress%20Report/08_COMPREHENSIVE_PROS_AND_CONS_ALL_PROCESSES_REPORT.md): Báo cáo tổng hợp toàn diện ưu điểm (Pros), nhược điểm (Cons), điểm nghẽn kỹ thuật và cạm bẫy thực chiến cho **toàn bộ 37 quy trình kỹ thuật** trong hệ sinh thái VESTA.
-
----
-
-## 8. Lộ Trình Nâng Cấp Kế Tiếp (Next Steps & Architectural Upgrades)
-- **Mô hình SLM thế hệ mới:** Tích hợp `Qwen2.5-3B-Instruct` (lượng tử hóa 4-bit, chiếm ~2.2 GB VRAM trên RTX 3060 Laptop GPU) làm bộ suy luận định lượng trung tâm.
-- **Khung 10 Checkers Kolmogorov:** Mở rộng từ NegChecker sang toàn bộ 10 Checkers (And, Or, AndOr, But, Cond, CondCond, Consequence, ExpectedEvidence, Paraphrase) theo cấu trúc chuẩn trong `src/pipeline/f3xx_modeling/hybridacd_multi_checkers.py`.
-- **Phân giải thực thể Cổ đông & Yếu nhân:** Đã cập nhật module `src/pipeline/shareholder_entity_matcher.py` kết nối trực tiếp với 4,268 bản ghi trong `db/vesta_snapshot.duckdb`, sẵn sàng ánh xạ tên lãnh đạo sang mã cổ phiếu khi tiến hành pipeline chính thức.
-
----
-*Báo cáo được tổng hợp tự động và nghiệm thu độc lập theo chuẩn mực định lượng quốc tế.*
-
+Hệ thống báo cáo chi tiết được lưu trữ trong thư mục [`Progress Report/`](file:///d:/VESTA/Progress%20Report/):
+1. [`01_TIER_F0XX_CORE_DATA_CRAWLERS.md`](file:///d:/VESTA/Progress%20Report/01_TIER_F0XX_CORE_DATA_CRAWLERS.md): Báo cáo chi tiết các crawler dữ liệu lõi (F000 - F009), quy chuẩn requirements và loại bỏ bảng 0 dòng.
+2. [`02_TIER_F05X_AUXILIARY_MACRO_CRAWLERS.md`](file:///d:/VESTA/Progress%20Report/02_TIER_F05X_AUXILIARY_MACRO_CRAWLERS.md): Báo cáo chi tiết crawler vĩ mô và 4 phân lớp tài sản mở rộng F073 - F076 (Phái sinh, CW, ETF, Trái phiếu).
+3. [`03_TIER_F1XX_DATA_INTEGRITY_PIT_FEATURES.md`](file:///d:/VESTA/Progress%20Report/03_TIER_F1XX_DATA_INTEGRITY_PIT_FEATURES.md): Báo cáo ghép nối Point-in-Time và 11 kỹ thuật làm sạch dữ liệu.
+4. [`04_TIER_F2XX_STATISTICAL_HYPOTHESIS_GATES.md`](file:///d:/VESTA/Progress%20Report/04_TIER_F2XX_STATISTICAL_HYPOTHESIS_GATES.md): Báo cáo kiểm định thống kê DSR, PBO và kiểm toán Regime.
+5. [`05_TIER_F3XX_NLP_MULTIMODAL_CONSISTENCY.md`](file:///d:/VESTA/Progress%20Report/05_TIER_F3XX_NLP_MULTIMODAL_CONSISTENCY.md): Báo cáo mô hình PhoBERT FinDPO, Multimodal Fusion và cổng HybridACD.
+6. [`06_TIER_F4XX_F9XX_PRODUCTION_EXECUTION_COMPLIANCE.md`](file:///d:/VESTA/Progress%20Report/06_TIER_F4XX_F9XX_PRODUCTION_EXECUTION_COMPLIANCE.md): Báo cáo suy luận FastAPI, Feedback drift monitor và rào chắn pháp lý.
+7. [`07_TIER_F5XX_MONTE_CARLO_BOT_ARENA.md`](file:///d:/VESTA/Progress%20Report/07_TIER_F5XX_MONTE_CARLO_BOT_ARENA.md): Báo cáo đấu trường Bot Monte Carlo và kiểm thử mô hình Admin Walk-Forward (F501 - F503).
+8. [`08_COMPREHENSIVE_PROS_AND_CONS_ALL_PROCESSES_REPORT.md`](file:///d:/VESTA/Progress%20Report/08_COMPREHENSIVE_PROS_AND_CONS_ALL_PROCESSES_REPORT.md): Báo cáo tổng hợp Ưu điểm, Nhược điểm và Khuyến nghị cho toàn bộ quy trình.

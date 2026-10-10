@@ -27,9 +27,11 @@ if hasattr(sys.stdout, "reconfigure"):
 
 logger = logging.getLogger("cross_lakehouse_connector")
 
-DEFAULT_SNAPSHOT_DB = "db/vesta_snapshot.duckdb"
+DEFAULT_MARKET_INDEX_DB = "db/vesta_market_index.duckdb"
 DEFAULT_OHLCV_DB = "db/vesta_ohlcv.duckdb"
 DEFAULT_NEWS_DB = "db/vesta_news.duckdb"
+DEFAULT_FUNDAMENTALS_DB = "db/vesta_fundamentals.duckdb"
+DEFAULT_EVENTS_DB = "db/vesta_events.duckdb"
 
 
 class CrossLakehouseError(Exception):
@@ -37,60 +39,69 @@ class CrossLakehouseError(Exception):
 
 
 def get_cross_lakehouse_connection(
-    snapshot_path: str = DEFAULT_SNAPSHOT_DB,
+    primary_path: str = DEFAULT_MARKET_INDEX_DB,
     ohlcv_path: str = DEFAULT_OHLCV_DB,
     news_path: str = DEFAULT_NEWS_DB,
+    fundamentals_path: str = DEFAULT_FUNDAMENTALS_DB,
+    events_path: str = DEFAULT_EVENTS_DB,
     read_only: bool = True,
     threads: int = 4,
     memory_limit: str = "8GB",
 ) -> duckdb.DuckDBPyConnection:
     """Khởi tạo kết nối DuckDB đa hồ an toàn và hiệu năng cao với cơ chế READ_ONLY."""
-    if not os.path.exists(snapshot_path):
-        raise FileNotFoundError(f"Không tìm thấy lakehouse snapshot tại: {snapshot_path}")
+    if not os.path.exists(primary_path):
+        # Fallback to in-memory if primary not found
+        primary_path = ":memory:"
 
     config = {
-        "access_mode": "read_only" if read_only else "automatic",
+        "access_mode": "read_only" if read_only and primary_path != ":memory:" else "automatic",
         "threads": str(threads),
         "max_memory": memory_limit,
         "preserve_insertion_order": "false",
     }
 
     try:
-        con = duckdb.connect(snapshot_path, read_only=read_only, config=config)
+        con = duckdb.connect(primary_path, read_only=read_only if primary_path != ":memory:" else False, config=config)
     except Exception as e:
-        raise CrossLakehouseError(f"Không thể mở CSDL {snapshot_path}: {e}") from e
+        raise CrossLakehouseError(f"Không thể mở CSDL {primary_path}: {e}") from e
 
-    # Gắn hồ OHLCV
-    if os.path.exists(ohlcv_path):
-        try:
-            con.execute(f"ATTACH '{ohlcv_path}' AS ohlcv_db (READ_ONLY);")
-            logger.debug(f"Đã gắn thành công hồ OHLCV: {ohlcv_path}")
-        except Exception as e:
-            logger.warning(f"Không thể gắn hồ OHLCV ({ohlcv_path}): {e}")
+    # Gắn các hồ chuyên biệt còn lại
+    attached_map = [
+        ("ohlcv_db", ohlcv_path),
+        ("news_db", news_path),
+        ("fundamentals_db", fundamentals_path),
+        ("events_db", events_path),
+    ]
+    if primary_path != DEFAULT_MARKET_INDEX_DB and os.path.exists(DEFAULT_MARKET_INDEX_DB):
+        attached_map.append(("market_index_db", DEFAULT_MARKET_INDEX_DB))
 
-    # Gắn hồ News
-    if os.path.exists(news_path):
-        try:
-            con.execute(f"ATTACH '{news_path}' AS news_db (READ_ONLY);")
-            logger.debug(f"Đã gắn thành công hồ News: {news_path}")
-        except Exception as e:
-            logger.warning(f"Không thể gắn hồ News ({news_path}): {e}")
+    for db_alias, db_file in attached_map:
+        if os.path.exists(db_file):
+            try:
+                con.execute(f"ATTACH '{db_file}' AS {db_alias} (READ_ONLY);")
+                logger.debug(f"Đã gắn thành công hồ {db_alias}: {db_file}")
+            except Exception as e:
+                logger.warning(f"Không thể gắn hồ {db_alias} ({db_file}): {e}")
 
     return con
 
 
 @contextlib.contextmanager
 def open_cross_lakehouse(
-    snapshot_path: str = DEFAULT_SNAPSHOT_DB,
+    primary_path: str = DEFAULT_MARKET_INDEX_DB,
     ohlcv_path: str = DEFAULT_OHLCV_DB,
     news_path: str = DEFAULT_NEWS_DB,
+    fundamentals_path: str = DEFAULT_FUNDAMENTALS_DB,
+    events_path: str = DEFAULT_EVENTS_DB,
     read_only: bool = True,
 ) -> Generator[duckdb.DuckDBPyConnection, None, None]:
     """Context manager đảm bảo tự động đóng kết nối và giải phóng file lock."""
     con = get_cross_lakehouse_connection(
-        snapshot_path=snapshot_path,
+        primary_path=primary_path,
         ohlcv_path=ohlcv_path,
         news_path=news_path,
+        fundamentals_path=fundamentals_path,
+        events_path=events_path,
         read_only=read_only,
     )
     try:

@@ -34,7 +34,7 @@ try:
 except ImportError:
     LocalReasoningSLMEngine = None  # type: ignore
 
-SNAPSHOT_DB = str(REPO_ROOT / "db" / "vesta_snapshot.duckdb")
+MARKET_INDEX_DB = str(REPO_ROOT / "db" / "vesta_market_index.duckdb")
 NEWS_DB = str(REPO_ROOT / "db" / "vesta_news.duckdb")
 OHLCV_DB = str(REPO_ROOT / "db" / "vesta_ohlcv.duckdb")
 CAFEF_SYMBOLS_PATH = REPO_ROOT / "cafef_company_list.json"
@@ -259,16 +259,16 @@ def load_valid_tickers() -> Set[str]:
     titles_map = _load_cafef_company_titles()
     tickers.update(titles_map.keys())
 
-    # 2. Đọc từ db/vesta_snapshot.duckdb core.dim_symbol (nếu có thể kết nối)
-    if os.path.exists(SNAPSHOT_DB):
+    # 2. Đọc từ db/vesta_market_index.duckdb core.dim_symbol (nếu có thể kết nối)
+    if os.path.exists(MARKET_INDEX_DB):
         try:
-            with duckdb.connect(SNAPSHOT_DB, read_only=True, config={"access_mode": "read_only"}) as con:
+            with duckdb.connect(MARKET_INDEX_DB, read_only=True, config={"access_mode": "read_only"}) as con:
                 rows = con.execute("SELECT symbol FROM core.dim_symbol").fetchall()
                 for r in rows:
                     if r[0]:
                         tickers.add(r[0].strip().upper())
         except Exception as exc:
-            logger.debug(f"Snapshot duckdb read_only connect skipped: {exc}")
+            logger.debug(f"Market index duckdb read_only connect skipped: {exc}")
 
     # 3. Luôn bảo đảm có danh sách cốt lõi VN30, Phái sinh & ETFs
     fallback_universe = {
@@ -554,12 +554,12 @@ def query_rag_snapshot(symbol: Optional[str] = None) -> Dict[str, Any]:
         known = KNOWN_COMPANY_OVERVIEWS[sym]
         res.update(known)
 
-    if not sym or not os.path.exists(SNAPSHOT_DB):
+    if not sym or not os.path.exists(MARKET_INDEX_DB):
         return res
 
     # 2. Truy vấn trực tiếp từ DuckDB Lakehouse nếu không bị lock
     try:
-        with duckdb.connect(SNAPSHOT_DB, read_only=True, config={"access_mode": "read_only"}) as con:
+        with duckdb.connect(MARKET_INDEX_DB, read_only=True, config={"access_mode": "read_only"}) as con:
             try:
                 sym_info = con.execute(
                     "SELECT organ_name, exchange, industry_name FROM core.dim_symbol WHERE symbol = ?",

@@ -40,30 +40,36 @@
   --green: #4ade80;
   --greenA: rgba(74, 222, 128, 0.12);
   
-  /* Vietnam Price Board 5 Colors */
+  /* 3 Main Colors for Percentage Change (Green, Red, Black-Orange) */
+  --color-up: #22A366;
+  --color-up-bg: rgba(34, 163, 102, 0.15);
+  --color-down: #D6483F;
+  --color-down-bg: rgba(214, 72, 63, 0.15);
+  --color-ref: #D97706; /* Black-orange / Dark amber */
+  --color-ref-bg: rgba(217, 119, 6, 0.15);
+
+  --vn-up: var(--color-up);
+  --vn-up-bg: var(--color-up-bg);
+  --vn-down: var(--color-down);
+  --vn-down-bg: var(--color-down-bg);
+  --vn-ref: var(--color-ref);
+  --vn-ref-bg: var(--color-ref-bg);
   --vn-ceiling: #A15FC4;
   --vn-ceiling-bg: rgba(161, 95, 196, 0.15);
   --vn-floor: #3E8FBF;
   --vn-floor-bg: rgba(62, 143, 191, 0.15);
-  --vn-up: #22A366;
-  --vn-up-bg: rgba(34, 163, 102, 0.15);
-  --vn-down: #D6483F;
-  --vn-down-bg: rgba(214, 72, 63, 0.15);
-  --vn-ref: #D9AA3E;
-  --vn-ref-bg: rgba(217, 170, 62, 0.15);
   
   /* Hairline Borders */
   --border: rgba(255, 255, 255, 0.06);
   --border2: rgba(255, 255, 255, 0.12);
   --border3: rgba(255, 255, 255, 0.22);
   
-  /* Typography */
-  --sans: 'Syne', sans-serif;
+  /* Typography — Strictly 3 Functional Fonts */
   --mono: 'Syne Mono', monospace;
   --serif: 'Playfair Display', serif;
-  --vn: 'Be Vietnam Pro', sans-serif;
+  --sans: 'Syne', sans-serif;
 
-  /* Vietnamese diacritics line-height tokens (prevent tone mark clipping) */
+  /* Line-height tokens */
   --lh-tight: 1.48;
   --lh-normal: 1.60;
   --lh-body: 1.68;
@@ -75,13 +81,36 @@
 html, body {
   background-color: var(--bg);
   color: var(--cream);
-  font-family: var(--vn);
+  font-family: var(--sans);
   font-size: 13px;
   line-height: var(--lh-body);
   min-height: 100vh;
   overflow-x: hidden;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+/* ── TICKER SLIDE ANIMATION (RIGHT TO LEFT) ── */
+@keyframes tickerSlide {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
+.ticker-track {
+  display: flex;
+  align-items: center;
+  gap: 32px;
+  width: max-content;
+  animation: tickerSlide 40s linear infinite;
+  will-change: transform;
+}
+
+.ticker-track:hover {
+  animation-play-state: paused;
 }
 
 h1, h2, h3, .sans-headline {
@@ -116,12 +145,41 @@ h1, h2, h3, .sans-headline {
   color: var(--bg);
 }
 
-/* ── UTILITIES ── */
-.mono { font-family: var(--mono); }
-.sans { font-family: var(--sans); }
-.serif { font-family: var(--serif); }
-.vn { font-family: var(--vn); }
-.tabular { font-feature-settings: 'tnum' 1, 'lnum' 1; }
+/* ── UTILITIES & FUNCTIONAL TYPOGRAPHY ROLES ── */
+.mono { font-family: var(--mono) !important; }
+.sans { font-family: var(--sans) !important; }
+.serif { font-family: var(--serif) !important; }
+.tabular { font-feature-settings: 'tnum' 1, 'lnum' 1; font-family: var(--mono); }
+
+/* 1. Hero & Display Headings: Playfair Display */
+h1, h2, .serif-display {
+  font-family: var(--serif) !important;
+}
+
+/* 2. Subheadings, UI Controls, Navigation: Syne */
+h3, h4, h5, .sans-subheading, .panel-title {
+  font-family: var(--sans) !important;
+}
+
+button, .btn-main, .btn-ghost, .btn-danger, input, select, textarea, .nav-item {
+  font-family: var(--sans) !important;
+}
+
+/* 3. Technical Data, Numbers, Code, Metrics: Syne Mono */
+code, pre, .terminal-window {
+  font-family: var(--mono) !important;
+}
+
+/* 3 Main Percentage Colors (Green, Red, Black-Orange) */
+.txt-up {
+  color: var(--color-up) !important;
+}
+.txt-down {
+  color: var(--color-down) !important;
+}
+.txt-ref, .txt-unchanged, .txt-neutral, .txt-ref-orange {
+  color: var(--color-ref) !important;
+}
 
 /* ── ANIMATIONS ── */
 @keyframes pulse {
@@ -262,7 +320,7 @@ input, select, textarea {
   background: var(--bg3);
   border: 0.5px solid var(--border2);
   color: var(--cream);
-  font-family: var(--vn);
+  font-family: var(--sans);
   font-size: 12px;
   padding: 8px 12px;
   border-radius: var(--rad);

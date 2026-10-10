@@ -27,6 +27,7 @@ export const getLakehouseStatus = () => fetchJson<{ status: string; timestamp: s
 export const getDashboardOverview = () => fetchJson<any>('/api/dashboard/overview');
 export const getMarketHeatmap = (limit = 60) => fetchJson<any>(`/api/dashboard/heatmap?limit=${limit}`);
 export const getForeignFlow = (limit = 20) => fetchJson<any>(`/api/dashboard/foreign_flow?limit=${limit}`);
+export const getMultiAssetSummary = () => fetchJson<any>('/api/dashboard/multi_asset');
 export const getCorporateEvents = (limit = 30) => fetchJson<any>(`/api/dashboard/events?limit=${limit}`);
 export const getMarketNews = (page = 1, limit = 10, symbol?: string, search?: string) => {
   const params = new URLSearchParams({ page: String(page), limit: String(limit) });
@@ -38,7 +39,8 @@ export const getOhlcv = (symbol: string, timeframe = '1d', limit = 300) =>
   fetchJson<any>(`/api/ohlcv/${symbol}?timeframe=${timeframe}&limit=${limit}`);
 export const getSymbolDetail = (symbol: string, newsPage = 1, newsLimit = 10, ohlcvLimit = 300) =>
   fetchJson<any>(`/api/symbol/${encodeURIComponent(symbol)}/detail?news_page=${newsPage}&news_limit=${newsLimit}&ohlcv_limit=${ohlcvLimit}`);
-
+export const getMarketExtended = () => fetchJson<any>('/api/dashboard/market_extended');
+export const getSymbolFull = (symbol: string) => fetchJson<any>(`/api/symbol/${encodeURIComponent(symbol)}/full`);
 // 3. Crawler Pipeline
 export interface CrawlParams {
   mode: 'latest' | 'category' | 'all';

@@ -27,7 +27,8 @@ import pandas as pd
 
 logger = logging.getLogger("shareholder_entity_matcher")
 
-DEFAULT_SNAPSHOT_DB = "db/vesta_snapshot.duckdb"
+DEFAULT_MARKET_INDEX_DB = "db/vesta_market_index.duckdb"
+DEFAULT_ADMIN_INDEX_DB = "db/admin/vesta_market_index.duckdb"
 DEFAULT_CANONICAL_DB = "db/vesta.duckdb"
 
 
@@ -129,7 +130,7 @@ class ShareholderEntityRegistry:
 
     def __init__(self, db_path: Optional[str] = None) -> None:
         self.db_path = db_path or (
-            DEFAULT_SNAPSHOT_DB if os.path.exists(DEFAULT_SNAPSHOT_DB) else DEFAULT_CANONICAL_DB
+            DEFAULT_MARKET_INDEX_DB if os.path.exists(DEFAULT_MARKET_INDEX_DB) else DEFAULT_CANONICAL_DB
         )
         self.records_by_symbol: Dict[str, List[ShareholderRecord]] = {}
         self.name_to_records: Dict[str, List[ShareholderRecord]] = {}
@@ -141,7 +142,7 @@ class ShareholderEntityRegistry:
         df: Optional[pd.DataFrame] = None
 
         # 1. Attempt DuckDB load if file exists and is accessible
-        candidate_paths = [p for p in [self.db_path, DEFAULT_SNAPSHOT_DB, DEFAULT_CANONICAL_DB] if os.path.exists(p)]
+        candidate_paths = [p for p in [self.db_path, DEFAULT_MARKET_INDEX_DB, DEFAULT_ADMIN_INDEX_DB, DEFAULT_CANONICAL_DB] if os.path.exists(p)]
         for path in candidate_paths:
             try:
                 con = duckdb.connect(path, read_only=True, config={"access_mode": "read_only"})

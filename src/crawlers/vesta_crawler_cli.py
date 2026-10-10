@@ -229,18 +229,32 @@ TABLE_METADATA_SPECS = [
         "type": "screener",
     },
     {
-        "table": "core.order_book_depth",
-        "name": "Sổ lệnh Level 2 & OFI (VN100)",
-        "date_col": "timestamp",
+        "table": "core.market_derivatives_daily",
+        "name": "Hợp đồng Tương lai VN30F (F073)",
+        "date_col": "date",
         "sym_col": "symbol",
-        "type": "orderbook",
+        "type": "derivatives",
     },
     {
-        "table": "core.intraday_trades",
-        "name": "Khớp lệnh Intraday (VN100)",
-        "date_col": "time",
+        "table": "core.market_covered_warrants_daily",
+        "name": "Chứng quyền Có bảo đảm CW (F074)",
+        "date_col": "date",
         "sym_col": "symbol",
-        "type": "trades",
+        "type": "warrants",
+    },
+    {
+        "table": "core.market_etf_daily",
+        "name": "Chứng chỉ Quỹ ETF Toàn thị trường (F075)",
+        "date_col": "date",
+        "sym_col": "symbol",
+        "type": "etf",
+    },
+    {
+        "table": "core.market_bonds_daily",
+        "name": "Trái phiếu Niêm yết (F076)",
+        "date_col": "fetched_at",
+        "sym_col": "symbol",
+        "type": "bonds",
     },
 ]
 
@@ -968,9 +982,9 @@ def parse_args() -> argparse.Namespace:
     crawl_parser.add_argument("--db", default=DEFAULT_TARGET_DB, help="Đường dẫn DuckDB")
     crawl_parser.add_argument(
         "--mode",
-        choices=["latest", "category", "all"],
+        choices=["latest", "category", "all", "simultaneous"],
         default="latest",
-        help="Chế độ cào: 'latest' (tự động cào bù tiến đến hôm nay), 'category' (chọn 1 danh mục), 'all' (cào toàn bộ)",
+        help="Chế độ cào: 'latest' (tự động cào bù tiến đến hôm nay), 'category' (chọn 1 danh mục), 'all' (cào toàn bộ), 'simultaneous' (cào đồng thời 3 CSDL tạm & tự động sáp nhập)",
     )
     crawl_parser.add_argument(
         "--scope",
@@ -1056,6 +1070,13 @@ def main() -> int:
         # Tự động suy luận mode nếu người dùng chỉ định --category
         if "--category" in sys.argv and "--mode" not in sys.argv:
             args.mode = "category"
+
+        # Mode: simultaneous (chạy đồng thời 3 CSDL tạm & tự động sáp nhập)
+        if args.mode == "simultaneous":
+            from crawlers.parallel_multidb_orchestrator import run_simultaneous_crawling_pipeline
+            limit = args.limit if args.limit else (None if args.symbols == "all" else len(symbols))
+            run_simultaneous_crawling_pipeline(symbol_limit=limit, auto_merge=True)
+            return 0
 
         # Mode: latest
         if args.mode == "latest":

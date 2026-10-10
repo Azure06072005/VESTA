@@ -27,18 +27,36 @@ export const BotArenaPage: React.FC = () => {
   ]);
 
   const CAPITAL_PRESETS = [
-    { label: '10 Triệu (10M)', value: 10000000 },
-    { label: '20 Triệu (20M)', value: 20000000 },
-    { label: '50 Triệu (50M)', value: 50000000 },
-    { label: '100 Triệu (100M)', value: 100000000 },
+    { label: lang === 'vi' ? '10 Triệu (10M)' : '10 Million (10M)', value: 10000000 },
+    { label: lang === 'vi' ? '20 Triệu (20M)' : '20 Million (20M)', value: 20000000 },
+    { label: lang === 'vi' ? '50 Triệu (50M)' : '50 Million (50M)', value: 50000000 },
+    { label: lang === 'vi' ? '100 Triệu (100M)' : '100 Million (100M)', value: 100000000 },
   ];
 
   const PROMPT_SUGGESTIONS = [
     { label: '👋 Hello', text: 'Hello' },
-    { label: '🏢 NVL & PNJ 50M', text: 'Tôi muốn đầu tư NVL và PNJ vốn 50 triệu VNĐ' },
-    { label: '🛡️ Phòng thủ thị trường', text: 'Thị trường có rủi ro đảo chiều, tôi cần chiến lược phòng thủ bảo toàn vốn' },
-    { label: '🚀 FPT tăng trưởng', text: 'Tôi muốn giải ngân FPT đón sóng tăng trưởng bứt phá' },
-    { label: '❓ Mã không tồn tại', text: 'Tôi muốn mua mã XYZ' },
+    {
+      label: '🏢 NVL & PNJ 50M',
+      text: lang === 'vi'
+        ? 'Tôi muốn đầu tư NVL và PNJ vốn 50 triệu VNĐ'
+        : 'I want to invest in NVL and PNJ with 50M VND capital',
+    },
+    {
+      label: lang === 'vi' ? '🛡️ Phòng thủ thị trường' : '🛡️ Market Defense',
+      text: lang === 'vi'
+        ? 'Thị trường có rủi ro đảo chiều, tôi cần chiến lược phòng thủ bảo toàn vốn'
+        : 'Market has reversal risk, I need a defensive capital preservation strategy',
+    },
+    {
+      label: lang === 'vi' ? '🚀 FPT tăng trưởng' : '🚀 FPT Growth',
+      text: lang === 'vi'
+        ? 'Tôi muốn giải ngân FPT đón sóng tăng trưởng bứt phá'
+        : 'I want to allocate to FPT to capture high-momentum growth',
+    },
+    {
+      label: lang === 'vi' ? '❓ Mã không tồn tại' : '❓ Unknown Symbol',
+      text: lang === 'vi' ? 'Tôi muốn mua mã XYZ' : 'I want to buy XYZ',
+    },
   ];
 
   useEffect(() => {
@@ -377,7 +395,7 @@ export const BotArenaPage: React.FC = () => {
                         ⚡ {t.arena.generated_config}: {msg.config.bot_id}
                       </div>
                       <div className="mono" style={{ fontSize: '11px', color: 'var(--gold)', fontWeight: 700, marginBottom: '4px' }}>
-                        💰 Vốn khởi điểm: {Number(msg.config.initial_cash || activeCapital).toLocaleString('vi-VN')} đ (Trần Odd-lot 25% NAV)
+                        💰 {lang === 'vi' ? 'Vốn khởi điểm:' : 'Initial Capital:'} {Number(msg.config.initial_cash || activeCapital).toLocaleString('vi-VN')} đ ({lang === 'vi' ? 'Trần Odd-lot 25% NAV' : 'Odd-lot Cap 25% NAV'})
                       </div>
                       <div className="mono" style={{ fontSize: '11px', color: 'var(--cream2)', marginBottom: '3px' }}>
                         {t.arena.target_assets}: <strong>{msg.config.target_assets?.join(', ')}</strong>
