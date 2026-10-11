@@ -167,3 +167,6 @@ datasets/
 models/
 storage/
 out/
+.wrangler/
+db/hot/
+!web/dist/
