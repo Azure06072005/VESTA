@@ -25,6 +25,7 @@
 - [Turn 16: Bản Đồ Treemap FoamTree Phân Tầng, Đồng Bộ Dữ Liệu Khung Thời Gian Biểu Đồ 1M/Daily, Chuẩn 3 Font & 3 Gam Màu Biến Động Giá](#turn-16)
 - [Turn 17: Giải Pháp Triển Khai Web Cho 5 CSDL 13GB & Đồng Bộ Lịch Giao Dịch Nghỉ Cuối Tuần/Lễ (Tạm Dừng Cào OHLCV)](#turn-17)
 - [Turn 18: Triển Khai Thực Nghiệm Giải Pháp 1: Phân Tầng Dữ Liệu Nóng/Lạnh (Hot Web DB 219MB vs Cold Lakehouse 12GB)](#turn-18)
+- [Turn 19: Khắc Phục Lỗi market_index_daily & Hướng Dẫn Tích Hợp Đồng Bộ Cloudflare R2](#turn-19)
 
 ---
 
@@ -1431,3 +1432,50 @@ Hệ thống đã hoàn thành trọn vẹn và hoàn mỹ 5 yêu cầu:
      - Kiểm tra truy vấn tin tức nóng và 2 views `v_stock_news`, `v_macro_news`.
      - Kiểm tra kết nối reader dự phòng (`connect_resilient_reader`, `connect_reader`).
 
+
+
+---
+
+### <a id="turn-19"></a>Turn 19: Khắc Phục Lỗi market_index_daily & Hướng Dẫn Tích Hợp Đồng Bộ Cloudflare R2
+
+- **Thời gian (Timestamp):** 2026-10-11 11:55:00 (T-0: 11/10/2026)
+- **Tương tác:** User yêu cầu 2 nội dung:
+  1. Khắc phục lỗi cảnh báo console: `11:33:48 [WARNING] Error querying market_index_daily in ohlcv db: Catalog Error: Table with name market_index_daily does not exist! Did you mean "market_ohlcv_daily"? LINE 13: FROM core.market_index_daily`
+  2. Hướng dẫn sử dụng Cloudflare R2 sau khi đã tạo bucket (`my-bucket` và `vesta-data`), giải thích lý do `npm create cloudflare@latest -- r2-worker` bị lỗi và cung cấp phương thức tích hợp trực tiếp cho VESTA.
+
+#### 🛠️ Hành Động Kỹ Thuật Đã Triển Khai (Engineering Actions):
+1. **Khắc Phục Triệt Để Lỗi `market_index_daily`:**
+   - **Nguyên nhân:** Khi tạo CSDL Hot Tier ([db/hot/vesta_ohlcv.duckdb](file:///d:/VESTA/db/hot/vesta_ohlcv.duckdb)), quy trình trích xuất chỉ copy nến cổ phiếu `market_ohlcv_daily` và `market_ohlcv_1m`, bỏ sót bảng chỉ số thị trường `core.market_index_daily` (VNINDEX, VN30...). Khi console API gọi `get_market_overview()` và truy vấn `core.market_index_daily`, DuckDB báo lỗi bảng không tồn tại.
+   - **Xử lý:**
+     - Đã sao chép toàn bộ 260,987 dòng `core.market_index_daily` vào [db/hot/vesta_ohlcv.duckdb](file:///d:/VESTA/db/hot/vesta_ohlcv.duckdb).
+     - Cập nhật [src/etl/build_hot_web_db.py](file:///d:/VESTA/src/etl/build_hot_web_db.py) để tự động trích xuất `core.market_index_daily` trong mọi lần build hot tier sau này.
+     - Cập nhật [src/service/console_api.py](file:///d:/VESTA/src/service/console_api.py): Bổ sung kiểm tra an toàn `table_exists` và cơ chế fallback tự động sang `vesta_market_index.duckdb` nếu bảng chưa sẵn sàng, triệt tiêu hoàn toàn cảnh báo lỗi.
+     - Chạy lại `pytest tests/test_hot_data_tier.py` đạt **6/6 Passed (100%)**.
+2. **Kiểm Tra & Tích Hợp Cloudflare R2:**
+   - **Giải thích lỗi `npm create cloudflare`:** Lệnh `create-cloudflare` dùng để tạo dự án Worker mới từ template mẫu của Cloudflare. Do user chọn template từ URL `https://github.com/Azure06072005/VESTA` (là repo mã nguồn định lượng hoàn chỉnh, không phải template Worker có sẵn file `wrangler.toml`), Cloudflare từ chối và hủy tạo thư mục `r2-worker/`.
+   - **Tạo Bucket Chuẩn Hóa:** Đã tạo bucket `vesta-data` chuẩn Cloudflare bên cạnh `my-bucket` hiện có.
+   - **Thử nghiệm Thực tế Thành Công:** Thực hiện upload và download trực tiếp file kiểm thử `test.txt` qua `npx wrangler r2 object put/get --remote` hoàn tất trong 3 giây.
+   - **Phát triển Công cụ Tự Động Hóa ([src/etl/r2_sync.py](file:///d:/VESTA/src/etl/r2_sync.py)):**
+     - Cho phép upload gói [db/hot/vesta_hot_tier.zip](file:///d:/VESTA/db/hot/vesta_hot_tier.zip) (219 MB) lên R2 chỉ với 1 lệnh: `python src/etl/r2_sync.py --upload`.
+     - Cho phép download về máy / server web chỉ với: `python src/etl/r2_sync.py --download`.
+     - Tự động tận dụng phiên đăng nhập OAuth sẵn có của `wrangler`.
+
+
+---
+
+### <a id="turn-20"></a>Turn 20: Xác Thực Cloudflare R2 Public URL Hoạt Động 200 OK & Lộ Trình Triển Khai Web Toàn Diện
+
+- **Thời gian (Timestamp):** 2026-10-11 13:05:00 (T-0: 11/10/2026)
+- **Tương tác:** User gửi ảnh chụp Cloudflare R2 xác nhận đã kích hoạt Public Access cho bucket `vesta-data` và hỏi: `I have these data already in cloudflare what's next`.
+
+#### 🛠️ Hành Động Kỹ Thuật Đã Triển Khai (Engineering Actions):
+1. **Xác thực Đường dẫn Công khai R2:**
+   - Kiểm tra trực tiếp URL: `https://pub-42c10f4f37494be4bbb1ed357bde3dcd.r2.dev/vesta_hot_tier.zip` trả về `HTTP/1.1 200 OK` (Content-Length: 229,913,795 bytes ~ 219.2 MB).
+   - Dữ liệu CSDL đã chính thức online toàn cầu với phí băng thông $0 (Zero Egress).
+2. **Biên Dịch Production Frontend:**
+   - Chạy `npm run build` trong thư mục `web/` thành công trong 909ms, tạo ra bundle tối ưu tại `web/dist/`.
+   - Cổng API FastAPI ([src/service/console_api.py](file:///d:/VESTA/src/service/console_api.py)) tự động mount `web/dist` phục vụ trọn gói cả UI và API tại cổng 8899.
+3. **Cung Cấp Bộ Docker & Lộ Trình Triển Khai Hoàn Chỉnh:**
+   - Tạo [Dockerfile](file:///d:/VESTA/Dockerfile) (Multi-stage build) tự động tải `vesta_hot_tier.zip` từ Cloudflare R2 khi container khởi động.
+   - Tạo [docker-compose.yml](file:///d:/VESTA/docker-compose.yml) phục vụ 1-click deploy.
+   - Hướng dẫn 3 phương án deploy lên Internet (Render/Railway, Cloudflare Pages, VPS).

@@ -85,7 +85,18 @@ def build_hot_ohlcv(cold_dir: Path, hot_dir: Path) -> Path:
         WHERE time >= '{HOT_POLICY['ohlcv_1m_start']}';
     """)
 
-    # 3. meta tables (nếu có)
+    # 3. core.market_index_daily (toàn bộ chỉ số thị trường VNINDEX, VN30, HNX...)
+    try:
+        log_step("  -> Trích xuất core.market_index_daily (chỉ số thị trường)...")
+        con.execute(f"""
+            CREATE TABLE core.market_index_daily AS 
+            SELECT * FROM cold.core.market_index_daily 
+            WHERE date >= '{HOT_POLICY['ohlcv_daily_start']}';
+        """)
+    except Exception as e:
+        log_step(f"  ⚠️ Cảnh báo copy market_index_daily: {e}")
+
+    # 4. meta tables (nếu có)
     try:
         con.execute("CREATE TABLE meta.crawl_progress AS SELECT * FROM cold.meta.crawl_progress;")
     except Exception:

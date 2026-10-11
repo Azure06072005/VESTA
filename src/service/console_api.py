@@ -414,7 +414,22 @@ def get_dashboard_overview():
                     WHEN 'VNFINLEAD' THEN 8
                     ELSE 9 END;
             """
-            idx_rows = con.execute(q_idx).fetchall()
+            # Kiểm tra an toàn sự tồn tại của bảng trước khi truy vấn
+            tbl_check = con.execute("SELECT 1 FROM information_schema.tables WHERE table_schema = 'core' AND table_name = 'market_index_daily'").fetchone()
+            if tbl_check:
+                idx_rows = con.execute(q_idx).fetchall()
+            else:
+                # Dự phòng kiểm tra từ vesta_market_index nếu chưa có trong vesta_ohlcv
+                alt_con = connect_resilient_reader(str(REPO_ROOT / "db" / "vesta_market_index.duckdb"))
+                if alt_con:
+                    try:
+                        alt_check = alt_con.execute("SELECT 1 FROM information_schema.tables WHERE table_schema = 'core' AND table_name = 'market_index_daily'").fetchone()
+                        idx_rows = alt_con.execute(q_idx).fetchall() if alt_check else []
+                    finally:
+                        alt_con.close()
+                else:
+                    idx_rows = []
+
             name_map = {
                 "VNINDEX": "VN-INDEX",
                 "VN30": "VN30-INDEX",
@@ -1013,16 +1028,21 @@ def get_symbol_ohlcv(symbol: str, limit: int = 300, timeframe: str = "1D"):
 
         # 1. Kiểm tra nếu là mã chỉ số
         if sym_clean in ["VNINDEX", "VN30", "HNX-INDEX", "HNX30", "UPCOM-INDEX", "VN100", "VNDIAMOND", "VNFINLEAD"]:
-            rows = con.execute("""
-                SELECT date, open, high, low, close, volume
-                FROM core.market_index_daily
-                WHERE index_code = ?
-                ORDER BY date DESC
-                LIMIT ?
-            """, [sym_clean, daily_limit]).fetchall()
-            bars = format_and_dedup(rows, False)
-            if bars:
-                return {"symbol": sym_clean, "timeframe": tf, "count": len(bars), "bars": bars, "source": "core.market_index_daily"}
+            try:
+                tbl_check = con.execute("SELECT 1 FROM information_schema.tables WHERE table_schema = 'core' AND table_name = 'market_index_daily'").fetchone()
+                if tbl_check:
+                    rows = con.execute("""
+                        SELECT date, open, high, low, close, volume
+                        FROM core.market_index_daily
+                        WHERE index_code = ?
+                        ORDER BY date DESC
+                        LIMIT ?
+                    """, [sym_clean, daily_limit]).fetchall()
+                    bars = format_and_dedup(rows, False)
+                    if bars:
+                        return {"symbol": sym_clean, "timeframe": tf, "count": len(bars), "bars": bars, "source": "core.market_index_daily"}
+            except Exception as e:
+                logger.debug(f"Index bars query fallback: {e}")
 
         # 2. Xử lý khung thời gian Intraday (1m, 5m, 1h)
         if tf in ["1m", "1min"]:
