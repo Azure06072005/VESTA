@@ -89,9 +89,35 @@ app.add_middleware(
 )
 
 
+def ensure_hot_db_downloaded() -> None:
+    """Tự động kiểm tra và tải gói dữ liệu nóng từ Cloudflare R2 nếu db/hot/ chưa có trên máy chủ Render/Cloud."""
+    hot_dir = REPO_ROOT / "db" / "hot"
+    hot_ohlcv = hot_dir / "vesta_ohlcv.duckdb"
+    cold_ohlcv = REPO_ROOT / "db" / "vesta_ohlcv.duckdb"
+    if hot_ohlcv.exists() or cold_ohlcv.exists():
+        return
+    logger.info("[HOT_TIER] Hot DuckDB files not found locally. Downloading from Cloudflare R2...")
+    try:
+        import urllib.request
+        import zipfile
+        hot_dir.mkdir(parents=True, exist_ok=True)
+        zip_path = hot_dir / "vesta_hot_tier.zip"
+        r2_url = "https://pub-42c10f4f37494be4bbb1ed357bde3dcd.r2.dev/vesta_hot_tier.zip"
+        logger.info(f"[HOT_TIER] Fetching {r2_url} -> {zip_path}...")
+        urllib.request.urlretrieve(r2_url, zip_path)
+        with zipfile.ZipFile(zip_path, "r") as zip_ref:
+            zip_ref.extractall(hot_dir)
+        if zip_path.exists():
+            zip_path.unlink()
+        logger.info("[HOT_TIER] Cloudflare R2 Hot DB unpacked successfully!")
+    except Exception as e:
+        logger.error(f"[HOT_TIER] Failed to fetch Hot DB from Cloudflare R2: {e}")
+
+
 def get_db_connection(read_only: bool = True) -> Optional[duckdb.DuckDBPyConnection]:
     """Helper kết nối DuckDB an toàn, tự động ATTACH tất cả 5 CSDL chuyên biệt (ohlcv, news, fundamentals, events, market_index).
     Hỗ trợ liền mạch cả Cold Tier (db/, db/admin/) lẫn Hot Tier (db/hot/)."""
+    ensure_hot_db_downloaded()
     is_hot = os.environ.get("VESTA_DATA_TIER", "").lower() == "hot"
     db_paths = []
     if is_hot:
@@ -190,6 +216,7 @@ def connect_resilient_reader(db_path: str) -> Optional[duckdb.DuckDBPyConnection
     Kết nối an toàn tới DuckDB trên Windows ở chế độ READ_ONLY.
     Tự động dự phòng đọc từ db/admin/ hoặc db/hot/ nếu file chính đang không thể truy cập hoặc bị khóa.
     """
+    ensure_hot_db_downloaded()
     base_name = os.path.basename(str(db_path))
     is_hot = os.environ.get("VESTA_DATA_TIER", "").lower() == "hot"
     candidates = []

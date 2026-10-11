@@ -3,7 +3,7 @@
  * Unified API Client for VESTA Web Console.
  */
 
-const API_BASE = import.meta.env.VITE_API_BASE || 'http://127.0.0.1:8899';
+const API_BASE = import.meta.env.VITE_API_BASE || '';
 
 export async function fetchJson<T>(path: string, options?: RequestInit): Promise<T> {
   const url = `${API_BASE}${path}`;
