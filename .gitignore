@@ -9,7 +9,7 @@ __pycache__/
 .Python
 build/
 develop-eggs/
-dist/
+/dist/
 downloads/
 eggs/
 .eggs/
@@ -164,9 +164,10 @@ har*.txt
 # Any custom big data folder
 data/
 datasets/
-models/
+/models/
+!src/models/
 storage/
 out/
 .wrangler/
 db/hot/
-!web/dist/
+!web/dist/**
