@@ -1,7 +1,7 @@
 # VESTA: NHẬT KÝ HỘI THOẠI & TIẾN ĐỘ TOÀN DIỆN (COMPREHENSIVE CHAT HISTORY)
 > **Tệp lưu trữ:** `CHAT_HISTORY.md`  
 > **Mã phiên làm việc (Conversation ID):** `d8334d76-6f02-4079-adcd-a6b0aac346f2`  
-> **Cập nhật lần cuối:** 2026-10-09 21:54:42 (T-0: 09/10/2026)  
+> **Cập nhật lần cuối:** 2026-10-11 10:35:00 (T-0: 11/10/2026)  
 > **Quy chuẩn ghi nhận:** Tự động lưu trữ chi tiết toàn bộ câu hỏi (User Prompt), hành động kỹ thuật (Engineering Actions), và câu trả lời (Agent Response) trong toàn bộ phiên làm việc.
 
 ---
@@ -22,6 +22,9 @@
 - [Turn 13: Trừu tượng hóa & Tự động ghi nhật ký hội thoại toàn diện vào CHAT_HISTORY.md](#turn-13)
 - [Turn 14: Autonomous Crawling Pipeline Flow, Data Quality Suite (100% Pass) & Khắc Phục Lỗi Candlestick Chart](#turn-14)
 - [Turn 15: Kiểm toán di chuyển Snapshot, Nâng cấp TickerStrip Animation & Đại tu DashboardPage theo chuẩn TradingView/Vietstock](#turn-15)
+- [Turn 16: Bản Đồ Treemap FoamTree Phân Tầng, Đồng Bộ Dữ Liệu Khung Thời Gian Biểu Đồ 1M/Daily, Chuẩn 3 Font & 3 Gam Màu Biến Động Giá](#turn-16)
+- [Turn 17: Giải Pháp Triển Khai Web Cho 5 CSDL 13GB & Đồng Bộ Lịch Giao Dịch Nghỉ Cuối Tuần/Lễ (Tạm Dừng Cào OHLCV)](#turn-17)
+- [Turn 18: Triển Khai Thực Nghiệm Giải Pháp 1: Phân Tầng Dữ Liệu Nóng/Lạnh (Hot Web DB 219MB vs Cold Lakehouse 12GB)](#turn-18)
 
 ---
 
@@ -1357,4 +1360,74 @@ Hệ thống đã hoàn thành trọn vẹn và hoàn mỹ 5 yêu cầu:
 3. Thanh chọn khung thời gian và lợi suất đa kỳ hạn trên biểu đồ hoạt động linh hoạt: 1D/5D nạp `ohlcv_1m`, từ 1M đến ALL nạp `ohlcv_daily`, tính toán động và hiển thị lợi suất tức thì.
 4. Cả phần Hiệu suất ngành và Bảng điện thời gian thực đã được tích hợp Bản đồ FoamTree Treemap phân cấp chuẩn mực như thiết kế của bạn.
 5. Quy chuẩn 3 màu (Xanh lá, Đỏ, Cam đen) được áp dụng nhất quán trên toàn bộ hệ thống.
+
+---
+
+### <a id="turn-17"></a>Turn 17: Giải Pháp Triển Khai Web Cho 5 CSDL 13GB & Đồng Bộ Lịch Giao Dịch Nghỉ Cuối Tuần/Lễ (Tạm Dừng Cào OHLCV)
+
+- **Thời gian (Timestamp):** 2026-10-11 10:30:00 (T-0: 11/10/2026 - Chủ Nhật)
+- **Tương tác:** User đặt ra 2 câu hỏi trọng tâm:
+  1. Kế hoạch đưa dự án lên Web nhưng lo ngại bộ nhớ/dung lượng lưu trữ của 5 cơ sở dữ liệu DuckDB (~13 GB) không thể đáp ứng được trên server web. Cần khuyến nghị kiến trúc khả thi.
+  2. Đồng bộ lịch giao dịch thị trường chứng khoán Việt Nam: Nến OHLCV và chỉ số thị trường chỉ phát sinh giao dịch vào các ngày thường (Thứ 2 đến Thứ 6). Thứ 7, Chủ Nhật và các ngày nghỉ lễ thị trường đóng cửa. Yêu cầu khi khởi chạy Console hoặc Pipeline vào Thứ 7, Chủ Nhật hoặc ngày lễ: **Tự động dừng việc cào dữ liệu OHLCV và giá hàng ngày, chỉ duy trì cào luồng tin tức (News)**.
+
+#### 🛠️ Hành Động Kỹ Thuật Đã Triển Khai (Engineering Actions):
+1. **Kiểm toán dung lượng 5 CSDL DuckDB:**
+   - `vesta_news.duckdb`: 8.11 GB (1.15M tin tức CafeF, Vietstock từ 2005)
+   - `vesta_ohlcv.duckdb`: 2.08 GB (4.28M nến 1D và 23.12M nến 1M)
+   - `vesta_fundamentals.duckdb`: 2.03 GB (7.36M thuyết minh và 71.8K BCTC)
+   - `vesta_events.duckdb`: 670 MB (37.5K sự kiện)
+   - `vesta_market_index.duckdb`: 110 MB (4.85M dòng giao dịch nước ngoài, F&G)
+   - Tổng cộng: **~13.0 GB**.
+2. **Xây dựng Mô-đun Lịch Giao Dịch Việt Nam ([src/crawlers/trading_calendar.py](file:///d:/VESTA/src/crawlers/trading_calendar.py)):**
+   - Xác định chính xác Thứ 7 (`weekday == 5`) và Chủ Nhật (`weekday == 6`).
+   - Tích hợp toàn diện lịch nghỉ lễ chính thức của UBCKNN / Sở GDCK Việt Nam (2024 - 2027): Tết Nguyên Đán, Giỗ Tổ Hùng Vương (10/3 ÂL), 30/4 - 1/5, Quốc khánh 2/9, Tết Dương lịch 1/1 và các ngày nghỉ bù.
+   - Hàm tiện ích: `is_weekend()`, `is_exchange_holiday()`, `is_trading_day()`, `should_skip_ohlcv_crawl()`, `get_market_status()`.
+3. **Viết Kiểm Thử Độc Lập Hoàn Chỉnh ([tests/test_trading_calendar.py](file:///d:/VESTA/tests/test_trading_calendar.py)):**
+   - 6 bài kiểm thử toàn diện: kiểm tra cuối tuần, ngày lễ nghỉ bù, ngày giao dịch thường, payload API và cờ override `--force`.
+   - Chạy lệnh `python -m pytest tests/test_trading_calendar.py -v` đạt **6/6 Passed (100%)**.
+4. **Tích Hợp Vào Toàn Bộ Pipeline & Orchestrator:**
+   - [src/crawlers/parallel_multidb_orchestrator.py](file:///d:/VESTA/src/crawlers/parallel_multidb_orchestrator.py): Kiểm tra `should_skip_ohlcv_crawl()`. Nếu là cuối tuần/ngày lễ, tự động bỏ qua worker OHLCV và Snapshot, chỉ thực thi `run_fast_news_worker()`.
+   - [src/service/console_api.py](file:///d:/VESTA/src/service/console_api.py): Khi API khởi động hoặc nhận yêu cầu cào trong ngày nghỉ, chuyển sang chế độ `news_comprehensive`, bảo toàn tài nguyên và tránh gọi API vô nghĩa.
+   - [run_console.py](file:///d:/VESTA/run_console.py): Banner hiển thị trực quan trạng thái thị trường (`MARKET STATUS: WEEKEND_SUNDAY`) và thông báo chế độ cào thông minh.
+   - [src/pipeline/autonomous_pipeline.py](file:///d:/VESTA/src/pipeline/autonomous_pipeline.py): Giai đoạn 1 ghi log lịch và bảo toàn mốc T-0 nến giá mà không cố cào nến ngày nghỉ.
+
+---
+
+### <a id="turn-18"></a>Turn 18: Triển Khai Thực Nghiệm Giải Pháp 1: Phân Tầng Dữ Liệu Nóng/Lạnh (Hot Web DB 219MB vs Cold Lakehouse 12GB)
+
+- **Thời gian (Timestamp):** 2026-10-11 10:50:00 (T-0: 11/10/2026)
+- **Tương tác:** User yêu cầu: `ok try "Giải pháp 1: Phân tầng Dữ liệu Nóng / Lạnh (Hot vs. Cold Data Tiering — Khuyên dùng)"`.
+- **Mục tiêu:** Xây dựng giải pháp kỹ thuật hoàn chỉnh để thu nhỏ toàn bộ 5 CSDL từ 12.12 GB xuống một gói phân tầng nóng (Hot Tier) dưới 350 MB phục vụ đẩy lên Web/Cloud, bảo đảm Web API chạy trơn tru mà không làm thay đổi các bảng dữ liệu gốc phục vụ backtest.
+
+#### 🛠️ Hành Động Kỹ Thuật Đã Triển Khai (Engineering Actions):
+1. **Phát triển Công Cụ Xây Dựng CSDL Nóng ([src/etl/build_hot_web_db.py](file:///d:/VESTA/src/etl/build_hot_web_db.py)):**
+   - Thiết lập chính sách lưu giữ dữ liệu nóng (Hot Tier Retention Policy) chuẩn cho Web:
+     - `ohlcv_daily`: Lưu giữ từ 2024-01-01 (đầy đủ 2 năm nến ngày cho TradingView chart).
+     - `ohlcv_1m`: Lưu giữ từ 2026-09-01 (đầy đủ 40 phiên gần nhất cho line chart cao tần).
+     - `foreign_flow`: Lưu giữ từ 2025-01-01 (dòng tiền khối ngoại 2 năm gần nhất).
+     - `news`: Lưu giữ từ 2026-06-01 (đầy đủ tin tức 4.5 tháng gần nhất).
+     - `fundamentals` & `ratios`: Lưu giữ từ 2022-01-01 (đầy đủ BCTC 4 năm).
+     - `financial_notes`: Lưu giữ từ 2024-Q1 (thuyết minh BCTC 8 quý gần nhất).
+     - `events`: Lưu giữ từ 2024-01-01 (sự kiện cổ tức, ĐHĐCĐ).
+     - Toàn bộ danh mục chiều (`dim_symbol`, `dim_sector`, `company_overview`, `market_sentiment_snapshot`, v.v.) được sao chép 100%.
+     - **Loại bỏ 100% các bảng staging tạm**, nén VACUUM & CHECKPOINT tối đa.
+2. **Kết quả đo lường thực tế:**
+   - `vesta_ohlcv.duckdb`: 1,986.5 MB -> **34.3 MB** (Tiết kiệm **98.3%**)
+   - `vesta_market_index.duckdb`: 105.5 MB -> **44.3 MB** (Tiết kiệm **58.1%**)
+   - `vesta_fundamentals.duckdb`: 1,942.8 MB -> **62.8 MB** (Tiết kiệm **96.8%**)
+   - `vesta_events.duckdb`: 638.8 MB -> **48.5 MB** (Tiết kiệm **92.4%**)
+   - `vesta_news.duckdb`: 7,736.0 MB -> **689.3 MB** (Tiết kiệm **91.1%**)
+   - **Tổng dung lượng Cold:** 12,409.6 MB (12.12 GB) -> **Tổng dung lượng Hot:** 879.1 MB.
+   - **Tỷ lệ nén đóng gói Zip ([db/hot/vesta_hot_tier.zip](file:///d:/VESTA/db/hot/vesta_hot_tier.zip)):** Toàn bộ 5 CSDL nén lại chỉ còn **219.3 MB**! (Có thể upload lên bất kỳ host web nào chỉ trong vài giây).
+3. **Cập nhật Cổng API ([src/service/console_api.py](file:///d:/VESTA/src/service/console_api.py) & [src/service/market_extended_api.py](file:///d:/VESTA/src/service/market_extended_api.py)):**
+   - Hỗ trợ biến môi trường `VESTA_DATA_TIER=hot`.
+   - Tự động nạp từ `db/hot/` nếu phát hiện chạy trên môi trường Web deploy (hoặc khi không có thư mục `db/` đầy đủ).
+4. **Kiểm thử Tự động ([tests/test_hot_data_tier.py](file:///d:/VESTA/tests/test_hot_data_tier.py)):**
+   - Đạt kết quả **6/6 Passed (100%)** với `pytest`:
+     - Kiểm tra tồn tại file và dung lượng gói zip.
+     - Kiểm tra kết nối và ATTACH tự động 5 CSDL.
+     - Kiểm tra truy vấn nến ngày & nến 1 phút VCB.
+     - Kiểm tra truy vấn danh mục mã, Fear & Greed và dòng tiền ngoại.
+     - Kiểm tra truy vấn tin tức nóng và 2 views `v_stock_news`, `v_macro_news`.
+     - Kiểm tra kết nối reader dự phòng (`connect_resilient_reader`, `connect_reader`).
 
