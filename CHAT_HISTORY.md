@@ -1479,3 +1479,20 @@ Hệ thống đã hoàn thành trọn vẹn và hoàn mỹ 5 yêu cầu:
    - Tạo [Dockerfile](file:///d:/VESTA/Dockerfile) (Multi-stage build) tự động tải `vesta_hot_tier.zip` từ Cloudflare R2 khi container khởi động.
    - Tạo [docker-compose.yml](file:///d:/VESTA/docker-compose.yml) phục vụ 1-click deploy.
    - Hướng dẫn 3 phương án deploy lên Internet (Render/Railway, Cloudflare Pages, VPS).
+
+
+---
+
+### <a id="turn-21"></a>Turn 21: Khắc Phục Lỗi Render Build (Ghim Python 3.12.8 & Tối Ưu Hóa requirements.txt)
+
+- **Thời gian (Timestamp):** 2026-10-11 13:25:00 (T-0: 11/10/2026)
+- **Tương tác:** User gửi nhật ký lỗi Render build: Render tự động sử dụng Python 3.14.3 (bản alpha) và báo lỗi `No matching distribution found for vnstock>=4.0.5`.
+
+#### 🛠️ Hành Động Kỹ Thuật Đã Triển Khai (Engineering Actions):
+1. **Ghim Phiên Bản Python Chuẩn Cho Render:**
+   - Tạo tệp [.python-version](file:///d:/VESTA/.python-version) chứa `3.12.8` theo đặc tả chính thức của Render. Render sẽ tự động dùng môi trường Python 3.12.8 ổn định.
+2. **Tối Ưu Hóa Tệp requirements.txt:**
+   - Cập nhật [requirements.txt](file:///d:/VESTA/requirements.txt): Bỏ `vnstock>=4.0.5` (gói chỉ dùng offline, không nằm trên PyPI mặc định và không cần thiết cho web runtime).
+   - Kiểm thử `pip install -r requirements.txt --dry-run` hoàn tất sạch sẽ 100%.
+3. **Đẩy Commit Mới Nhất:**
+   - Đã push commit `4378c93` lên nhánh `web` trên GitHub `Azure06072005/VESTA`.
