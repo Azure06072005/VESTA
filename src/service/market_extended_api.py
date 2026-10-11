@@ -24,10 +24,16 @@ REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
 
 
 def connect_reader(db_name: str) -> Optional[duckdb.DuckDBPyConnection]:
-    for cand in [
+    is_hot = os.environ.get("VESTA_DATA_TIER", "").lower() == "hot"
+    candidates = []
+    if is_hot:
+        candidates.append(REPO_ROOT / "db" / "hot" / db_name)
+    candidates.extend([
         REPO_ROOT / "db" / "admin" / db_name,
         REPO_ROOT / "db" / db_name,
-    ]:
+        REPO_ROOT / "db" / "hot" / db_name,
+    ])
+    for cand in candidates:
         if cand.exists():
             try:
                 return duckdb.connect(str(cand), read_only=True)

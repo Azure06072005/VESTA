@@ -81,6 +81,15 @@ class AutonomousPipelineOrchestrator:
 
         stage_res = {"status": "SUCCESS", "databases_checked": 5, "watermarks": {}}
 
+        from crawlers.trading_calendar import get_market_status, should_skip_ohlcv_crawl
+        mkt = get_market_status()
+        stage_res["market_status"] = mkt
+        if not mkt["is_trading_day"]:
+            logger.info(f" ⏸️ [LỊCH GIAO DỊCH] {mkt['reason']}")
+            logger.info("    -> HOSE/HNX đóng cửa. Dừng cào nến OHLCV & chỉ số giá, chỉ duy trì cào Tin tức (News Stream).")
+        else:
+            logger.info(f" ✓ [LỊCH GIAO DỊCH] Hôm nay là ngày giao dịch hợp lệ ({mkt['weekday']}, {mkt['date']}).")
+
         # Kiểm tra và cập nhật tiến trình cào trên 5 CSDL
         db_configs = [
             ("vesta_ohlcv.duckdb", "core.market_ohlcv_daily", "date"),

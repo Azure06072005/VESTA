@@ -37,13 +37,19 @@ def main():
     else:
         os.environ["VESTA_AUTO_CRAWL_ON_STARTUP"] = "0"
 
+    from crawlers.trading_calendar import get_market_status
+    mkt = get_market_status()
+
     url = f"http://{args.host}:{args.port}"
 
     print("═" * 70)
     print("VESTA QUANT LABS — UNIFIED WEB CONSOLE (SLM × LAM v2.0)")
     print("Powered by FastAPI + DuckDB Lakehouse + React TypeScript")
     print(f"Địa chỉ Web Console: {url}")
-    print(f"Tự động cào dữ liệu mới nhất: {'BẬT (Chạy ngầm)' if args.auto_crawl else 'TẮT'}")
+    print(f"Lịch giao dịch hôm nay ({mkt['weekday']}, {mkt['date']}): {'🟢 MỞ CỬA GIAO DỊCH' if mkt['is_trading_day'] else '🔴 ĐÓNG CỬA (' + mkt['reason'] + ')'}")
+    if not mkt['is_trading_day']:
+        print("  ⚡ [CHẾ ĐỘ NGHỈ]: Tự động DỪNG cào OHLCV/chỉ số, CHỈ CÀO TIN TỨC CafeF/Vietstock.")
+    print(f"Tự động cào dữ liệu mới nhất: {'BẬT (' + ('CHỈ CÀO TIN TỨC' if not mkt['can_crawl_ohlcv'] else 'Toàn bộ OHLCV + News') + ')' if args.auto_crawl else 'TẮT'}")
     print("Các phân hệ tích hợp:")
     print("    • 1. Overview & Architecture (Kế thừa phong cách kietfolio)")
     print("    • 2. Market Dashboard (CafeF & Vietstock, Heatmap, Nến TradingView)")

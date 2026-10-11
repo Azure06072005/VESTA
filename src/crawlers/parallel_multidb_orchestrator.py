@@ -337,15 +337,27 @@ def run_fast_snapshot_worker(symbols: List[str]) -> int:
 def run_simultaneous_crawling_pipeline(
     symbol_limit: Optional[int] = None,
     auto_merge: bool = True,
+    force: bool = False,
 ) -> Dict[str, Any]:
     """
-    Thực thi đồng thời cả 3 phân hệ (OHLCV, News, Snapshot) vào 3 CSDL tạm,
-    sau đó sáp nhập nguyên tử vào 3 CSDL chính.
+    Thực thi đồng thời đa CSDL:
+    - Nếu là ngày giao dịch bình thường (Thứ 2 - Thứ 6): Cào cả OHLCV, Tin tức, Snapshot/chỉ số.
+    - Nếu là Thứ Bảy, Chủ Nhật hoặc ngày nghỉ Lễ/Tết: Tự động DỪNG cào OHLCV/chỉ số, CHỈ CÀO TIN TỨC.
     """
+    from crawlers.trading_calendar import should_skip_ohlcv_crawl, get_market_status
+
     start_time = dt.datetime.now()
+    mkt_status = get_market_status()
+    skip_ohlcv, skip_reason = should_skip_ohlcv_crawl(force=force)
+
     logger.info("=" * 80)
-    logger.info("BẮT ĐẦU QUY TRÌNH THU THẬP DỮ LIỆU ĐỒNG THỜI ĐA CSDL (SIMULTANEOUS MULTI-DB PIPELINE)")
-    logger.info(f"Thời điểm: {start_time.isoformat()}")
+    logger.info("BẮT ĐẦU QUY TRÌNH THU THẬP DỮ LIỆU ĐA CSDL (SIMULTANEOUS MULTI-DB PIPELINE)")
+    logger.info(f"Thời điểm: {start_time.isoformat()} ({mkt_status['weekday']}, {mkt_status['date']})")
+    if skip_ohlcv:
+        logger.info(f"🛑 [LỊCH GIAO DỊCH] {skip_reason}")
+        logger.info("   -> Sở GDCK đóng cửa. DỪNG cào OHLCV và chỉ số giá. CHỈ THỰC THI cào Tin tức (News Stream)!")
+    else:
+        logger.info("✓ [LỊCH GIAO DỊCH] Ngày giao dịch hợp lệ. Cào toàn bộ (OHLCV + Tin tức + Chỉ số).")
     logger.info("=" * 80)
 
     symbols = get_target_symbol_list(limit=symbol_limit)
@@ -353,20 +365,31 @@ def run_simultaneous_crawling_pipeline(
     results = {
         "status": "STARTED",
         "start_time": start_time.isoformat(),
+        "market_status": mkt_status,
+        "ohlcv_skipped": skip_ohlcv,
+        "skip_reason": skip_reason,
         "symbols_count": len(symbols),
         "workers": {},
     }
 
-    # Chạy đồng thời 3 Worker bằng ThreadPoolExecutor (max_workers=3)
-    with concurrent.futures.ThreadPoolExecutor(max_workers=3) as master_executor:
-        f_ohlcv = master_executor.submit(run_fast_ohlcv_worker, symbols, 12)
-        f_news = master_executor.submit(run_fast_news_worker, 3)
-        f_snap = master_executor.submit(run_fast_snapshot_worker, symbols)
+    if skip_ohlcv:
+        # Ngày nghỉ: Chỉ chạy News Worker
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as master_executor:
+            f_news = master_executor.submit(run_fast_news_worker, 3)
+            news_count = f_news.result()
+        ohlcv_count = 0
+        snap_count = 0
+    else:
+        # Ngày thường: Chạy đồng thời cả 3 Worker bằng ThreadPoolExecutor (max_workers=3)
+        with concurrent.futures.ThreadPoolExecutor(max_workers=3) as master_executor:
+            f_ohlcv = master_executor.submit(run_fast_ohlcv_worker, symbols, 12)
+            f_news = master_executor.submit(run_fast_news_worker, 3)
+            f_snap = master_executor.submit(run_fast_snapshot_worker, symbols)
 
-        # Chờ cả 3 hoàn thành
-        ohlcv_count = f_ohlcv.result()
-        news_count = f_news.result()
-        snap_count = f_snap.result()
+            # Chờ cả 3 hoàn thành
+            ohlcv_count = f_ohlcv.result()
+            news_count = f_news.result()
+            snap_count = f_snap.result()
 
     results["workers"]["ohlcv"] = {"records": ohlcv_count, "target_temp": TEMP_OHLCV_DB}
     results["workers"]["news"] = {"records": news_count, "target_temp": TEMP_NEWS_DB}

@@ -90,14 +90,24 @@ app.add_middleware(
 
 
 def get_db_connection(read_only: bool = True) -> Optional[duckdb.DuckDBPyConnection]:
-    """Helper kết nối DuckDB an toàn, tự động ATTACH tất cả 5 CSDL chuyên biệt (ohlcv, news, fundamentals, events, market_index)."""
-    db_paths = [
+    """Helper kết nối DuckDB an toàn, tự động ATTACH tất cả 5 CSDL chuyên biệt (ohlcv, news, fundamentals, events, market_index).
+    Hỗ trợ liền mạch cả Cold Tier (db/, db/admin/) lẫn Hot Tier (db/hot/)."""
+    is_hot = os.environ.get("VESTA_DATA_TIER", "").lower() == "hot"
+    db_paths = []
+    if is_hot:
+        db_paths.extend([
+            str(REPO_ROOT / "db" / "hot" / "vesta_ohlcv.duckdb"),
+            str(REPO_ROOT / "db" / "hot" / "vesta_market_index.duckdb"),
+        ])
+    db_paths.extend([
         str(REPO_ROOT / "db" / "vesta_ohlcv.duckdb"),
         str(REPO_ROOT / "db" / "admin" / "vesta_ohlcv.duckdb"),
+        str(REPO_ROOT / "db" / "hot" / "vesta_ohlcv.duckdb"),
         str(REPO_ROOT / "db" / "vesta_market_index.duckdb"),
         str(REPO_ROOT / "db" / "admin" / "vesta_market_index.duckdb"),
+        str(REPO_ROOT / "db" / "hot" / "vesta_market_index.duckdb"),
         DEFAULT_TARGET_DB,
-    ]
+    ])
     con = None
     for p in db_paths:
         if os.path.exists(p):
@@ -114,7 +124,9 @@ def get_db_connection(read_only: bool = True) -> Optional[duckdb.DuckDBPyConnect
         return None
 
     # Tự động ATTACH market_index & snapshot (ánh xạ sang vesta_market_index để tương thích ngược)
-    for sp in [str(REPO_ROOT / "db" / "vesta_market_index.duckdb"), str(REPO_ROOT / "db" / "admin" / "vesta_market_index.duckdb")]:
+    mkt_paths = [str(REPO_ROOT / "db" / "hot" / "vesta_market_index.duckdb")] if is_hot else []
+    mkt_paths.extend([str(REPO_ROOT / "db" / "vesta_market_index.duckdb"), str(REPO_ROOT / "db" / "admin" / "vesta_market_index.duckdb"), str(REPO_ROOT / "db" / "hot" / "vesta_market_index.duckdb")])
+    for sp in mkt_paths:
         if os.path.exists(sp):
             try:
                 con.execute(f"ATTACH '{sp}' AS market_index (READ_ONLY)")
@@ -127,7 +139,9 @@ def get_db_connection(read_only: bool = True) -> Optional[duckdb.DuckDBPyConnect
             break
 
     # Tự động ATTACH fundamentals
-    for fp in [str(REPO_ROOT / "db" / "vesta_fundamentals.duckdb"), str(REPO_ROOT / "db" / "admin" / "vesta_fundamentals.duckdb")]:
+    fun_paths = [str(REPO_ROOT / "db" / "hot" / "vesta_fundamentals.duckdb")] if is_hot else []
+    fun_paths.extend([str(REPO_ROOT / "db" / "vesta_fundamentals.duckdb"), str(REPO_ROOT / "db" / "admin" / "vesta_fundamentals.duckdb"), str(REPO_ROOT / "db" / "hot" / "vesta_fundamentals.duckdb")])
+    for fp in fun_paths:
         if os.path.exists(fp):
             try:
                 con.execute(f"ATTACH '{fp}' AS fundamentals (READ_ONLY)")
@@ -136,7 +150,9 @@ def get_db_connection(read_only: bool = True) -> Optional[duckdb.DuckDBPyConnect
                 pass
 
     # Tự động ATTACH events
-    for ep in [str(REPO_ROOT / "db" / "vesta_events.duckdb"), str(REPO_ROOT / "db" / "admin" / "vesta_events.duckdb")]:
+    evt_paths = [str(REPO_ROOT / "db" / "hot" / "vesta_events.duckdb")] if is_hot else []
+    evt_paths.extend([str(REPO_ROOT / "db" / "vesta_events.duckdb"), str(REPO_ROOT / "db" / "admin" / "vesta_events.duckdb"), str(REPO_ROOT / "db" / "hot" / "vesta_events.duckdb")])
+    for ep in evt_paths:
         if os.path.exists(ep):
             try:
                 con.execute(f"ATTACH '{ep}' AS events (READ_ONLY)")
@@ -145,7 +161,9 @@ def get_db_connection(read_only: bool = True) -> Optional[duckdb.DuckDBPyConnect
                 pass
 
     # Tự động ATTACH news_db
-    for np in [str(REPO_ROOT / "db" / "vesta_news.duckdb"), str(REPO_ROOT / "db" / "admin" / "vesta_news.duckdb")]:
+    news_paths = [str(REPO_ROOT / "db" / "hot" / "vesta_news.duckdb")] if is_hot else []
+    news_paths.extend([str(REPO_ROOT / "db" / "vesta_news.duckdb"), str(REPO_ROOT / "db" / "admin" / "vesta_news.duckdb"), str(REPO_ROOT / "db" / "hot" / "vesta_news.duckdb")])
+    for np in news_paths:
         if os.path.exists(np):
             try:
                 con.execute(f"ATTACH '{np}' AS news_db (READ_ONLY)")
@@ -154,7 +172,9 @@ def get_db_connection(read_only: bool = True) -> Optional[duckdb.DuckDBPyConnect
                 pass
 
     # Tự động ATTACH ohlcv_db
-    for op in [str(REPO_ROOT / "db" / "vesta_ohlcv.duckdb"), str(REPO_ROOT / "db" / "admin" / "vesta_ohlcv.duckdb")]:
+    ohlcv_paths = [str(REPO_ROOT / "db" / "hot" / "vesta_ohlcv.duckdb")] if is_hot else []
+    ohlcv_paths.extend([str(REPO_ROOT / "db" / "vesta_ohlcv.duckdb"), str(REPO_ROOT / "db" / "admin" / "vesta_ohlcv.duckdb"), str(REPO_ROOT / "db" / "hot" / "vesta_ohlcv.duckdb")])
+    for op in ohlcv_paths:
         if os.path.exists(op):
             try:
                 con.execute(f"ATTACH '{op}' AS ohlcv_db (READ_ONLY)")
@@ -168,12 +188,18 @@ def get_db_connection(read_only: bool = True) -> Optional[duckdb.DuckDBPyConnect
 def connect_resilient_reader(db_path: str) -> Optional[duckdb.DuckDBPyConnection]:
     """
     Kết nối an toàn tới DuckDB trên Windows ở chế độ READ_ONLY.
-    Tự động dự phòng đọc từ db/admin/ nếu file chính đang không thể truy cập hoặc bị khóa.
+    Tự động dự phòng đọc từ db/admin/ hoặc db/hot/ nếu file chính đang không thể truy cập hoặc bị khóa.
     """
-    candidates = [
+    base_name = os.path.basename(str(db_path))
+    is_hot = os.environ.get("VESTA_DATA_TIER", "").lower() == "hot"
+    candidates = []
+    if is_hot:
+        candidates.append(str(REPO_ROOT / "db" / "hot" / base_name))
+    candidates.extend([
         str(db_path),
-        os.path.join(os.path.dirname(str(db_path)), "admin", os.path.basename(str(db_path))),
-    ]
+        os.path.join(os.path.dirname(str(db_path)), "admin", base_name),
+        str(REPO_ROOT / "db" / "hot" / base_name),
+    ])
     for cand in candidates:
         if cand and os.path.exists(cand):
             try:
@@ -1166,6 +1192,7 @@ class CrawlStartRequest(BaseModel):
     buffer_first: bool = Field(True, description="Write to buffer first then atomic ingest")
     delay: float = Field(0.3, description="Delay between requests in seconds")
     pages: int = Field(5, description="Number of pages for news crawling")
+    force: bool = Field(False, description="Cưỡng bức cào ngay cả trong ngày nghỉ/cuối tuần")
 
 
 @app.post("/api/crawl/run", tags=["Crawler Controller"])
@@ -1195,9 +1222,19 @@ def start_crawl_job(req: CrawlStartRequest):
                 lf.flush()
 
             try:
+                from crawlers.trading_calendar import should_skip_ohlcv_crawl, get_market_status
+                skip_ohlcv, skip_reason = should_skip_ohlcv_crawl(force=req.force)
+                mkt_status = get_market_status()
+
                 log_print("═" * 70)
                 log_print(f"[*] KHỞI CHẠY TIẾN TRÌNH CÀO: Mode={req.mode.upper()}, Category={req.category}")
                 log_print(f"[*] Target Database: {os.path.basename(DEFAULT_TARGET_DB)}")
+                if skip_ohlcv:
+                    log_print(f"🛑 [LỊCH GIAO DỊCH] {skip_reason}")
+                    log_print("   -> Sở GDCK đóng cửa. DỪNG cào nến OHLCV & chỉ số giá.")
+                    log_print("   -> Tự động duy trì luồng thu thập TIN TỨC tài chính (News Stream).")
+                else:
+                    log_print("✓ [LỊCH GIAO DỊCH] Ngày giao dịch hợp lệ. Cào toàn bộ dữ liệu.")
                 log_print("═" * 70)
 
                 class DummyArgs:
@@ -1208,43 +1245,54 @@ def start_crawl_job(req: CrawlStartRequest):
                 args.period = "quarter"
                 args.report_type = "all"
                 args.pages = req.pages
-                args.force = False
+                args.force = req.force
 
                 symbols = get_target_symbols(DEFAULT_TARGET_DB, symbol_arg=req.symbols or "all")
                 log_print(f"[*] Tổng số mã chứng khoán xử lý: {len(symbols)}")
 
                 if req.mode in ("latest", "all", "simultaneous"):
-                    log_print("🚀 [1/3] Kích hoạt thu thập đồng thời đa CSDL siêu tốc (OHLCV, Tin tức, Snapshot/Sổ lệnh)...")
+                    if not skip_ohlcv:
+                        log_print("🚀 [1/3] Kích hoạt thu thập đồng thời đa CSDL siêu tốc (OHLCV, Tin tức, Snapshot/Sổ lệnh)...")
+                    else:
+                        log_print("🚀 [1/3] Kích hoạt thu thập Tin tức thị trường (Đã tự động bỏ qua OHLCV do ngày nghỉ)...")
                     from crawlers.parallel_multidb_orchestrator import run_simultaneous_crawling_pipeline
-                    sim_res = run_simultaneous_crawling_pipeline(symbol_limit=50, auto_merge=True)
+                    sim_res = run_simultaneous_crawling_pipeline(symbol_limit=50, auto_merge=True, force=req.force)
                     log_print(f"  ✓ Hoàn tất phân hệ đa CSDL trong {sim_res.get('total_elapsed_seconds', 0)}s.")
 
-                    log_print("🚀 [2/3] Kích hoạt thu thập Đa tài sản F073-F076 (Phái sinh VN30F, CW, ETF, Trái phiếu)...")
-                    from crawlers.multi_asset_crawler import crawl_all_multi_assets
-                    ma_res = crawl_all_multi_assets(limit=25)
-                    log_print(f"  ✓ Hoàn tất Đa tài sản: Phái sinh ({ma_res.get('derivatives', 0)}), CW ({ma_res.get('covered_warrants', 0)}), ETF ({ma_res.get('etfs', 0)}), Trái phiếu ({ma_res.get('bonds', 0)}).")
+                    if not skip_ohlcv:
+                        log_print("🚀 [2/3] Kích hoạt thu thập Đa tài sản F073-F076 (Phái sinh VN30F, CW, ETF, Trái phiếu)...")
+                        from crawlers.multi_asset_crawler import crawl_all_multi_assets
+                        ma_res = crawl_all_multi_assets(limit=25)
+                        log_print(f"  ✓ Hoàn tất Đa tài sản: Phái sinh ({ma_res.get('derivatives', 0)}), CW ({ma_res.get('covered_warrants', 0)}), ETF ({ma_res.get('etfs', 0)}), Trái phiếu ({ma_res.get('bonds', 0)}).")
+                    else:
+                        log_print("  ⏸️ [2/3] Bỏ qua thu thập Đa tài sản: Thị trường phái sinh & chứng quyền đóng cửa.")
 
                     log_print("🚀 [3/3] Sáp nhập nguyên tử và đồng bộ toàn bộ sang db/admin/...")
                     from etl.merge_temp_to_canonical import merge_all_temp_databases
                     m_res = merge_all_temp_databases()
                     log_print(f"  ✓ Đồng bộ hoàn tất ({m_res.get('admin_synced_databases', 0)} CSDL).")
                 elif req.mode == "multi_asset" or req.category == "multi_asset":
-                    log_print("🚀 Kích hoạt thu thập Đa tài sản F073-F076 (Phái sinh, CW, ETF, Trái phiếu)...")
-                    from crawlers.multi_asset_crawler import crawl_all_multi_assets
-                    ma_res = crawl_all_multi_assets(limit=50)
-                    log_print(f"  ✓ Hoàn tất: Phái sinh ({ma_res.get('derivatives', 0)}), CW ({ma_res.get('covered_warrants', 0)}), ETF ({ma_res.get('etfs', 0)}), Trái phiếu ({ma_res.get('bonds', 0)}).")
-                    from etl.merge_temp_to_canonical import merge_all_temp_databases
-                    merge_all_temp_databases()
+                    if skip_ohlcv:
+                        log_print("  ⏸️ Bỏ qua thu thập Đa tài sản: Thị trường phái sinh & chứng quyền đóng cửa vào ngày nghỉ.")
+                    else:
+                        log_print("🚀 Kích hoạt thu thập Đa tài sản F073-F076 (Phái sinh, CW, ETF, Trái phiếu)...")
+                        from crawlers.multi_asset_crawler import crawl_all_multi_assets
+                        ma_res = crawl_all_multi_assets(limit=50)
+                        log_print(f"  ✓ Hoàn tất: Phái sinh ({ma_res.get('derivatives', 0)}), CW ({ma_res.get('covered_warrants', 0)}), ETF ({ma_res.get('etfs', 0)}), Trái phiếu ({ma_res.get('bonds', 0)}).")
+                        from etl.merge_temp_to_canonical import merge_all_temp_databases
+                        merge_all_temp_databases()
                 elif req.mode == "category":
                     cat_key = req.category or "ohlcv"
-                    if cat_key in CATEGORIES_REGISTRY:
+                    if cat_key in ("ohlcv", "macro", "foreign_flow") and skip_ohlcv:
+                        log_print(f"⏸️ [BỎ QUA] Phân hệ [{cat_key.upper()}] tạm ngừng trong ngày nghỉ giao dịch.")
+                    elif cat_key in CATEGORIES_REGISTRY:
                         runner = CATEGORIES_REGISTRY[cat_key]
                         cnt = runner(symbols, writer, args)
                         log_print(f"[OK] Hoàn tất phân hệ [{cat_key.upper()}]. Thu thập +{cnt:,} bản ghi.")
-                    # Nạp nguyên tử sau cào category
-                    log_print("[*] THỰC HIỆN GIAO DỊCH NẠP NGUYÊN TỬ (ATOMIC INGESTION)...")
-                    res = writer.atomic_ingest_buffer()
-                    log_print(f"⚡ [KẾT QUẢ NẠP] Status={res.get('status')} | Rows synced={res.get('total_rows', 0)}")
+                        # Nạp nguyên tử sau cào category
+                        log_print("[*] THỰC HIỆN GIAO DỊCH NẠP NGUYÊN TỬ (ATOMIC INGESTION)...")
+                        res = writer.atomic_ingest_buffer()
+                        log_print(f"⚡ [KẾT QUẢ NẠP] Status={res.get('status')} | Rows synced={res.get('total_rows', 0)}")
 
                 log_print("[✓] TIẾN TRÌNH CÀO VÀ ĐỒNG BỘ DỮ LIỆU HOÀN TẤT THÀNH CÔNG!")
             except Exception as e:
@@ -1311,15 +1359,31 @@ def on_app_startup():
     """Tự động kích hoạt luồng cào dữ liệu mới nhất (background daemon) khi khởi động run_console nếu bật."""
     auto_crawl = os.environ.get("VESTA_AUTO_CRAWL_ON_STARTUP", "1")
     if auto_crawl == "1":
-        logger.info("[STARTUP] VESTA_AUTO_CRAWL_ON_STARTUP=1: Tự động khởi chạy tiến trình cào dữ liệu mới nhất ngầm...")
-        def _delayed_start():
-            time.sleep(1.5)
-            try:
-                start_crawl_job(CrawlStartRequest(mode="latest", symbols="all", buffer_first=True, pages=5))
-            except Exception as e:
-                logger.warning(f"[STARTUP] Không thể kích hoạt auto-crawl khi khởi động: {e}")
+        from crawlers.trading_calendar import should_skip_ohlcv_crawl, get_market_status
+        skip_ohlcv, skip_reason = should_skip_ohlcv_crawl()
+        mkt_status = get_market_status()
 
-        threading.Thread(target=_delayed_start, daemon=True).start()
+        if skip_ohlcv:
+            logger.info(f"[STARTUP] Phát hiện ngày nghỉ giao dịch ({mkt_status['weekday']}, {mkt_status['date']}): {skip_reason}")
+            logger.info("[STARTUP] Tự động cấu hình daemon: DỪNG cào OHLCV/chỉ số, CHỈ CÀO TIN TỨC CafeF/Vietstock.")
+            def _delayed_start_news():
+                time.sleep(1.5)
+                try:
+                    start_crawl_job(CrawlStartRequest(mode="category", category="news_comprehensive", symbols="all", buffer_first=True, pages=5))
+                except Exception as e:
+                    logger.warning(f"[STARTUP] Không thể kích hoạt auto-crawl tin tức: {e}")
+
+            threading.Thread(target=_delayed_start_news, daemon=True).start()
+        else:
+            logger.info("[STARTUP] VESTA_AUTO_CRAWL_ON_STARTUP=1: Ngày giao dịch hợp lệ. Tự động khởi chạy tiến trình cào toàn diện ngầm...")
+            def _delayed_start():
+                time.sleep(1.5)
+                try:
+                    start_crawl_job(CrawlStartRequest(mode="latest", symbols="all", buffer_first=True, pages=5))
+                except Exception as e:
+                    logger.warning(f"[STARTUP] Không thể kích hoạt auto-crawl khi khởi động: {e}")
+
+            threading.Thread(target=_delayed_start, daemon=True).start()
 
 
 # =============================================================================
